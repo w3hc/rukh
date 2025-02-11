@@ -2,9 +2,18 @@
 
 [Nest.js](https://nestjs.com/)-based AI agent starter kit.
 
-RUKK governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e12eeb2d5b3fdd73e30fa0d661d5429#code 
+RUKH governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e12eeb2d5b3fdd73e30fa0d661d5429#code 
 
+## Features
 
+- Nest.js `v11`
+- Ethers `v6`
+- OpenAPI/Swagger docs
+- JSON-based persistent storage
+- LangChain.js
+- Mistral `ministral-3b-2410` 
+
+Any other LLM service can be added (Anthropic, OpenAI, DeepSeek).
 
 ## Install
 
@@ -12,7 +21,7 @@ RUKK governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e
 pnpm i
 ```
 
-Create and edit your `.env` file on the model of `.env.template`.
+Create and edit your `.env` file on the model of `.env.template`. You can also [deploy your own token contract](https://github.com/w3hc/ouf-contracts). 
 
 ## Run
 
