@@ -1,8 +1,6 @@
 # RUKH Governance Token
 
-Governance Token of RUKH (OUr Friendly assistant).
-
-Rukh UI repo: https://github.com/w3hc/rukh 
+Rukh Governance Token & DAO contracts.
 
 ## Features
 
