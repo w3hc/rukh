@@ -1,6 +1,17 @@
 # Rukh
+A lightweight, developer-friendly toolkit for building AI agents with blockchain integration. Rukh makes it easy to create, deploy, and scale AI applications with:
 
-[Nest.js](https://nestjs.com/)-based AI agent starter kit.
+- 🚀 Quick setup and minimal configuration
+- 🔄 Built-in session management and persistent storage
+- 🔗 Seamless blockchain integration with Mantle Network
+- 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, etc.)
+- 📝 Auto-generated OpenAPI documentation
+- 🎮 Token-gated access control built-in
+- ⚡ Production-ready with rate limiting and error handling
+
+Live at: **http://rukh.w3hc.org/api**
+
+Solidity contracts: 
 
 - [Rukh governance token](https://explorer.sepolia.mantle.xyz/address/0x4db173196C37bF4Df60277A843590690F52bEB6a#code)
 - [Rukh DAO](https://explorer.sepolia.mantle.xyz/address/0x446200cB329592134989B615d4C02f9f3c9E970F#code)
@@ -66,7 +77,8 @@ or
 {
   "message": "What is Rukh?",
   "model": "mistral",
-  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73"
+  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73",
+  "walletAddress": "0x265E31444C6E279870eB20c15B0547373635840b"
 }
 ```
 
@@ -77,8 +89,9 @@ Will return:
   "output": "Rukh is a powerful bird.",
   "model": "ministral-3b-2410",
   "network": "mantle-sepolia",
-  "txHash": "0xe12029f35c67551d2c8c58e91a90090e5e0f0998a8c0b6f6cdb72fe9075c73fa",
-  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73"
+  "txHash": "0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
+  "explorerLink": "https://explorer.sepolia.mantle.xyz/tx/0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
+  "sessionId": "bdce1931-b09d-49ef-954b-d20074d11ffa"
 }
 ```
 
