@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsIn,
+  IsUUID,
+} from 'class-validator';
 
 export class AskDto {
   @ApiProperty({
@@ -20,4 +26,13 @@ export class AskDto {
   @IsOptional()
   @IsIn(['mistral', ''], { message: 'Model must be either "mistral" or empty' })
   model?: string;
+
+  @ApiProperty({
+    description: 'Session ID for conversation continuity',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID(4, { message: 'Session ID must be a valid UUID v4' })
+  sessionId?: string;
 }

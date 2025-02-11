@@ -42,13 +42,12 @@ export class AppController {
         statusCode: { type: 'number', example: 429 },
         message: {
           type: 'string',
-          example:
-            'Rate limit exceeded. Maximum 3 requests allowed per hour. Please try again later.',
+          example: 'Rate limit exceeded. Maximum 3 requests allowed per hour.',
         },
       },
     },
   })
   async ask(@Body() askDto: AskDto): Promise<AskResponseDto> {
-    return this.appService.ask(askDto.message, askDto.model);
+    return this.appService.ask(askDto.message, askDto.model, askDto.sessionId);
   }
 }
