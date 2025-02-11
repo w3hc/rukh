@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsNotEmpty,
-  IsOptional,
-  IsIn,
-  IsUUID,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 
 export class AskDto {
   @ApiProperty({
@@ -33,6 +27,5 @@ export class AskDto {
     required: false,
   })
   @IsOptional()
-  @IsUUID(4, { message: 'Session ID must be a valid UUID v4' })
   sessionId?: string;
 }
