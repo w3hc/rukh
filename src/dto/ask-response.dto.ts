@@ -26,4 +26,10 @@ export class AskResponseDto {
     required: false,
   })
   output?: string;
+
+  @ApiProperty({
+    description: 'Session ID for conversation tracking',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  sessionId: string;
 }

@@ -1,39 +1,13 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
-
-interface MistralRequestBody {
-  model: string;
-  messages: {
-    role: string;
-    content: string;
-  }[];
-  temperature: number;
-  max_tokens: number;
-}
-
-interface MistralResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: {
-    index: number;
-    message: {
-      role: string;
-      content: string;
-    };
-    finish_reason: string;
-  }[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
+import { ChatMistralAI } from '@langchain/mistralai';
+import { CustomJsonMemory } from '../memory/custom-memory';
+import { v4 as uuidv4 } from 'uuid';
+import { BaseMessage } from '@langchain/core/messages';
 
 @Injectable()
 export class MistralService {
   private readonly apiKey: string;
-  private readonly apiUrl = 'https://api.mistral.ai/v1/chat/completions';
+  private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
 
   constructor() {
@@ -42,77 +16,63 @@ export class MistralService {
       this.logger.error('MISTRAL_API_KEY environment variable is not set');
       throw new Error('MISTRAL_API_KEY environment variable is not set');
     }
+
+    this.model = new ChatMistralAI({
+      apiKey: this.apiKey,
+      modelName: 'mistral-tiny',
+      temperature: 0.7,
+      maxTokens: 500,
+    });
+
     this.logger.log('MistralService initialized');
   }
 
-  async processMessage(message: string): Promise<string> {
+  async processMessage(
+    message: string,
+    sessionId: string = uuidv4(),
+  ): Promise<{ content: string; sessionId: string }> {
     const requestId = this.generateRequestId();
-    this.logger.log(`Processing message [${requestId}]`);
+    const memory = new CustomJsonMemory(sessionId);
+
+    this.logger.log(
+      `Processing message [${requestId}] for session [${sessionId}]`,
+    );
 
     try {
-      const requestBody: MistralRequestBody = {
-        model: 'ministral-3b-2410',
-        messages: [
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
+      const { history } = await memory.loadMemoryVariables();
+      const messages = history.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      messages.push({
+        role: 'user',
+        content: message,
+      });
+
+      const response = await this.model.call(messages);
+      const responseContent = response.content.toString();
+
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
+      this.logger.log({
+        message: `Conversation updated [${requestId}]`,
+        sessionId,
+        messageCount: messages.length + 1,
+      });
+
+      return {
+        content: responseContent,
+        sessionId,
       };
-
-      this.logger.log({
-        message: `Mistral API request [${requestId}]`,
-        requestBody: {
-          ...requestBody,
-          message_length: message.length,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        this.logger.error({
-          message: `Mistral API error [${requestId}]`,
-          statusCode: response.status,
-          error: error,
-        });
-        throw new HttpException(
-          error.error?.message || 'Mistral API error',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const data = (await response.json()) as MistralResponse;
-
-      this.logger.log({
-        message: `Mistral API response [${requestId}]`,
-        responseData: {
-          id: data.id,
-          model: data.model,
-          usage: data.usage,
-          finish_reason: data.choices[0]?.finish_reason,
-          response_length: data.choices[0]?.message?.content?.length,
-          output: data.choices[0]?.message?.content,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      return data.choices[0]?.message?.content || 'No response generated';
     } catch (error) {
       this.logger.error({
         message: `Error processing message [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId,
         timestamp: new Date().toISOString(),
       });
 
@@ -124,6 +84,21 @@ export class MistralService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  async getConversationHistory(sessionId: string) {
+    const memory = new CustomJsonMemory(sessionId);
+    return memory.loadMemoryVariables();
+  }
+
+  async deleteConversation(sessionId: string): Promise<boolean> {
+    const memory = new CustomJsonMemory(sessionId);
+    const { history } = await memory.loadMemoryVariables();
+    if (history.length > 0) {
+      await memory.saveContext({ input: '' }, { response: '' });
+      return true;
+    }
+    return false;
   }
 
   private generateRequestId(): string {
