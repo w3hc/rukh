@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class AskResponseDto {
   @ApiProperty({
     description: 'The network used for processing',
-    example: 'mainnet',
+    example: 'Arbitrum Sepolia',
   })
   network: string;
 

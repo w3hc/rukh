@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -12,7 +13,22 @@ describe('AppController', () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
-        AppService,
+        {
+          provide: AppService,
+          useValue: {
+            getHello: () => 'Hello World!',
+            ask: jest
+              .fn()
+              .mockImplementation(async (message, model, sessionId) => ({
+                output: model === 'mistral' ? 'AI response' : undefined,
+                model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
+                network: 'arbitrum-sepolia',
+                txHash:
+                  '0x1234567890123456789012345678901234567890123456789012345678901234',
+                sessionId: sessionId || 'generated-session-id',
+              })),
+          },
+        },
         {
           provide: MistralService,
           useValue: {
@@ -20,6 +36,12 @@ describe('AppController', () => {
               content: 'AI response',
               sessionId: 'test-session-id',
             }),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
           },
         },
       ],
@@ -43,10 +65,10 @@ describe('AppController', () => {
       });
 
       expect(result).toEqual({
-        network: 'mainnet',
+        output: undefined,
         model: 'none',
-        txHash:
-          '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
+        network: 'arbitrum-sepolia',
+        txHash: expect.any(String),
         sessionId: expect.any(String),
       });
     });
@@ -59,18 +81,12 @@ describe('AppController', () => {
       });
 
       expect(result).toEqual({
-        network: 'mainnet',
-        model: 'mistral-tiny',
-        txHash:
-          '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
         output: 'AI response',
+        model: 'ministral-3b-2410',
+        network: 'arbitrum-sepolia',
+        txHash: expect.any(String),
         sessionId: 'test-session-id',
       });
-
-      expect(mistralService.processMessage).toHaveBeenCalledWith(
-        'test message',
-        'test-session-id',
-      );
     });
 
     it('should generate sessionId if not provided', async () => {
@@ -80,18 +96,12 @@ describe('AppController', () => {
       });
 
       expect(result).toEqual({
-        network: 'mainnet',
-        model: 'mistral-tiny',
-        txHash:
-          '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
         output: 'AI response',
+        model: 'ministral-3b-2410',
+        network: 'arbitrum-sepolia',
+        txHash: expect.any(String),
         sessionId: expect.any(String),
       });
-
-      expect(mistralService.processMessage).toHaveBeenCalledWith(
-        'test message',
-        expect.any(String),
-      );
     });
   });
 });

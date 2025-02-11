@@ -62,36 +62,37 @@ describe('AppController (e2e)', () => {
           sessionId: TEST_SESSION_ID,
         })
         .expect(201)
-        .expect({
-          network: 'mainnet',
-          model: 'mistral-tiny',
-          txHash:
-            '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
-          output: 'Mocked AI response',
-          sessionId: TEST_SESSION_ID,
+        .expect((res) => {
+          expect(res.body).toEqual({
+            output: 'Mocked AI response',
+            model: 'ministral-3b-2410',
+            network: 'arbitrum-sepolia',
+            txHash: expect.any(String),
+            sessionId: TEST_SESSION_ID,
+          });
         });
     });
 
-    it('should handle request with Mistral model', () => {
+    it('should handle request with no model specified', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
           message: 'test message',
-          model: 'mistral',
           sessionId: TEST_SESSION_ID,
         })
         .expect(201)
-        .expect({
-          network: 'mainnet',
-          model: 'mistral-tiny',
-          txHash:
-            '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
-          output: 'Mocked AI response',
-          sessionId: TEST_SESSION_ID,
+        .expect((res) => {
+          expect(res.body).toEqual({
+            output: undefined,
+            model: 'none',
+            network: 'arbitrum-sepolia',
+            txHash: expect.any(String),
+            sessionId: TEST_SESSION_ID,
+          });
         });
     });
 
-    it('should handle request with Mistral model and generate sessionId', () => {
+    it('should generate sessionId if not provided', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
@@ -101,11 +102,10 @@ describe('AppController (e2e)', () => {
         .expect(201)
         .expect((res) => {
           expect(res.body).toEqual({
-            network: 'mainnet',
-            model: 'mistral-tiny',
-            txHash:
-              '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
             output: 'Mocked AI response',
+            model: 'ministral-3b-2410',
+            network: 'arbitrum-sepolia',
+            txHash: expect.any(String),
             sessionId: expect.any(String),
           });
         });
