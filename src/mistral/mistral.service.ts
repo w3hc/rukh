@@ -18,7 +18,7 @@ export class MistralService {
 
     this.model = new ChatMistralAI({
       apiKey: this.apiKey,
-      modelName: 'mistral-tiny',
+      modelName: 'ministral-3b-2410',
       temperature: 0.7,
       maxTokens: 500,
     });
