@@ -81,13 +81,15 @@ export class AppService {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
 
-    if (model === 'mistral') {
+    try {
       const response = await this.mistralService.processMessage(
         message,
         usedSessionId,
       );
       output = response.content;
       usedSessionId = response.sessionId;
+    } catch (error) {
+      this.logger.error('Error processing message with Mistral:', error);
     }
 
     const txHash = await this.mintToken(
@@ -96,7 +98,7 @@ export class AppService {
 
     return {
       output,
-      model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
+      model: 'ministral-3b-2410',
       network: 'arbitrum-sepolia',
       txHash,
       sessionId: usedSessionId,

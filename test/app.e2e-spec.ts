@@ -53,7 +53,7 @@ describe('AppController (e2e)', () => {
   });
 
   describe('/ask (POST)', () => {
-    it('should handle request with Mistral model', () => {
+    it('should handle request with Mistral model explicitly specified', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
@@ -73,7 +73,7 @@ describe('AppController (e2e)', () => {
         });
     });
 
-    it('should handle request with no model specified', () => {
+    it('should handle request with no model specified (defaults to Mistral)', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
@@ -83,8 +83,8 @@ describe('AppController (e2e)', () => {
         .expect(201)
         .expect((res) => {
           expect(res.body).toEqual({
-            output: undefined,
-            model: 'none',
+            output: 'Mocked AI response',
+            model: 'ministral-3b-2410',
             network: 'arbitrum-sepolia',
             txHash: expect.any(String),
             sessionId: TEST_SESSION_ID,
@@ -157,21 +157,23 @@ describe('AppController (e2e)', () => {
         });
     });
 
-    it('should validate sessionId format', () => {
+    it('should accept any sessionId format', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
           message: 'test',
           model: 'mistral',
-          sessionId: 'invalid-uuid',
+          sessionId: 'any-session-id-format',
         })
-        .expect(400)
+        .expect(201)
         .expect((res) => {
-          expect(Array.isArray(res.body.message)).toBe(true);
-          expect(res.body.message).toContain(
-            'Session ID must be a valid UUID v4',
-          );
-          expect(res.body.error).toBe('Bad Request');
+          expect(res.body).toEqual({
+            output: 'Mocked AI response',
+            model: 'ministral-3b-2410',
+            network: 'arbitrum-sepolia',
+            txHash: expect.any(String),
+            sessionId: 'any-session-id-format',
+          });
         });
     });
   });
