@@ -6,9 +6,10 @@ import { MistralService } from '../src/mistral/mistral.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
+  let moduleFixture: TestingModule;
 
   beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
+    moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(MistralService)
@@ -30,8 +31,12 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
+  afterEach(async () => {
+    await app?.close();
+  });
+
   afterAll(async () => {
-    await app.close();
+    await moduleFixture?.close();
   });
 
   it('/ (GET)', () => {
