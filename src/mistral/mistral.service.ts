@@ -2,7 +2,6 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ChatMistralAI } from '@langchain/mistralai';
 import { CustomJsonMemory } from '../memory/custom-memory';
 import { v4 as uuidv4 } from 'uuid';
-import { BaseMessage } from '@langchain/core/messages';
 
 @Injectable()
 export class MistralService {
@@ -45,9 +44,19 @@ export class MistralService {
         content: msg.content,
       }));
 
+      // Add the new message
       messages.push({
         role: 'user',
         content: message,
+      });
+
+      this.logger.debug({
+        message: `Mistral API request [${requestId}]`,
+        requestData: {
+          message_length: message.length,
+          history_length: messages.length,
+          timestamp: new Date().toISOString(),
+        },
       });
 
       const response = await this.model.call(messages);
@@ -58,10 +67,12 @@ export class MistralService {
         { response: responseContent },
       );
 
-      this.logger.log({
-        message: `Conversation updated [${requestId}]`,
-        sessionId,
-        messageCount: messages.length + 1,
+      this.logger.debug({
+        message: `Mistral API response [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          timestamp: new Date().toISOString(),
+        },
       });
 
       return {

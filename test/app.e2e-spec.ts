@@ -63,8 +63,8 @@ describe('AppController (e2e)', () => {
         })
         .expect(201)
         .expect({
-          network: 'mainnet',
-          model: 'mistral-tiny',
+          network: 'Arbitrum Sepolia',
+          model: 'none',
           txHash:
             '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
           output: 'Mocked AI response',
@@ -82,8 +82,8 @@ describe('AppController (e2e)', () => {
         })
         .expect(201)
         .expect({
-          network: 'mainnet',
-          model: 'mistral-tiny',
+          network: 'Arbitrum Sepolia',
+          model: 'ministral-3b-2410',
           txHash:
             '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
           output: 'Mocked AI response',

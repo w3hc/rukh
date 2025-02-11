@@ -2,11 +2,17 @@
 
 [Nest.js](https://nestjs.com/)-based AI agent starter kit.
 
+RUKK governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e12eeb2d5b3fdd73e30fa0d661d5429#code 
+
+
+
 ## Install
 
 ```bash
 pnpm i
 ```
+
+Create and edit your `.env` file on the model of `.env.template`.
 
 ## Run
 
@@ -20,6 +26,8 @@ pnpm start:dev
 # production mode
 pnpm start:prod
 ```
+
+The Swagger UI should be available at http://localhost:3000/api
 
 ## Test
 
