@@ -10,7 +10,7 @@ import {
 export class AskDto {
   @ApiProperty({
     description: 'The message to send',
-    example: 'What is the weather like today?',
+    example: 'What is Rukh?',
   })
   @IsString()
   @IsNotEmpty({ message: 'Message is required' })
