@@ -22,7 +22,7 @@ describe('AppController', () => {
               .mockImplementation(async (message, model, sessionId) => ({
                 output: model === 'mistral' ? 'AI response' : undefined,
                 model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
-                network: 'arbitrum-sepolia',
+                network: 'mantle-sepolia',
                 txHash:
                   '0x1234567890123456789012345678901234567890123456789012345678901234',
                 sessionId: sessionId || 'generated-session-id',
@@ -67,7 +67,7 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: undefined,
         model: 'none',
-        network: 'arbitrum-sepolia',
+        network: 'mantle-sepolia',
         txHash: expect.any(String),
         sessionId: expect.any(String),
       });
@@ -83,7 +83,7 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'ministral-3b-2410',
-        network: 'arbitrum-sepolia',
+        network: 'mantle-sepolia',
         txHash: expect.any(String),
         sessionId: 'test-session-id',
       });
@@ -98,7 +98,7 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'ministral-3b-2410',
-        network: 'arbitrum-sepolia',
+        network: 'mantle-sepolia',
         txHash: expect.any(String),
         sessionId: expect.any(String),
       });

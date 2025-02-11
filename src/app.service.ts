@@ -26,7 +26,7 @@ export class AppService {
   }
 
   private initializeWeb3() {
-    const rpcUrl = this.configService.get<string>('ARBITRUM_RPC_URL');
+    const rpcUrl = this.configService.get<string>('MANTLE_RPC_URL');
     const privateKey = this.configService.get<string>('PRIVATE_KEY');
     const tokenAddress = this.configService.get<string>('RUKH_TOKEN_ADDRESS');
 
@@ -99,7 +99,7 @@ export class AppService {
     return {
       output,
       model: 'ministral-3b-2410',
-      network: 'arbitrum-sepolia',
+      network: 'mantle-sepolia',
       txHash,
       sessionId: usedSessionId,
     };

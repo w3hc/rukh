@@ -2,7 +2,8 @@
 
 [Nest.js](https://nestjs.com/)-based AI agent starter kit.
 
-RUKH governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e12eeb2d5b3fdd73e30fa0d661d5429#code 
+- [Rukh governance token](https://explorer.sepolia.mantle.xyz/address/0x4db173196C37bF4Df60277A843590690F52bEB6a#code)
+- [Rukh DAO](https://explorer.sepolia.mantle.xyz/address/0x446200cB329592134989B615d4C02f9f3c9E970F#code)
 
 ## Features
 

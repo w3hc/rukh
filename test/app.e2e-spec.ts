@@ -66,7 +66,7 @@ describe('AppController (e2e)', () => {
           expect(res.body).toEqual({
             output: 'Mocked AI response',
             model: 'ministral-3b-2410',
-            network: 'arbitrum-sepolia',
+            network: 'mantle-sepolia',
             txHash: expect.any(String),
             sessionId: TEST_SESSION_ID,
           });
@@ -85,7 +85,7 @@ describe('AppController (e2e)', () => {
           expect(res.body).toEqual({
             output: 'Mocked AI response',
             model: 'ministral-3b-2410',
-            network: 'arbitrum-sepolia',
+            network: 'mantle-sepolia',
             txHash: expect.any(String),
             sessionId: TEST_SESSION_ID,
           });
@@ -104,7 +104,7 @@ describe('AppController (e2e)', () => {
           expect(res.body).toEqual({
             output: 'Mocked AI response',
             model: 'ministral-3b-2410',
-            network: 'arbitrum-sepolia',
+            network: 'mantle-sepolia',
             txHash: expect.any(String),
             sessionId: expect.any(String),
           });
@@ -170,7 +170,7 @@ describe('AppController (e2e)', () => {
           expect(res.body).toEqual({
             output: 'Mocked AI response',
             model: 'ministral-3b-2410',
-            network: 'arbitrum-sepolia',
+            network: 'mantle-sepolia',
             txHash: expect.any(String),
             sessionId: 'any-session-id-format',
           });
