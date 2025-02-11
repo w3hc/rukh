@@ -48,6 +48,11 @@ export class AppController {
     },
   })
   async ask(@Body() askDto: AskDto): Promise<AskResponseDto> {
-    return this.appService.ask(askDto.message, askDto.model, askDto.sessionId);
+    return this.appService.ask(
+      askDto.message,
+      askDto.model,
+      askDto.sessionId,
+      askDto.walletAddress,
+    );
   }
 }

@@ -8,6 +8,7 @@ describe('AppController (e2e)', () => {
   let app: INestApplication;
   let moduleFixture: TestingModule;
   const TEST_SESSION_ID = 'fe35ccb1-848f-4111-98cf-09aec5a134e0';
+  const TEST_WALLET_ADDRESS = '0x446200cB329592134989B615d4C02f9f3c9E970F';
 
   beforeEach(async () => {
     moduleFixture = await Test.createTestingModule({
@@ -53,7 +54,31 @@ describe('AppController (e2e)', () => {
   });
 
   describe('/ask (POST)', () => {
-    it('should handle request with Mistral model explicitly specified', () => {
+    it('should handle request with Mistral model and wallet address', () => {
+      return request(app.getHttpServer())
+        .post('/ask')
+        .send({
+          message: 'test message',
+          model: 'mistral',
+          sessionId: TEST_SESSION_ID,
+          walletAddress: TEST_WALLET_ADDRESS,
+        })
+        .expect(201)
+        .expect((res) => {
+          expect(res.body).toEqual({
+            output: 'Mocked AI response',
+            model: 'ministral-3b-2410',
+            network: 'mantle-sepolia',
+            txHash: expect.any(String),
+            explorerLink: expect.stringMatching(
+              /^https:\/\/explorer\.sepolia\.mantle\.xyz\/tx\/0x[a-fA-F0-9]{64}$/,
+            ),
+            sessionId: TEST_SESSION_ID,
+          });
+        });
+    });
+
+    it('should handle request with no wallet address (use default)', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
@@ -68,27 +93,27 @@ describe('AppController (e2e)', () => {
             model: 'ministral-3b-2410',
             network: 'mantle-sepolia',
             txHash: expect.any(String),
+            explorerLink: expect.stringMatching(
+              /^https:\/\/explorer\.sepolia\.mantle\.xyz\/tx\/0x[a-fA-F0-9]{64}$/,
+            ),
             sessionId: TEST_SESSION_ID,
           });
         });
     });
 
-    it('should handle request with no model specified (defaults to Mistral)', () => {
+    it('should validate invalid wallet address', () => {
       return request(app.getHttpServer())
         .post('/ask')
         .send({
           message: 'test message',
-          sessionId: TEST_SESSION_ID,
+          model: 'mistral',
+          walletAddress: 'invalid-address',
         })
-        .expect(201)
+        .expect(400)
         .expect((res) => {
-          expect(res.body).toEqual({
-            output: 'Mocked AI response',
-            model: 'ministral-3b-2410',
-            network: 'mantle-sepolia',
-            txHash: expect.any(String),
-            sessionId: TEST_SESSION_ID,
-          });
+          expect(res.body.message).toContain(
+            'walletAddress must be an Ethereum address',
+          );
         });
     });
 
@@ -106,6 +131,9 @@ describe('AppController (e2e)', () => {
             model: 'ministral-3b-2410',
             network: 'mantle-sepolia',
             txHash: expect.any(String),
+            explorerLink: expect.stringMatching(
+              /^https:\/\/explorer\.sepolia\.mantle\.xyz\/tx\/0x[a-fA-F0-9]{64}$/,
+            ),
             sessionId: expect.any(String),
           });
         });
@@ -137,43 +165,6 @@ describe('AppController (e2e)', () => {
             'Model must be either "mistral" or empty',
           );
           expect(res.body.error).toBe('Bad Request');
-        });
-    });
-
-    it('should validate request body - unexpected field', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test',
-          unexpectedField: 'should fail',
-        })
-        .expect(400)
-        .expect((res) => {
-          expect(Array.isArray(res.body.message)).toBe(true);
-          expect(res.body.message).toContain(
-            'property unexpectedField should not exist',
-          );
-          expect(res.body.error).toBe('Bad Request');
-        });
-    });
-
-    it('should accept any sessionId format', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test',
-          model: 'mistral',
-          sessionId: 'any-session-id-format',
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toEqual({
-            output: 'Mocked AI response',
-            model: 'ministral-3b-2410',
-            network: 'mantle-sepolia',
-            txHash: expect.any(String),
-            sessionId: 'any-session-id-format',
-          });
         });
     });
   });

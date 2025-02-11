@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsIn,
+  IsEthereumAddress,
+} from 'class-validator';
 
 export class AskDto {
   @ApiProperty({
@@ -31,4 +37,13 @@ export class AskDto {
   })
   @IsOptional()
   sessionId?: string;
+
+  @ApiProperty({
+    description: 'Ethereum address to receive your RUKH governance token',
+    example: '0x446200cB329592134989B615d4C02f9f3c9E970F',
+    required: false,
+  })
+  @IsOptional()
+  @IsEthereumAddress()
+  walletAddress?: string;
 }
