@@ -14,7 +14,7 @@
 - LangChain.js
 - Mistral `ministral-3b-2410` 
 
-Any other LLM service can be added (Anthropic, OpenAI, DeepSeek).
+Any other LLM service can be added (Anthropic, OpenAI, DeepSeek, or any).
 
 ## Install
 
@@ -50,6 +50,48 @@ pnpm test:e2e
 
 # test coverage
 pnpm test:cov
+```
+
+## Example requests
+
+```json
+{
+  "message": "What is Rukh?"
+}
+```
+
+or 
+
+```json
+{
+  "message": "What is Rukh?",
+  "model": "mistral",
+  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73"
+}
+```
+
+Will return: 
+
+```json
+{
+  "output": "Rukh is a powerful bird.",
+  "model": "ministral-3b-2410",
+  "network": "mantle-sepolia",
+  "txHash": "0xe12029f35c67551d2c8c58e91a90090e5e0f0998a8c0b6f6cdb72fe9075c73fa",
+  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73"
+}
+```
+
+### Curl
+
+```bash 
+curl -X 'POST' \
+  'http://localhost:3000/ask' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "message": "What is Rukh?"
+}'
 ```
 
 ## Support
