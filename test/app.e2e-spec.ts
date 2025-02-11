@@ -7,7 +7,6 @@ import { MistralService } from '../src/mistral/mistral.service';
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let moduleFixture: TestingModule;
-  // Define a valid UUID for testing
   const TEST_SESSION_ID = 'fe35ccb1-848f-4111-98cf-09aec5a134e0';
 
   beforeEach(async () => {
@@ -17,7 +16,6 @@ describe('AppController (e2e)', () => {
       .overrideProvider(MistralService)
       .useValue({
         processMessage: jest.fn().mockImplementation((message, sessionId) => {
-          // Return the same sessionId that was passed in
           return Promise.resolve({
             content: 'Mocked AI response',
             sessionId: sessionId || TEST_SESSION_ID,
@@ -80,7 +78,7 @@ describe('AppController (e2e)', () => {
         .send({
           message: 'test message',
           model: 'mistral',
-          sessionId: TEST_SESSION_ID, // Use the valid UUID
+          sessionId: TEST_SESSION_ID,
         })
         .expect(201)
         .expect({
