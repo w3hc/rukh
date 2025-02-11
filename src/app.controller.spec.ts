@@ -9,6 +9,9 @@ describe('AppController', () => {
   let appService: AppService;
   let mistralService: MistralService;
 
+  const mockTxHash =
+    '0x1234567890123456789012345678901234567890123456789012345678901234';
+
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
@@ -19,14 +22,16 @@ describe('AppController', () => {
             getHello: () => 'Hello World!',
             ask: jest
               .fn()
-              .mockImplementation(async (message, model, sessionId) => ({
-                output: model === 'mistral' ? 'AI response' : undefined,
-                model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
-                network: 'arbitrum-sepolia',
-                txHash:
-                  '0x1234567890123456789012345678901234567890123456789012345678901234',
-                sessionId: sessionId || 'generated-session-id',
-              })),
+              .mockImplementation(
+                async (message, model, sessionId, walletAddress) => ({
+                  output: model === 'mistral' ? 'AI response' : undefined,
+                  model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
+                  network: 'mantle-sepolia',
+                  txHash: mockTxHash,
+                  explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
+                  sessionId: sessionId || 'generated-session-id',
+                }),
+              ),
           },
         },
         {
@@ -59,6 +64,8 @@ describe('AppController', () => {
   });
 
   describe('ask', () => {
+    const testWalletAddress = '0x446200cB329592134989B615d4C02f9f3c9E970F';
+
     it('should return response with no model specified', async () => {
       const result = await appController.ask({
         message: 'test message',
@@ -67,24 +74,27 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: undefined,
         model: 'none',
-        network: 'arbitrum-sepolia',
-        txHash: expect.any(String),
+        network: 'mantle-sepolia',
+        txHash: mockTxHash,
+        explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
         sessionId: expect.any(String),
       });
     });
 
-    it('should return response with Mistral model', async () => {
+    it('should return response with Mistral model and wallet address', async () => {
       const result = await appController.ask({
         message: 'test message',
         model: 'mistral',
         sessionId: 'test-session-id',
+        walletAddress: testWalletAddress,
       });
 
       expect(result).toEqual({
         output: 'AI response',
         model: 'ministral-3b-2410',
-        network: 'arbitrum-sepolia',
-        txHash: expect.any(String),
+        network: 'mantle-sepolia',
+        txHash: mockTxHash,
+        explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
         sessionId: 'test-session-id',
       });
     });
@@ -98,8 +108,9 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'ministral-3b-2410',
-        network: 'arbitrum-sepolia',
-        txHash: expect.any(String),
+        network: 'mantle-sepolia',
+        txHash: mockTxHash,
+        explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
         sessionId: expect.any(String),
       });
     });

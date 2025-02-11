@@ -1,8 +1,20 @@
 # Rukh
+A lightweight, developer-friendly toolkit for building AI agents with blockchain integration. Rukh makes it easy to create, deploy, and scale AI applications with:
 
-[Nest.js](https://nestjs.com/)-based AI agent starter kit.
+- 🚀 Quick setup and minimal configuration
+- 🔄 Built-in session management and persistent storage
+- 🔗 Seamless blockchain integration with Mantle Network
+- 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, etc.)
+- 📝 Auto-generated OpenAPI documentation
+- 🎮 Token-gated access control built-in
+- ⚡ Production-ready with rate limiting and error handling
 
-RUKH governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e12eeb2d5b3fdd73e30fa0d661d5429#code 
+Live at: **http://rukh.w3hc.org/api**
+
+Solidity contracts: 
+
+- [Rukh governance token](https://explorer.sepolia.mantle.xyz/address/0x4db173196C37bF4Df60277A843590690F52bEB6a#code)
+- [Rukh DAO](https://explorer.sepolia.mantle.xyz/address/0x446200cB329592134989B615d4C02f9f3c9E970F#code)
 
 ## Features
 
@@ -13,7 +25,7 @@ RUKH governance contract address: https://sepolia.arbiscan.io/token/0xefb5b4f08e
 - LangChain.js
 - Mistral `ministral-3b-2410` 
 
-Any other LLM service can be added (Anthropic, OpenAI, DeepSeek).
+Any other LLM service can be added (Anthropic, OpenAI, DeepSeek, or any).
 
 ## Install
 
@@ -49,6 +61,50 @@ pnpm test:e2e
 
 # test coverage
 pnpm test:cov
+```
+
+## Example requests
+
+```json
+{
+  "message": "What is Rukh?"
+}
+```
+
+or 
+
+```json
+{
+  "message": "What is Rukh?",
+  "model": "mistral",
+  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73",
+  "walletAddress": "0x265E31444C6E279870eB20c15B0547373635840b"
+}
+```
+
+Will return: 
+
+```json
+{
+  "output": "Rukh is a powerful bird.",
+  "model": "ministral-3b-2410",
+  "network": "mantle-sepolia",
+  "txHash": "0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
+  "explorerLink": "https://explorer.sepolia.mantle.xyz/tx/0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
+  "sessionId": "bdce1931-b09d-49ef-954b-d20074d11ffa"
+}
+```
+
+### Curl
+
+```bash 
+curl -X 'POST' \
+  'http://localhost:3000/ask' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "message": "What is Rukh?"
+}'
 ```
 
 ## Support

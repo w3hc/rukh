@@ -11,6 +11,8 @@ const RUKH_TOKEN_ABI = [
   'function owner() external view returns (address)',
 ];
 
+const DEFAULT_RECIPIENT = '0x446200cB329592134989B615d4C02f9f3c9E970F';
+
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
@@ -26,7 +28,7 @@ export class AppService {
   }
 
   private initializeWeb3() {
-    const rpcUrl = this.configService.get<string>('ARBITRUM_RPC_URL');
+    const rpcUrl = this.configService.get<string>('MANTLE_RPC_URL');
     const privateKey = this.configService.get<string>('PRIVATE_KEY');
     const tokenAddress = this.configService.get<string>('RUKH_TOKEN_ADDRESS');
 
@@ -77,6 +79,7 @@ export class AppService {
     message: string,
     model?: string,
     sessionId?: string,
+    walletAddress?: string,
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
@@ -92,15 +95,16 @@ export class AppService {
       this.logger.error('Error processing message with Mistral:', error);
     }
 
-    const txHash = await this.mintToken(
-      '0x990E99d9fEF9bB83E5854f3cE7E6846Dcd9e5FD5',
-    );
+    const recipient = walletAddress || DEFAULT_RECIPIENT;
+    const txHash = await this.mintToken(recipient);
+    const explorerLink = `https://explorer.sepolia.mantle.xyz/tx/${txHash}`;
 
     return {
       output,
       model: 'ministral-3b-2410',
-      network: 'arbitrum-sepolia',
+      network: 'mantle-sepolia',
       txHash,
+      explorerLink,
       sessionId: usedSessionId,
     };
   }

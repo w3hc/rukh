@@ -3,13 +3,13 @@ import { ApiProperty } from '@nestjs/swagger';
 export class AskResponseDto {
   @ApiProperty({
     description: 'The network used for processing',
-    example: 'Arbitrum Sepolia',
+    example: 'mantle-sepolia',
   })
   network: string;
 
   @ApiProperty({
     description: 'The model used for processing',
-    example: 'mistral',
+    example: 'ministral-3b-2410',
   })
   model: string;
 
@@ -19,6 +19,13 @@ export class AskResponseDto {
       '0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
   })
   txHash: string;
+
+  @ApiProperty({
+    description: 'The explorer link for the transaction',
+    example:
+      'https://explorer.sepolia.mantle.xyz/tx/0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
+  })
+  explorerLink: string;
 
   @ApiProperty({
     description: 'The AI generated response',
