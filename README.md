@@ -1,9 +1,9 @@
 # Rukh
-A lightweight, developer-friendly toolkit for building AI agents with blockchain integration. Rukh makes it easy to create, deploy, and scale AI applications with:
+A lightweight, developer-friendly toolkit for building AI agents with Web3 integration. Built with Nest.js (TypeScript), Rukh makes it easy to create, deploy, and scale AI applications with:
 
 - 🚀 Quick setup and minimal configuration
 - 🔄 Built-in session management and persistent storage
-- 🔗 Seamless blockchain integration with Mantle Network
+- 🔗 Seamless Web3 integration with [Mantle Network](https://www.mantle.xyz/)
 - 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, etc.)
 - 📝 Auto-generated OpenAPI documentation
 - 🎮 Token-gated access control built-in
@@ -18,12 +18,12 @@ Solidity contracts:
 
 ## Features
 
-- Nest.js `v11`
+- [Nest.js](https://nestjs.com/) `v11` (TypeScript-based API framework)
 - Ethers `v6`
 - OpenAPI/Swagger docs
 - JSON-based persistent storage
 - LangChain.js
-- Mistral `ministral-3b-2410` 
+- Mistral [`ministral-3b-2410`](https://mistral.ai/en/news/ministraux) 
 
 Any other LLM service can be added (Anthropic, OpenAI, DeepSeek, or any).
 
