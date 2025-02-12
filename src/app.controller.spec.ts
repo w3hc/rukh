@@ -58,8 +58,10 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return HTML content', () => {
+      const result = appController.getHello();
+      expect(result).toContain('<!DOCTYPE html>');
+      expect(result).toContain('Welcome to Rukh');
     });
   });
 

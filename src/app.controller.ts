@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Header } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
@@ -12,6 +12,7 @@ export class AppController {
 
   @Get()
   @SkipThrottle()
+  @Header('Content-Type', 'text/html')
   @ApiOperation({ summary: 'Get hello message' })
   @ApiResponse({
     status: 200,
