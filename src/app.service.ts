@@ -4,7 +4,7 @@ import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
 import { MistralService } from './mistral/mistral.service';
 import { AskResponseDto } from './dto/ask-response.dto';
-import { readFile } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
 
 const RUKH_TOKEN_ABI = [
@@ -21,29 +21,35 @@ export class AppService {
   private provider: ethers.JsonRpcProvider;
   private signer: ethers.Wallet;
   private tokenContract: ethers.Contract;
-  private rukhDefinition: string | null = null;
+  private contexts: Map<string, string> = new Map();
 
   constructor(
     private readonly mistralService: MistralService,
     private readonly configService: ConfigService,
   ) {
     this.initializeWeb3();
-    this.loadRukhDefinition();
+    this.loadContexts();
   }
 
-  private async loadRukhDefinition() {
+  private async loadContexts() {
     try {
-      const definitionPath = join(
-        process.cwd(),
-        'data',
-        'assistants',
-        'rukh',
-        'rukh-definition.md',
-      );
-      this.rukhDefinition = await readFile(definitionPath, 'utf-8');
+      const assistantsPath = join(process.cwd(), 'data', 'contexts');
+      const contexts = await readdir(assistantsPath);
+
+      for (const context of contexts) {
+        const contextPath = join(assistantsPath, context);
+        const files = await readdir(contextPath);
+
+        for (const file of files) {
+          if (file.endsWith('.md')) {
+            const content = await readFile(join(contextPath, file), 'utf-8');
+            this.contexts.set(context, content);
+            this.logger.log(`Loaded context: ${context}`);
+          }
+        }
+      }
     } catch (error) {
-      this.logger.error('Failed to load Rukh definition:', error);
-      this.rukhDefinition = null;
+      this.logger.error('Failed to load contexts:', error);
     }
   }
 
@@ -96,6 +102,7 @@ export class AppService {
     model?: string,
     sessionId?: string,
     walletAddress?: string,
+    context: string = 'rukh',
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
@@ -104,9 +111,10 @@ export class AppService {
       const { isFirstMessage } =
         await this.mistralService.getConversationHistory(usedSessionId);
 
+      const contextContent = this.contexts.get(context);
       const contextualMessage =
-        isFirstMessage && this.rukhDefinition
-          ? `Context: ${this.rukhDefinition}\n\nUser Query: ${message}`
+        isFirstMessage && contextContent
+          ? `Context: ${contextContent}\n\nUser Query: ${message}`
           : message;
 
       const response = await this.mistralService.processMessage(
