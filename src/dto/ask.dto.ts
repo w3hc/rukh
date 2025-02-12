@@ -46,4 +46,14 @@ export class AskDto {
   @IsOptional()
   @IsEthereumAddress()
   walletAddress?: string;
+
+  @ApiProperty({
+    description: 'Context to use for the conversation',
+    example: 'rukh',
+    required: false,
+    default: 'rukh',
+  })
+  @IsOptional()
+  @IsString()
+  context?: string;
 }

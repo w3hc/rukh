@@ -54,6 +54,7 @@ export class AppController {
       askDto.model,
       askDto.sessionId,
       askDto.walletAddress,
+      askDto.context,
     );
   }
 }

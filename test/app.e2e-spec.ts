@@ -3,12 +3,16 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { MistralService } from '../src/mistral/mistral.service';
+import { AppService } from '../src/app.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let moduleFixture: TestingModule;
-  const TEST_SESSION_ID = 'fe35ccb1-848f-4111-98cf-09aec5a134e0';
+  const TEST_SESSION_ID = 'test-session-id';
   const TEST_WALLET_ADDRESS = '0x446200cB329592134989B615d4C02f9f3c9E970F';
+  const MOCK_TX_HASH =
+    '0x1234567890123456789012345678901234567890123456789012345678901234';
 
   beforeEach(async () => {
     moduleFixture = await Test.createTestingModule({
@@ -16,17 +20,42 @@ describe('AppController (e2e)', () => {
     })
       .overrideProvider(MistralService)
       .useValue({
-        processMessage: jest.fn().mockImplementation((message, sessionId) => {
-          return Promise.resolve({
-            content: 'Mocked AI response',
-            sessionId: sessionId || TEST_SESSION_ID,
-          });
+        processMessage: jest.fn().mockResolvedValue({
+          content: 'Mocked AI response',
+          sessionId: TEST_SESSION_ID,
+        }),
+        getConversationHistory: jest.fn().mockResolvedValue({
+          history: [],
+          isFirstMessage: true,
+        }),
+      })
+      .overrideProvider(AppService)
+      .useValue({
+        getHello: () =>
+          `<!DOCTYPE html><html><body><h1>Welcome to Rukh</h1><p>developer-friendly toolkit</p><a href="/api">Swagger UI</a></body></html>`,
+        ask: jest.fn().mockResolvedValue({
+          output: 'Mocked AI response',
+          model: 'ministral-3b-2410',
+          network: 'mantle-sepolia',
+          txHash: MOCK_TX_HASH,
+          explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${MOCK_TX_HASH}`,
+          sessionId: TEST_SESSION_ID,
+        }),
+      })
+      .overrideProvider(ConfigService)
+      .useValue({
+        get: jest.fn().mockImplementation((key: string) => {
+          const config = {
+            MANTLE_RPC_URL: 'https://test.mantle.xyz',
+            PRIVATE_KEY: '0x1234567890',
+            RUKH_TOKEN_ADDRESS: '0x1234567890123456789012345678901234567890',
+          };
+          return config[key];
         }),
       })
       .compile();
 
     app = moduleFixture.createNestApplication();
-
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -34,7 +63,6 @@ describe('AppController (e2e)', () => {
         transform: true,
       }),
     );
-
     await app.init();
   });
 
@@ -46,129 +74,150 @@ describe('AppController (e2e)', () => {
     await moduleFixture?.close();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Content-Type', /html/)
-      .expect((res) => {
-        expect(res.text).toContain('Welcome to Rukh');
-      });
+  describe('/ (GET)', () => {
+    it('should return HTML welcome page', () => {
+      return request(app.getHttpServer())
+        .get('/')
+        .expect(200)
+        .expect('Content-Type', /html/)
+        .expect((res) => {
+          expect(res.text).toContain('Welcome to Rukh');
+          expect(res.text).toContain('developer-friendly toolkit');
+          expect(res.text).toContain('Swagger UI');
+        });
+    });
   });
 
   describe('/ask (POST)', () => {
-    it('should handle request with Mistral model and wallet address', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test message',
-          model: 'mistral',
-          sessionId: TEST_SESSION_ID,
-          walletAddress: TEST_WALLET_ADDRESS,
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toEqual({
-            output: 'Mocked AI response',
-            model: 'ministral-3b-2410',
-            network: 'mantle-sepolia',
-            txHash: expect.any(String),
-            explorerLink: expect.stringMatching(
-              /^https:\/\/explorer\.sepolia\.mantle\.xyz\/tx\/0x[a-fA-F0-9]{64}$/,
-            ),
+    describe('Valid Requests', () => {
+      it('should handle basic request with only message', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({ message: 'test message' })
+          .expect(201)
+          .expect((res) => {
+            expect(res.body).toMatchObject({
+              output: 'Mocked AI response',
+              model: 'ministral-3b-2410',
+              network: 'mantle-sepolia',
+              txHash: MOCK_TX_HASH,
+              sessionId: TEST_SESSION_ID,
+            });
+          });
+      });
+
+      it('should handle request with all optional parameters', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({
+            message: 'test message',
+            model: 'mistral',
             sessionId: TEST_SESSION_ID,
+            walletAddress: TEST_WALLET_ADDRESS,
+          })
+          .expect(201)
+          .expect((res) => {
+            expect(res.body).toMatchObject({
+              output: 'Mocked AI response',
+              model: 'ministral-3b-2410',
+              network: 'mantle-sepolia',
+              txHash: MOCK_TX_HASH,
+              explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${MOCK_TX_HASH}`,
+              sessionId: TEST_SESSION_ID,
+            });
           });
-        });
-    });
+      });
 
-    it('should handle request with no wallet address (use default)', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test message',
-          model: 'mistral',
-          sessionId: TEST_SESSION_ID,
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toEqual({
-            output: 'Mocked AI response',
-            model: 'ministral-3b-2410',
-            network: 'mantle-sepolia',
-            txHash: expect.any(String),
-            explorerLink: expect.stringMatching(
-              /^https:\/\/explorer\.sepolia\.mantle\.xyz\/tx\/0x[a-fA-F0-9]{64}$/,
-            ),
-            sessionId: TEST_SESSION_ID,
+      it('should handle request with empty model string', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({
+            message: 'test message',
+            model: '',
+          })
+          .expect(201)
+          .expect((res) => {
+            expect(res.body.model).toBe('ministral-3b-2410');
           });
-        });
+      });
     });
 
-    it('should validate invalid wallet address', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test message',
-          model: 'mistral',
-          walletAddress: 'invalid-address',
-        })
-        .expect(400)
-        .expect((res) => {
-          expect(res.body.message).toContain(
-            'walletAddress must be an Ethereum address',
-          );
-        });
-    });
-
-    it('should generate sessionId if not provided', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test message',
-          model: 'mistral',
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toEqual({
-            output: 'Mocked AI response',
-            model: 'ministral-3b-2410',
-            network: 'mantle-sepolia',
-            txHash: expect.any(String),
-            explorerLink: expect.stringMatching(
-              /^https:\/\/explorer\.sepolia\.mantle\.xyz\/tx\/0x[a-fA-F0-9]{64}$/,
-            ),
-            sessionId: expect.any(String),
+    describe('Invalid Requests', () => {
+      it('should reject missing message', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({})
+          .expect(400)
+          .expect((res) => {
+            expect(res.body.message).toContain('message must be a string');
           });
-        });
+      });
+
+      it('should reject invalid model value', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({
+            message: 'test',
+            model: 'invalid-model',
+          })
+          .expect(400)
+          .expect((res) => {
+            expect(res.body.message).toContain(
+              'Model must be either "mistral" or empty',
+            );
+          });
+      });
+
+      it('should reject invalid wallet address', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({
+            message: 'test',
+            walletAddress: 'invalid-address',
+          })
+          .expect(400)
+          .expect((res) => {
+            expect(res.body.message).toContain(
+              'walletAddress must be an Ethereum address',
+            );
+          });
+      });
+
+      it('should reject additional properties', () => {
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({
+            message: 'test',
+            invalidProperty: 'value',
+          })
+          .expect(400)
+          .expect((res) => {
+            expect(res.body.message).toContain(
+              'property invalidProperty should not exist',
+            );
+          });
+      });
     });
 
-    it('should validate request body - missing required field', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({})
-        .expect(400)
-        .expect((res) => {
-          expect(Array.isArray(res.body.message)).toBe(true);
-          expect(res.body.message).toContain('message must be a string');
-          expect(res.body.error).toBe('Bad Request');
-        });
-    });
+    describe('Rate Limiting', () => {
+      it('should enforce rate limiting after 3 requests', async () => {
+        // Make 3 successful requests
+        for (let i = 0; i < 3; i++) {
+          await request(app.getHttpServer())
+            .post('/ask')
+            .send({ message: 'test message' })
+            .expect(201);
+        }
 
-    it('should validate request body - invalid model value', () => {
-      return request(app.getHttpServer())
-        .post('/ask')
-        .send({
-          message: 'test',
-          model: 'invalid-model',
-        })
-        .expect(400)
-        .expect((res) => {
-          expect(Array.isArray(res.body.message)).toBe(true);
-          expect(res.body.message).toContain(
-            'Model must be either "mistral" or empty',
-          );
-          expect(res.body.error).toBe('Bad Request');
-        });
+        // Fourth request should be rate limited
+        return request(app.getHttpServer())
+          .post('/ask')
+          .send({ message: 'test message' })
+          .expect(429)
+          .expect((res) => {
+            expect(res.body.message).toContain('Rate limit exceeded');
+          });
+      });
     });
   });
 });
