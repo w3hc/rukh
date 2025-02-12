@@ -20,7 +20,6 @@ describe('AppController', () => {
           provide: AppService,
           useValue: {
             getHello: () => {
-              // Return a simplified version of the HTML for testing
               return `<!DOCTYPE html>
 <html lang="en">
 <head>

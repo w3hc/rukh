@@ -4,6 +4,8 @@ import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
 import { MistralService } from './mistral/mistral.service';
 import { AskResponseDto } from './dto/ask-response.dto';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 
 const RUKH_TOKEN_ABI = [
   'function mint(address to, uint256 amount) external',
@@ -19,12 +21,30 @@ export class AppService {
   private provider: ethers.JsonRpcProvider;
   private signer: ethers.Wallet;
   private tokenContract: ethers.Contract;
+  private rukhDefinition: string | null = null;
 
   constructor(
     private readonly mistralService: MistralService,
     private readonly configService: ConfigService,
   ) {
     this.initializeWeb3();
+    this.loadRukhDefinition();
+  }
+
+  private async loadRukhDefinition() {
+    try {
+      const definitionPath = join(
+        process.cwd(),
+        'data',
+        'assistants',
+        'rukh',
+        'rukh-definition.md',
+      );
+      this.rukhDefinition = await readFile(definitionPath, 'utf-8');
+    } catch (error) {
+      this.logger.error('Failed to load Rukh definition:', error);
+      this.rukhDefinition = null;
+    }
   }
 
   private initializeWeb3() {
@@ -69,6 +89,48 @@ export class AppService {
       this.logger.error('Error minting token:', error);
       return '0x0000000000000000000000000000000000000000000000000000000000000000';
     }
+  }
+
+  async ask(
+    message: string,
+    model?: string,
+    sessionId?: string,
+    walletAddress?: string,
+  ): Promise<AskResponseDto> {
+    let output: string | undefined;
+    let usedSessionId = sessionId || uuidv4();
+
+    try {
+      const { isFirstMessage } =
+        await this.mistralService.getConversationHistory(usedSessionId);
+
+      const contextualMessage =
+        isFirstMessage && this.rukhDefinition
+          ? `Context: ${this.rukhDefinition}\n\nUser Query: ${message}`
+          : message;
+
+      const response = await this.mistralService.processMessage(
+        contextualMessage,
+        usedSessionId,
+      );
+      output = response.content;
+      usedSessionId = response.sessionId;
+    } catch (error) {
+      this.logger.error('Error processing message with Mistral:', error);
+    }
+
+    const recipient = walletAddress || DEFAULT_RECIPIENT;
+    const txHash = await this.mintToken(recipient);
+    const explorerLink = `https://explorer.sepolia.mantle.xyz/tx/${txHash}`;
+
+    return {
+      output,
+      model: 'ministral-3b-2410',
+      network: 'mantle-sepolia',
+      txHash,
+      explorerLink,
+      sessionId: usedSessionId,
+    };
   }
 
   getHello(): string {
@@ -169,39 +231,5 @@ export class AppService {
     </div>
 </body>
 </html>`;
-  }
-
-  async ask(
-    message: string,
-    model?: string,
-    sessionId?: string,
-    walletAddress?: string,
-  ): Promise<AskResponseDto> {
-    let output: string | undefined;
-    let usedSessionId = sessionId || uuidv4();
-
-    try {
-      const response = await this.mistralService.processMessage(
-        message,
-        usedSessionId,
-      );
-      output = response.content;
-      usedSessionId = response.sessionId;
-    } catch (error) {
-      this.logger.error('Error processing message with Mistral:', error);
-    }
-
-    const recipient = walletAddress || DEFAULT_RECIPIENT;
-    const txHash = await this.mintToken(recipient);
-    const explorerLink = `https://explorer.sepolia.mantle.xyz/tx/${txHash}`;
-
-    return {
-      output,
-      model: 'ministral-3b-2410',
-      network: 'mantle-sepolia',
-      txHash,
-      explorerLink,
-      sessionId: usedSessionId,
-    };
   }
 }
