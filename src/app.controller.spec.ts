@@ -19,7 +19,20 @@ describe('AppController', () => {
         {
           provide: AppService,
           useValue: {
-            getHello: () => 'Hello World!',
+            getHello: () => {
+              // Return a simplified version of the HTML for testing
+              return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Welcome to Rukh</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Rukh</h1>
+    </div>
+</body>
+</html>`;
+            },
             ask: jest
               .fn()
               .mockImplementation(
@@ -58,8 +71,11 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return HTML content', () => {
+      const result = appController.getHello();
+      expect(result).toContain('<!DOCTYPE html>');
+      expect(result).toContain('Welcome to Rukh');
+      expect(result).toContain('</html>');
     });
   });
 

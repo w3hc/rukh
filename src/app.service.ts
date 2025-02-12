@@ -72,7 +72,80 @@ export class AppService {
   }
 
   getHello(): string {
-    return 'Hello World!';
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Rukh</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 800px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #3490dc, #6574cd);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        p {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            color: #a0aec0;
+            margin: 1rem 0;
+        }
+
+        .links {
+            margin-top: 2rem;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 0.8rem 1.6rem;
+            margin: 0.5rem;
+            background: linear-gradient(45deg, #3490dc, #6574cd);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: transform 0.2s;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Rukh</h1>
+        <p>A lightweight, developer-friendly toolkit for building AI agents with Web3 integration</p>
+        <p>🚀 Quick setup • 🔄 Built-in session management • 🔗 Web3 integration • 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, DeepSeek, etc.)</p>
+        <div class="links">
+            <a href="/api" class="button">Swagger UI</a>
+            <a href="https://github.com/w3hc/rukh" class="button">GitHub Repo</a>
+        </div>
+    </div>
+</body>
+</html>`;
   }
 
   async ask(

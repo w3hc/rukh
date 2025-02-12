@@ -19,7 +19,7 @@ async function bootstrap() {
     .setDescription(
       'Nest.js-based AI agent starter kit. \n\nGitHub repo: https://github.com/w3hc/rukh',
     )
-    .setVersion('0.1.0-alpha')
+    .setVersion('0.1.1-alpha')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
