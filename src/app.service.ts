@@ -114,6 +114,26 @@ export class AppService {
             margin: 1rem 0;
         }
 
+        .tech-links {
+            margin: 1rem 0;
+            font-size: 1.2rem;
+            line-height: 1.6;
+            color: #a0aec0;
+        }
+
+        .tech-links a {
+            background: linear-gradient(45deg, #3490dc, #6574cd);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .tech-links a:hover {
+            opacity: 0.8;
+        }
+
         .links {
             margin-top: 2rem;
         }
@@ -138,10 +158,13 @@ export class AppService {
     <div class="container">
         <h1>Welcome to Rukh</h1>
         <p>A lightweight, developer-friendly toolkit for building AI agents with Web3 integration</p>
+        <div class="tech-links">
+            Built with <a href="https://nestjs.com/" target="_blank" rel="noopener noreferrer">Nest.js</a> • Powered by <a href="https://www.mantle.xyz/" target="_blank" rel="noopener noreferrer">Mantle</a>
+        </div>
         <p>🚀 Quick setup • 🔄 Built-in session management • 🔗 Web3 integration • 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, DeepSeek, etc.)</p>
         <div class="links">
             <a href="/api" class="button">Swagger UI</a>
-            <a href="https://github.com/w3hc/rukh" class="button">GitHub Repo</a>
+            <a href="https://github.com/w3hc/rukh" target="_blank" rel="noopener noreferrer" class="button">GitHub Repo</a>
         </div>
     </div>
 </body>
