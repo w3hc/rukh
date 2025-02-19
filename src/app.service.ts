@@ -13,7 +13,7 @@ const RUKH_TOKEN_ABI = [
   'function owner() external view returns (address)',
 ];
 
-const DEFAULT_RECIPIENT = '0x446200cB329592134989B615d4C02f9f3c9E970F';
+const DEFAULT_RECIPIENT = '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977';
 
 @Injectable()
 export class AppService {
@@ -54,7 +54,7 @@ export class AppService {
   }
 
   private initializeWeb3() {
-    const rpcUrl = this.configService.get<string>('MANTLE_RPC_URL');
+    const rpcUrl = this.configService.get<string>('ARBITRUM_RPC_URL');
     const privateKey = this.configService.get<string>('PRIVATE_KEY');
     const tokenAddress = this.configService.get<string>('RUKH_TOKEN_ADDRESS');
 
@@ -84,8 +84,7 @@ export class AppService {
         throw new Error('Token contract not initialized');
       }
 
-      const decimals = await this.tokenContract.decimals();
-      const amount = ethers.parseUnits('1', decimals);
+      const amount = ethers.parseUnits('1');
 
       const tx = await this.tokenContract.mint(to, amount);
       this.logger.debug(`Transaction hash: ${tx.hash}`);
@@ -129,12 +128,12 @@ export class AppService {
 
     const recipient = walletAddress || DEFAULT_RECIPIENT;
     const txHash = await this.mintToken(recipient);
-    const explorerLink = `https://explorer.sepolia.mantle.xyz/tx/${txHash}`;
+    const explorerLink = `https://sepolia.arbiscan.io/tx/${txHash}`;
 
     return {
       output,
       model: 'ministral-3b-2410',
-      network: 'mantle-sepolia',
+      network: 'arbitrum-sepolia',
       txHash,
       explorerLink,
       sessionId: usedSessionId,
@@ -226,16 +225,15 @@ export class AppService {
 </head>
 <body>
     <div class="container">
-        <h1>Welcome to Rukh</h1>
+        <h1>Welcome to Rukh!</h1>
         <p>A lightweight, developer-friendly toolkit for building AI agents with Web3 integration</p>
-        <div class="tech-links">
-            Built with <a href="https://nestjs.com/" target="_blank" rel="noopener noreferrer">Nest.js</a> • Powered by <a href="https://www.mantle.xyz/" target="_blank" rel="noopener noreferrer">Mantle</a>
-        </div>
         <p>🚀 Quick setup • 🔄 Built-in session management • 🔗 Web3 integration • 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, DeepSeek, etc.)</p>
         <div class="links">
             <a href="/api" class="button">Swagger UI</a>
             <a href="https://github.com/w3hc/rukh" target="_blank" rel="noopener noreferrer" class="button">GitHub Repo</a>
         </div>
+        <br />
+        <img src="https://bafkreid5xwxz4bed67bxb2wjmwsec4uhlcjviwy7pkzwoyu5oesjd3sp64.ipfs.w3s.link" alt="built-with-ethereum-w3hc" width="150"/>
     </div>
 </body>
 </html>`;

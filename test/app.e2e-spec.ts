@@ -36,9 +36,9 @@ describe('AppController (e2e)', () => {
         ask: jest.fn().mockResolvedValue({
           output: 'Mocked AI response',
           model: 'ministral-3b-2410',
-          network: 'mantle-sepolia',
+          network: 'arbitrum-sepolia',
           txHash: MOCK_TX_HASH,
-          explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${MOCK_TX_HASH}`,
+          explorerLink: `https://sepolia.arbiscan.io/tx/${MOCK_TX_HASH}`,
           sessionId: TEST_SESSION_ID,
         }),
       })
@@ -46,7 +46,7 @@ describe('AppController (e2e)', () => {
       .useValue({
         get: jest.fn().mockImplementation((key: string) => {
           const config = {
-            MANTLE_RPC_URL: 'https://test.mantle.xyz',
+            ARBITRUM_RPC_URL: 'https://test.arbitrum.xyz',
             PRIVATE_KEY: '0x1234567890',
             RUKH_TOKEN_ADDRESS: '0x1234567890123456789012345678901234567890',
           };
@@ -99,7 +99,7 @@ describe('AppController (e2e)', () => {
             expect(res.body).toMatchObject({
               output: 'Mocked AI response',
               model: 'ministral-3b-2410',
-              network: 'mantle-sepolia',
+              network: 'arbitrum-sepolia',
               txHash: MOCK_TX_HASH,
               sessionId: TEST_SESSION_ID,
             });
@@ -120,9 +120,9 @@ describe('AppController (e2e)', () => {
             expect(res.body).toMatchObject({
               output: 'Mocked AI response',
               model: 'ministral-3b-2410',
-              network: 'mantle-sepolia',
+              network: 'arbitrum-sepolia',
               txHash: MOCK_TX_HASH,
-              explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${MOCK_TX_HASH}`,
+              explorerLink: `https://sepolia.arbiscan.io/tx/${MOCK_TX_HASH}`,
               sessionId: TEST_SESSION_ID,
             });
           });

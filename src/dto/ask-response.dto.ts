@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class AskResponseDto {
   @ApiProperty({
     description: 'The network used for processing',
-    example: 'mantle-sepolia',
+    example: 'arbitrum-sepolia',
   })
   network: string;
 
@@ -23,7 +23,7 @@ export class AskResponseDto {
   @ApiProperty({
     description: 'The explorer link for the transaction',
     example:
-      'https://explorer.sepolia.mantle.xyz/tx/0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
+      'https://sepolia.arbiscan.io/tx/0x74a439e5a30952f4209037878f61e24949077e2285997a37798aee982651e84c',
   })
   explorerLink: string;
 
