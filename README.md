@@ -3,7 +3,7 @@ A lightweight, developer-friendly toolkit for building AI agents with Web3 integ
 
 - 🚀 Quick setup and minimal configuration
 - 🔄 Built-in session management and persistent storage
-- 🔗 Seamless Web3 integration with [Mantle Network](https://www.mantle.xyz/)
+- 🔗 Seamless Web3 integration
 - 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, etc.)
 - 📝 Auto-generated OpenAPI documentation
 - 🎮 Token-gated access control built-in
@@ -13,8 +13,8 @@ Live at: **http://rukh.w3hc.org/api**
 
 Solidity contracts: 
 
-- [Rukh governance token](https://explorer.sepolia.mantle.xyz/address/0x4db173196C37bF4Df60277A843590690F52bEB6a#code)
-- [Rukh DAO](https://explorer.sepolia.mantle.xyz/address/0x446200cB329592134989B615d4C02f9f3c9E970F#code)
+- [Rukh governance token](https://sepolia.arbiscan.io/address/0x281d3F386A48D31DC65E366081f5E3E3fA49B663#code)
+- [Rukh DAO](https://sepolia.arbiscan.io/address/0xf79c712228Bf3b8E71760291822c88A41C510244#code)
 
 ## Features
 
@@ -88,9 +88,9 @@ Will return:
 {
   "output": "Rukh is a powerful bird.",
   "model": "ministral-3b-2410",
-  "network": "mantle-sepolia",
+  "network": "arbitrum-sepolia",
   "txHash": "0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
-  "explorerLink": "https://explorer.sepolia.mantle.xyz/tx/0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
+  "explorerLink": "https://sepolia.arbiscan.io/tx/0x7946e7d46a2115779902a73ceb01d6817479c60200350c46876677566858e899",
   "sessionId": "bdce1931-b09d-49ef-954b-d20074d11ffa"
 }
 ```
@@ -117,3 +117,5 @@ Feel free to reach out to [Julien](https://github.com/julienbrg) through:
 - Twitter: [@julienbrg](https://twitter.com/julienbrg)
 - Discord: [julienbrg](https://discordapp.com/users/julienbrg)
 - LinkedIn: [julienberanger](https://www.linkedin.com/in/julienberanger/)
+
+<img src="https://bafkreid5xwxz4bed67bxb2wjmwsec4uhlcjviwy7pkzwoyu5oesjd3sp64.ipfs.w3s.link" alt="built-with-ethereum-w3hc" width="100"/>

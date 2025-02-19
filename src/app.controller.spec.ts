@@ -38,9 +38,9 @@ describe('AppController', () => {
                 async (message, model, sessionId, walletAddress) => ({
                   output: model === 'mistral' ? 'AI response' : undefined,
                   model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
-                  network: 'mantle-sepolia',
+                  network: 'arbitrum-sepolia',
                   txHash: mockTxHash,
-                  explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
+                  explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
                   sessionId: sessionId || 'generated-session-id',
                 }),
               ),
@@ -89,9 +89,9 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: undefined,
         model: 'none',
-        network: 'mantle-sepolia',
+        network: 'arbitrum-sepolia',
         txHash: mockTxHash,
-        explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
+        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: expect.any(String),
       });
     });
@@ -107,9 +107,9 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'ministral-3b-2410',
-        network: 'mantle-sepolia',
+        network: 'arbitrum-sepolia',
         txHash: mockTxHash,
-        explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
+        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: 'test-session-id',
       });
     });
@@ -123,9 +123,9 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'ministral-3b-2410',
-        network: 'mantle-sepolia',
+        network: 'arbitrum-sepolia',
         txHash: mockTxHash,
-        explorerLink: `https://explorer.sepolia.mantle.xyz/tx/${mockTxHash}`,
+        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: expect.any(String),
       });
     });

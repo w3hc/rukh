@@ -6,9 +6,9 @@
     "scripts": {
         "test": "hardhat test",
         "compile": "hardhat compile",
-        "deploy:mantle-sepolia": "hardhat deploy --network mantle-sepolia --reset",
-        "mint:mantle-sepolia": "hardhat mint --network mantle-sepolia --amount",
-        "send:mantle-sepolia": "hardhat send --network mantle-sepolia --amount",
+        "deploy:arbitrum-sepolia": "hardhat deploy --network arbitrum-sepolia --reset",
+        "mint:arbitrum-sepolia": "hardhat mint --network arbitrum-sepolia --amount",
+        "send:arbitrum-sepolia": "hardhat send --network arbitrum-sepolia --amount",
         "bal": "npx hardhat run scripts/check-my-balance.ts",
         "prettier": "prettier --write \"**/*.ts\"",
         "prettier-check": "prettier --check \"**/*.ts\""
