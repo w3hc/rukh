@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Header } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
 import { AskDto } from './dto/ask.dto';
@@ -29,6 +29,38 @@ export class AppController {
   @Post('ask')
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiOperation({ summary: 'Send a message for processing' })
+  @ApiBody({
+    description: 'Select an example request body.',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        model: { type: 'string' },
+        sessionId: { type: 'string' },
+        walletAddress: { type: 'string' },
+      },
+    },
+    examples: {
+      Minimal: {
+        summary: 'Minimal',
+        description: 'Only the message field is provided.',
+        value: {
+          message: 'What is Rukh?',
+        },
+      },
+      Complete: {
+        summary: 'Complete',
+        description:
+          'Includes additional parameters like model, sessionId, and walletAddress. Only the message field is required.',
+        value: {
+          message: 'What is Rukh?',
+          model: 'mistral',
+          sessionId: '12345',
+          walletAddress: '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Message processed successfully',
