@@ -5,7 +5,7 @@ import { AppService } from './app.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
 
-@ApiTags('default')
+@ApiTags('Ask')
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
