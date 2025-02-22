@@ -1,8 +1,3 @@
 {
-  "contexts": [
-    {
-      "name": "rukh",
-      "password": "rukh"
-    }
-  ]
+  "contexts": []
 }
