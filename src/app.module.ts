@@ -6,6 +6,7 @@ import { MistralService } from './mistral/mistral.service';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './throttler.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ContextModule } from './context/context.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
         name: 'default',
       },
     ]),
+    ContextModule,
   ],
   controllers: [AppController],
   providers: [
