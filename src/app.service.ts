@@ -33,20 +33,49 @@ export class AppService {
 
   private async loadContexts() {
     try {
-      const assistantsPath = join(process.cwd(), 'data', 'contexts');
-      const contexts = await readdir(assistantsPath);
+      const contextsPath = join(process.cwd(), 'data', 'contexts');
+      const indexPath = join(contextsPath, 'index.json');
 
-      for (const context of contexts) {
-        const contextPath = join(assistantsPath, context);
+      let validContexts: string[] = [];
+      try {
+        const indexContent = await readFile(indexPath, 'utf-8');
+        const { contexts } = JSON.parse(indexContent);
+        validContexts = contexts.map((ctx) => ctx.name);
+      } catch (error) {
+        this.logger.warn('No index.json found or invalid format');
+        return;
+      }
+
+      const items = await readdir(contextsPath);
+      const directories = items.filter((item) => {
+        const itemPath = join(contextsPath, item);
+        return validContexts.includes(item) && !item.endsWith('.json');
+      });
+
+      for (const dir of directories) {
+        const contextPath = join(contextsPath, dir);
         const files = await readdir(contextPath);
 
-        for (const file of files) {
-          if (file.endsWith('.md')) {
-            const content = await readFile(join(contextPath, file), 'utf-8');
-            this.contexts.set(context, content);
-            this.logger.log(`Loaded context: ${context}`);
-          }
+        const mdFiles = files.filter((file) => file.endsWith('.md'));
+        if (mdFiles.length === 0) {
+          this.logger.warn(`No markdown files found in context: ${dir}`);
+          continue;
         }
+
+        let contextContent = '';
+        for (const file of mdFiles) {
+          const content = await readFile(join(contextPath, file), 'utf-8');
+          contextContent += content + '\n\n';
+        }
+
+        this.contexts.set(dir, contextContent.trim());
+        this.logger.log(`Loaded context: ${dir} (${mdFiles.length} files)`);
+      }
+
+      if (this.contexts.size === 0) {
+        this.logger.warn('No valid contexts were loaded');
+      } else {
+        this.logger.log(`Successfully loaded ${this.contexts.size} contexts`);
       }
     } catch (error) {
       this.logger.error('Failed to load contexts:', error);
