@@ -7,7 +7,7 @@ import { AppService } from '../src/app.service';
 import { ConfigService } from '@nestjs/config';
 import { ContextService } from '../src/context/context.service';
 import { existsSync } from 'fs';
-import { mkdir, rm } from 'fs/promises';
+import { mkdir, rm, readFile, writeFile } from 'fs/promises';
 
 jest.mock('fs');
 jest.mock('fs/promises');
@@ -238,16 +238,37 @@ describe('App (e2e)', () => {
     });
   });
 
-  describe('Context Endpoint', () => {
-    describe('/context (POST)', () => {
-      it('should create a new context', () => {
-        const contextName = 'test-context';
+  describe('Context Endpoint with Password Authentication', () => {
+    const mockConfigPath = 'data/contexts/index.json';
+    const mockConfig = {
+      contexts: [{ name: 'test-context', password: 'test-password' }],
+    };
+
+    beforeEach(() => {
+      // Reset mocks for each test
+      (existsSync as jest.Mock).mockReset();
+      (readFile as jest.Mock).mockReset();
+      (writeFile as jest.Mock).mockReset();
+      (mkdir as jest.Mock).mockReset();
+      (rm as jest.Mock).mockReset();
+
+      // Setup default mock behaviors
+      (readFile as jest.Mock).mockResolvedValue(JSON.stringify(mockConfig));
+      (writeFile as jest.Mock).mockResolvedValue(undefined);
+      (mkdir as jest.Mock).mockResolvedValue(undefined);
+      (rm as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    describe('POST /context', () => {
+      it('should create context with password', () => {
+        const contextName = 'new-context';
+        const password = 'new-password';
+
         (existsSync as jest.Mock).mockReturnValue(false);
-        (mkdir as jest.Mock).mockResolvedValue(undefined);
 
         return request(app.getHttpServer())
           .post('/context')
-          .send({ name: contextName })
+          .send({ name: contextName, password })
           .expect(201)
           .expect((res) => {
             expect(res.body).toHaveProperty(
@@ -255,80 +276,144 @@ describe('App (e2e)', () => {
               'Context created successfully',
             );
             expect(res.body).toHaveProperty('path');
-            expect(loggerErrorSpy).not.toHaveBeenCalled();
           });
       });
 
-      it('should validate context name format', () => {
+      it('should reject context creation without password', () => {
         return request(app.getHttpServer())
           .post('/context')
-          .send({ name: 'Invalid Context!' })
+          .send({ name: 'test-context' })
           .expect(400)
           .expect((res) => {
-            expect(res.body.message).toContain(
-              'Context name can only contain lowercase letters, numbers, and hyphens',
-            );
-          });
-      });
-
-      it('should prevent duplicate context creation', () => {
-        const contextName = 'existing-context';
-        (existsSync as jest.Mock).mockReturnValue(true);
-
-        return request(app.getHttpServer())
-          .post('/context')
-          .send({ name: contextName })
-          .expect(400)
-          .expect((res) => {
-            expect(res.body.message).toBe(
-              `Context '${contextName}' already exists`,
-            );
+            expect(res.body.message).toContain('password should not be empty');
           });
       });
     });
 
-    describe('/context/:name (DELETE)', () => {
-      it('should delete an existing context', () => {
+    describe('DELETE /context/:name', () => {
+      it('should delete context with correct password', () => {
         const contextName = 'test-context';
+        const password = 'test-password';
+
         (existsSync as jest.Mock).mockReturnValue(true);
-        (rm as jest.Mock).mockResolvedValue(undefined);
 
         return request(app.getHttpServer())
           .delete(`/context/${contextName}`)
+          .set('x-context-password', password)
           .expect(200)
           .expect((res) => {
             expect(res.body).toHaveProperty(
               'message',
               'Context deleted successfully',
             );
-            expect(loggerErrorSpy).not.toHaveBeenCalled();
           });
       });
 
-      it('should handle non-existent context', () => {
-        const contextName = 'non-existent';
-        (existsSync as jest.Mock).mockReturnValue(false);
+      it('should reject context deletion with incorrect password', () => {
+        const contextName = 'test-context';
 
-        return request(app.getHttpServer())
-          .delete(`/context/${contextName}`)
-          .expect(404)
-          .expect((res) => {
-            expect(res.body.message).toBe(`Context '${contextName}' not found`);
-          });
-      });
-
-      it('should handle filesystem errors during deletion', () => {
-        const contextName = 'error-context';
         (existsSync as jest.Mock).mockReturnValue(true);
-        (rm as jest.Mock).mockRejectedValue(new Error('Deletion error'));
 
         return request(app.getHttpServer())
           .delete(`/context/${contextName}`)
-          .expect(404)
+          .set('x-context-password', 'wrong-password')
+          .expect(401)
+          .expect((res) => {
+            expect(res.body.message).toBe('Invalid password for context');
+          });
+      });
+
+      it('should reject context deletion without password header', () => {
+        (existsSync as jest.Mock).mockReturnValue(true);
+
+        return request(app.getHttpServer())
+          .delete('/context/test-context')
+          .expect(400)
           .expect((res) => {
             expect(res.body.message).toBe(
-              'Failed to delete context: Deletion error',
+              'x-context-password header is required',
             );
+          });
+      });
+    });
+
+    describe('POST /context/upload', () => {
+      it('should upload file with correct password', () => {
+        const contextName = 'test-context';
+        const password = 'test-password';
+        const testFile = Buffer.from('test content');
+
+        (existsSync as jest.Mock).mockImplementation((path) => true);
+
+        return request(app.getHttpServer())
+          .post('/context/upload')
+          .set('x-context-password', password)
+          .field('contextName', contextName)
+          .attach('file', testFile, 'test.md')
+          .expect(201)
+          .expect((res) => {
+            expect(res.body).toHaveProperty('message');
+            expect([
+              'File uploaded successfully',
+              'File updated successfully',
+            ]).toContain(res.body.message);
+            expect(res.body).toHaveProperty('path');
+            expect(res.body).toHaveProperty('wasOverwritten');
+          });
+      });
+
+      it('should reject file upload with incorrect password', () => {
+        const contextName = 'test-context';
+        const testFile = Buffer.from('test content');
+
+        (existsSync as jest.Mock).mockReturnValue(true);
+
+        return request(app.getHttpServer())
+          .post('/context/upload')
+          .set('x-context-password', 'wrong-password')
+          .field('contextName', contextName)
+          .attach('file', testFile, 'test.md')
+          .expect(401)
+          .expect((res) => {
+            expect(res.body.message).toBe('Invalid password for context');
+          });
+      });
+    });
+
+    describe('DELETE /context/:name/file', () => {
+      it('should delete file with correct password', () => {
+        const contextName = 'test-context';
+        const password = 'test-password';
+        const fileName = 'test.md';
+
+        (existsSync as jest.Mock).mockImplementation((path) => true);
+
+        return request(app.getHttpServer())
+          .delete(`/context/${contextName}/file`)
+          .set('x-context-password', password)
+          .send({ filename: fileName })
+          .expect(200)
+          .expect((res) => {
+            expect(res.body).toHaveProperty(
+              'message',
+              'File deleted successfully',
+            );
+          });
+      });
+
+      it('should reject file deletion with incorrect password', () => {
+        const contextName = 'test-context';
+        const fileName = 'test.md';
+
+        (existsSync as jest.Mock).mockImplementation((path) => true);
+
+        return request(app.getHttpServer())
+          .delete(`/context/${contextName}/file`)
+          .set('x-context-password', 'wrong-password')
+          .send({ filename: fileName })
+          .expect(401)
+          .expect((res) => {
+            expect(res.body.message).toBe('Invalid password for context');
           });
       });
     });

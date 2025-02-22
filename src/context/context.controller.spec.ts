@@ -37,7 +37,10 @@ describe('ContextController', () => {
   describe('createContext', () => {
     it('should create context successfully', async () => {
       const contextPath = '/path/to/context';
-      const createContextDto = { name: 'test-context' };
+      const createContextDto = {
+        name: 'test-context',
+        password: 'test-password',
+      };
 
       jest.spyOn(service, 'createContext').mockResolvedValue(contextPath);
 
@@ -47,12 +50,18 @@ describe('ContextController', () => {
         message: 'Context created successfully',
         path: contextPath,
       });
-      expect(service.createContext).toHaveBeenCalledWith(createContextDto.name);
+      expect(service.createContext).toHaveBeenCalledWith(
+        createContextDto.name,
+        createContextDto.password,
+      );
       expect(loggerErrorSpy).not.toHaveBeenCalled();
     });
 
     it('should handle service errors', async () => {
-      const createContextDto = { name: 'error-context' };
+      const createContextDto = {
+        name: 'error-context',
+        password: 'error-password',
+      };
 
       jest
         .spyOn(service, 'createContext')
@@ -67,28 +76,38 @@ describe('ContextController', () => {
   describe('deleteContext', () => {
     it('should delete context successfully', async () => {
       const contextName = 'test-context';
+      const password = 'test-password';
 
       jest.spyOn(service, 'deleteContext').mockResolvedValue(undefined);
 
-      const result = await controller.deleteContext(contextName);
+      const result = await controller.deleteContext(contextName, password);
 
       expect(result).toEqual({
         message: 'Context deleted successfully',
       });
-      expect(service.deleteContext).toHaveBeenCalledWith(contextName);
+      expect(service.deleteContext).toHaveBeenCalledWith(contextName, password);
       expect(loggerErrorSpy).not.toHaveBeenCalled();
+    });
+
+    it('should reject deletion without password header', async () => {
+      const contextName = 'test-context';
+
+      await expect(
+        controller.deleteContext(contextName, undefined),
+      ).rejects.toThrow('x-context-password header is required');
     });
 
     it('should handle service errors', async () => {
       const contextName = 'error-context';
+      const password = 'error-password';
 
       jest
         .spyOn(service, 'deleteContext')
         .mockRejectedValue(new Error('Service error'));
 
-      await expect(controller.deleteContext(contextName)).rejects.toThrow(
-        HttpException,
-      );
+      await expect(
+        controller.deleteContext(contextName, password),
+      ).rejects.toThrow(HttpException);
     });
   });
 });

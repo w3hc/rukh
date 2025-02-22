@@ -13,4 +13,22 @@ export class CreateContextDto {
       'Context name can only contain lowercase letters, numbers, and hyphens',
   })
   name: string;
+
+  @ApiProperty({
+    description: 'Password for the context',
+    example: 'my-password',
+  })
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+}
+
+export class ContextPasswordHeaderDto {
+  @ApiProperty({
+    description: 'Password for the context',
+    example: 'my-password',
+  })
+  @IsString()
+  @IsNotEmpty()
+  'x-context-password': string;
 }

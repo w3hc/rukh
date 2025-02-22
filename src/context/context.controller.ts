@@ -10,6 +10,9 @@ import {
   MaxFileSizeValidator,
   HttpException,
   HttpStatus,
+  Headers,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -18,10 +21,11 @@ import {
   ApiResponse,
   ApiConsumes,
   ApiBody,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { ContextService } from './context.service';
 import { UploadContextFileDto, DeleteFileDto } from '../dto/upload-file.dto';
-import { CreateContextDto } from '../dto/context.dto';
+import { CreateContextDto, ContextPasswordHeaderDto } from '../dto/context.dto';
 
 @ApiTags('Context')
 @Controller('context')
@@ -49,42 +53,31 @@ export class ContextController {
     try {
       const result = await this.contextService.createContext(
         createContextDto.name,
+        createContextDto.password,
       );
       return {
         message: 'Context created successfully',
         path: result,
       };
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @Delete(':name')
-  @ApiOperation({ summary: 'Delete a context' })
-  @ApiResponse({
-    status: 200,
-    description: 'Context deleted successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-      },
-    },
-  })
-  async deleteContext(@Param('name') name: string) {
-    try {
-      await this.contextService.deleteContext(name);
-      return {
-        message: 'Context deleted successfully',
-      };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      if (error.message?.includes('already exists')) {
+        throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(
+        error.message || 'Failed to create context',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
   @Post('upload')
   @ApiOperation({ summary: 'Upload a markdown file to a context' })
   @ApiConsumes('multipart/form-data')
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
   @ApiBody({
     type: UploadContextFileDto,
   })
@@ -100,8 +93,17 @@ export class ContextController {
       },
     },
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request or invalid file type',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
+    @Headers('x-context-password') password: string,
     @Body('contextName') contextName: string,
     @UploadedFile(
       new ParseFilePipe({
@@ -113,18 +115,21 @@ export class ContextController {
     file: Express.MulterFile,
   ) {
     try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
       if (!file.originalname.toLowerCase().endsWith('.md')) {
-        throw new HttpException(
-          'Only .md files are allowed',
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new BadRequestException('Only .md files are allowed');
       }
 
       const result = await this.contextService.uploadFile(
         contextName,
         file.originalname,
         file.buffer.toString('utf-8'),
+        password,
       );
+
       return {
         message: result.wasOverwritten
           ? 'File updated successfully'
@@ -133,17 +138,88 @@ export class ContextController {
         wasOverwritten: result.wasOverwritten,
       };
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('Context not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
       throw new HttpException(
-        error.message,
-        error instanceof HttpException
-          ? error.getStatus()
-          : HttpStatus.BAD_REQUEST,
+        error.message || 'Failed to upload file',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':name')
+  @ApiOperation({ summary: 'Delete a context' })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Context deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing password header',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context not found',
+  })
+  async deleteContext(
+    @Param('name') name: string,
+    @Headers('x-context-password') password: string,
+  ) {
+    try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      await this.contextService.deleteContext(name, password);
+      return {
+        message: 'Context deleted successfully',
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to delete context',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
   @Delete(':name/file')
   @ApiOperation({ summary: 'Delete a markdown file from a context' })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
   @ApiResponse({
     status: 200,
     description: 'File deleted successfully',
@@ -154,17 +230,50 @@ export class ContextController {
       },
     },
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing password header',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context or file not found',
+  })
   async deleteFile(
     @Param('name') contextName: string,
+    @Headers('x-context-password') password: string,
     @Body() deleteFileDto: DeleteFileDto,
   ) {
     try {
-      await this.contextService.deleteFile(contextName, deleteFileDto.filename);
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      await this.contextService.deleteFile(
+        contextName,
+        deleteFileDto.filename,
+        password,
+      );
       return {
         message: 'File deleted successfully',
       };
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to delete file',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }

@@ -8,6 +8,7 @@ A lightweight, developer-friendly toolkit for building AI agents with Web3 integ
 - 📝 Auto-generated OpenAPI documentation
 - 🎮 Token-gated access control built-in
 - ⚡ Production-ready with rate limiting and error handling
+- 🔒 Password-protected contexts for secure data management
 
 Live at: **http://rukh.w3hc.org/api**
 
@@ -62,6 +63,77 @@ pnpm test:e2e
 # test coverage
 pnpm test:cov
 ```
+
+## Context Management
+
+Rukh provides a secure context management system that allows you to create and manage separate contexts for different use cases or clients. Each context is password-protected to ensure data security.
+
+### Context Password System
+
+Contexts are managed through a `data/contexts/index.json` file that stores context names and their associated passwords:
+
+```json
+{
+  "contexts": [
+    {
+      "name": "context-1",
+      "password": "password-1"
+    },
+    {
+      "name": "context-2",
+      "password": "password-2"
+    }
+  ]
+}
+```
+
+### Creating a Context
+
+To create a new context:
+
+```bash
+curl -X 'POST' \
+  'http://localhost:3000/context' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "my-context",
+    "password": "my-secure-password"
+  }'
+```
+
+### Managing Context Files
+
+All context operations require the context password to be provided in the `x-context-password` header:
+
+```bash
+# Upload a file to a context
+curl -X 'POST' \
+  'http://localhost:3000/context/upload' \
+  -H 'x-context-password: my-secure-password' \
+  -F 'contextName=my-context' \
+  -F 'file=@myfile.md'
+
+# Delete a context
+curl -X 'DELETE' \
+  'http://localhost:3000/context/my-context' \
+  -H 'x-context-password: my-secure-password'
+
+# Delete a file from a context
+curl -X 'DELETE' \
+  'http://localhost:3000/context/my-context/file' \
+  -H 'x-context-password: my-secure-password' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "filename": "myfile.md"
+  }'
+```
+
+### Security Considerations
+
+- Context passwords are stored in plain text in `index.json`. For production use, consider implementing encryption.
+- Only `.md` files are allowed to be uploaded to contexts.
+- All operations on a context require the correct password in the `x-context-password` header.
+- File size is limited to 1MB.
 
 ## Example requests
 
