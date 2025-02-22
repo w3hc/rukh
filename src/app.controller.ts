@@ -51,10 +51,11 @@ export class AppController {
       Complete: {
         summary: 'Complete',
         description:
-          'Includes additional parameters like model, sessionId, and walletAddress. Only the message field is required.',
+          'Includes additional parameters like model, context, sessionId, and walletAddress.',
         value: {
           message: 'What is Rukh?',
           model: 'mistral',
+          context: 'rukh',
           sessionId: '12345',
           walletAddress: '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977',
         },
