@@ -28,67 +28,6 @@ import { CreateContextDto } from '../dto/context.dto';
 export class ContextController {
   constructor(private readonly contextService: ContextService) {}
 
-  @Post('upload')
-  @ApiOperation({ summary: 'Upload a markdown file to a context' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    type: UploadContextFileDto,
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'File uploaded successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        path: { type: 'string' },
-        wasOverwritten: { type: 'boolean' },
-      },
-    },
-  })
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(
-    @Body('contextName') contextName: string,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 1024 * 1024 }), // 1MB
-        ],
-      }),
-    )
-    file: Express.MulterFile,
-  ) {
-    try {
-      // Validate file extension
-      if (!file.originalname.toLowerCase().endsWith('.md')) {
-        throw new HttpException(
-          'Only .md files are allowed',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const result = await this.contextService.uploadFile(
-        contextName,
-        file.originalname,
-        file.buffer.toString('utf-8'),
-      );
-      return {
-        message: result.wasOverwritten
-          ? 'File updated successfully'
-          : 'File uploaded successfully',
-        path: result.path,
-        wasOverwritten: result.wasOverwritten,
-      };
-    } catch (error) {
-      throw new HttpException(
-        error.message,
-        error instanceof HttpException
-          ? error.getStatus()
-          : HttpStatus.BAD_REQUEST,
-      );
-    }
-  }
-
   @Post()
   @ApiOperation({ summary: 'Create a new context' })
   @ApiResponse({
@@ -140,6 +79,66 @@ export class ContextController {
       };
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+    }
+  }
+
+  @Post('upload')
+  @ApiOperation({ summary: 'Upload a markdown file to a context' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    type: UploadContextFileDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'File uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        path: { type: 'string' },
+        wasOverwritten: { type: 'boolean' },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @Body('contextName') contextName: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 1024 * 1024 }), // 1MB
+        ],
+      }),
+    )
+    file: Express.MulterFile,
+  ) {
+    try {
+      if (!file.originalname.toLowerCase().endsWith('.md')) {
+        throw new HttpException(
+          'Only .md files are allowed',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const result = await this.contextService.uploadFile(
+        contextName,
+        file.originalname,
+        file.buffer.toString('utf-8'),
+      );
+      return {
+        message: result.wasOverwritten
+          ? 'File updated successfully'
+          : 'File uploaded successfully',
+        path: result.path,
+        wasOverwritten: result.wasOverwritten,
+      };
+    } catch (error) {
+      throw new HttpException(
+        error.message,
+        error instanceof HttpException
+          ? error.getStatus()
+          : HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
