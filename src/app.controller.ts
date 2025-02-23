@@ -69,7 +69,7 @@ export class AppController {
   })
   @ApiResponse({
     status: 429,
-    description: 'Rate limit: 3 requests per hour',
+    description: 'Rate limit: 100 requests per hour',
     schema: {
       type: 'object',
       properties: {
