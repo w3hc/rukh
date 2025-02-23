@@ -7,11 +7,11 @@ import { AskResponseDto } from './dto/ask-response.dto';
 
 @ApiTags('Ask')
 @Controller()
+@SkipThrottle()
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  @SkipThrottle()
   @Header('Content-Type', 'text/html')
   @ApiOperation({ summary: 'Get hello message' })
   @ApiResponse({
@@ -27,7 +27,7 @@ export class AppController {
   }
 
   @Post('ask')
-  @Throttle({ default: { limit: 3, ttl: 3600000 } })
+  @Throttle({ ask: { limit: 50, ttl: 3600000 } })
   @ApiOperation({ summary: 'Send a message for processing' })
   @ApiBody({
     description: 'Select an example request body.',
@@ -69,14 +69,14 @@ export class AppController {
   })
   @ApiResponse({
     status: 429,
-    description: 'Rate limit: 100 requests per hour',
+    description: 'Rate limit: 50 requests per hour',
     schema: {
       type: 'object',
       properties: {
         statusCode: { type: 'number', example: 429 },
         message: {
           type: 'string',
-          example: 'Rate limit exceeded. Maximum 3 requests allowed per hour.',
+          example: 'Rate limit exceeded. Maximum 50 requests allowed per hour.',
         },
       },
     },
