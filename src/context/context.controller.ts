@@ -25,10 +25,12 @@ import {
 } from '@nestjs/swagger';
 import { ContextService } from './context.service';
 import { UploadContextFileDto, DeleteFileDto } from '../dto/upload-file.dto';
-import { CreateContextDto, ContextPasswordHeaderDto } from '../dto/context.dto';
+import { CreateContextDto } from '../dto/context.dto';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @ApiTags('Context')
 @Controller('context')
+@SkipThrottle()
 export class ContextController {
   constructor(private readonly contextService: ContextService) {}
 
