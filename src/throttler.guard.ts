@@ -13,7 +13,7 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   ): Promise<void> {
     const minutesRemaining = Math.ceil(timeToExpire / (1000 * 60));
     throw new ThrottlerException(
-      `Rate limit exceeded. Maximum 3 requests allowed per hour. Please try again in ${minutesRemaining} ${
+      `Rate limit exceeded. Maximum 100 requests allowed per hour. Please try again in ${minutesRemaining} ${
         minutesRemaining === 1 ? 'minute' : 'minutes'
       }.`,
     );

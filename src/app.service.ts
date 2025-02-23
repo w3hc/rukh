@@ -63,13 +63,17 @@ export class AppService {
         }
 
         let contextContent = '';
+        this.logger.log(`Loading files for context '${dir}':`);
         for (const file of mdFiles) {
+          this.logger.log(`- Loading file: ${file}`);
           const content = await readFile(join(contextPath, file), 'utf-8');
           contextContent += content + '\n\n';
         }
 
         this.contexts.set(dir, contextContent.trim());
-        this.logger.log(`Loaded context: ${dir} (${mdFiles.length} files)`);
+        this.logger.log(
+          `Successfully loaded context: ${dir} with ${mdFiles.length} files`,
+        );
       }
 
       if (this.contexts.size === 0) {

@@ -16,7 +16,7 @@ import { ContextModule } from './context/context.module';
     ThrottlerModule.forRoot([
       {
         ttl: 3600000,
-        limit: 3,
+        limit: 100,
         name: 'default',
       },
     ]),
