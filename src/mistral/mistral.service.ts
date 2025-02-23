@@ -54,6 +54,17 @@ export class MistralService {
         content: msg.content,
       }));
 
+      // Detailed logging of the message content
+      this.logger.debug('Full message to be sent to Mistral:');
+      this.logger.debug('----------------------------------------');
+      this.logger.debug(`Request ID: ${requestId}`);
+      this.logger.debug(`Session ID: ${sessionId}`);
+      this.logger.debug('Message Content:');
+      this.logger.debug(message);
+      this.logger.debug('----------------------------------------');
+      this.logger.debug(`Total message length: ${message.length} characters`);
+      this.logger.debug(`Chat history length: ${messages.length} messages`);
+
       messages.push({
         role: 'user',
         content: message,
