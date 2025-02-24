@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsIn,
   IsEthereumAddress,
+  ValidateIf,
 } from 'class-validator';
 
 export class AskDto {
@@ -39,11 +40,13 @@ export class AskDto {
   sessionId?: string;
 
   @ApiProperty({
-    description: 'Ethereum address to receive your RUKH governance token',
+    description:
+      'Ethereum address to receive your RUKH governance token. Can be empty.',
     example: '0x446200cB329592134989B615d4C02f9f3c9E970F',
     required: false,
   })
   @IsOptional()
+  @ValidateIf((o) => o.walletAddress !== '' && o.walletAddress !== undefined)
   @IsEthereumAddress()
   walletAddress?: string;
 

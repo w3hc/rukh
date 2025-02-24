@@ -135,6 +135,7 @@ export class AppService {
     sessionId?: string,
     walletAddress?: string,
     context: string = 'rukh',
+    file?: Express.Multer.File,
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
@@ -144,10 +145,22 @@ export class AppService {
         await this.mistralService.getConversationHistory(usedSessionId);
 
       const contextContent = this.contexts.get(context);
+
+      let fileContent = '';
+      if (file && file.originalname.toLowerCase().endsWith('.md')) {
+        fileContent = `\n\nUploaded file (${file.originalname}):\n${file.buffer.toString('utf-8')}`;
+        this.logger.log(
+          `Processing uploaded file: ${file.originalname} (${file.size} bytes)`,
+        );
+      } else if (file) {
+        this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
+      }
+
+      // Combine context, message and file content
       const contextualMessage =
         isFirstMessage && contextContent
-          ? `Context: ${contextContent}\n\nUser Query: ${message}`
-          : message;
+          ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
+          : `${message}${fileContent}`;
 
       const response = await this.mistralService.processMessage(
         contextualMessage,
@@ -159,7 +172,11 @@ export class AppService {
       this.logger.error('Error processing message with Mistral:', error);
     }
 
-    const recipient = walletAddress || DEFAULT_RECIPIENT;
+    const recipient =
+      walletAddress && walletAddress.trim() !== ''
+        ? walletAddress
+        : DEFAULT_RECIPIENT;
+
     const txHash = await this.mintToken(recipient);
     const explorerLink = `https://sepolia.arbiscan.io/tx/${txHash}`;
 
