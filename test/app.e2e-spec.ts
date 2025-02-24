@@ -420,11 +420,11 @@ describe('App (e2e)', () => {
 
     describe('File Upload with Ask', () => {
       it('should handle a request with file upload', () => {
-        const testFile = Buffer.from('This is test file content');
+        const testFile = Buffer.from('# This is test markdown content');
 
         return request(app.getHttpServer())
           .post('/ask')
-          .attach('file', testFile, 'test.txt')
+          .attach('file', testFile, 'test.md')
           .field('message', 'Please analyze this file')
           .field('model', 'mistral')
           .expect(201)
@@ -440,11 +440,11 @@ describe('App (e2e)', () => {
       });
 
       it('should handle a request with all parameters and file', () => {
-        const testFile = Buffer.from('This is test file content');
+        const testFile = Buffer.from('# This is test markdown content');
 
         return request(app.getHttpServer())
           .post('/ask')
-          .attach('file', testFile, 'test.txt')
+          .attach('file', testFile, 'test.md')
           .field('message', 'Please analyze this file')
           .field('model', 'mistral')
           .field('sessionId', TEST_SESSION_ID)
@@ -459,6 +459,20 @@ describe('App (e2e)', () => {
               txHash: MOCK_TX_HASH,
               sessionId: TEST_SESSION_ID,
             });
+          });
+      });
+
+      it('should reject non-markdown files', () => {
+        const testFile = Buffer.from('This is non-markdown content');
+
+        return request(app.getHttpServer())
+          .post('/ask')
+          .attach('file', testFile, 'test.txt')
+          .field('message', 'Please analyze this file')
+          .field('model', 'mistral')
+          .expect(400)
+          .expect((res) => {
+            expect(res.body.message).toContain('markdown');
           });
       });
     });
