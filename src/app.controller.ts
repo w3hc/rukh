@@ -1,9 +1,26 @@
-import { Controller, Get, Post, Body, Header } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Header,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
+import { MarkdownFileValidator } from './validators/markdown-file.validator';
 
 @ApiTags('Ask')
 @Controller()
@@ -28,7 +45,10 @@ export class AppController {
 
   @Post('ask')
   @Throttle({ ask: { limit: 50, ttl: 3600000 } })
-  @ApiOperation({ summary: 'Send a message for processing' })
+  @ApiOperation({
+    summary: 'Send a message for processing with optional markdown file upload',
+  })
+  @ApiConsumes('multipart/form-data')
   @ApiBody({
     description: 'Select an example request body.',
     schema: {
@@ -38,6 +58,13 @@ export class AppController {
         model: { type: 'string' },
         sessionId: { type: 'string' },
         walletAddress: { type: 'string' },
+        context: { type: 'string' },
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'Optional markdown file (.md) to include with the message',
+        },
       },
     },
     examples: {
@@ -60,12 +87,24 @@ export class AppController {
           walletAddress: '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977',
         },
       },
+      WithFile: {
+        summary: 'With File',
+        description: 'Includes a markdown file upload',
+        value: {
+          message: 'Analyze this document for me',
+          model: 'mistral',
+        },
+      },
     },
   })
   @ApiResponse({
     status: 201,
     description: 'Message processed successfully',
     type: AskResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request or invalid file (only .md files are allowed)',
   })
   @ApiResponse({
     status: 429,
@@ -81,13 +120,18 @@ export class AppController {
       },
     },
   })
-  async ask(@Body() askDto: AskDto): Promise<AskResponseDto> {
+  @UseInterceptors(FileInterceptor('file'))
+  async ask(
+    @Body() askDto: AskDto,
+    @UploadedFile(new MarkdownFileValidator()) file?: Express.Multer.File,
+  ): Promise<AskResponseDto> {
     return this.appService.ask(
       askDto.message,
       askDto.model,
       askDto.sessionId,
       askDto.walletAddress,
       askDto.context,
+      file,
     );
   }
 }

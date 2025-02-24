@@ -54,13 +54,24 @@ export class MistralService {
         content: msg.content,
       }));
 
+      const containsUploadedFile = message.includes('Uploaded file (');
+
       // Detailed logging of the message content
       this.logger.debug('Full message to be sent to Mistral:');
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Request ID: ${requestId}`);
       this.logger.debug(`Session ID: ${sessionId}`);
+      this.logger.debug(`Contains uploaded file: ${containsUploadedFile}`);
       this.logger.debug('Message Content:');
-      this.logger.debug(message);
+
+      if (message.length > 1000) {
+        this.logger.debug(
+          `${message.substring(0, 500)}...${message.substring(message.length - 500)}`,
+        );
+      } else {
+        this.logger.debug(message);
+      }
+
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Total message length: ${message.length} characters`);
       this.logger.debug(`Chat history length: ${messages.length} messages`);
@@ -75,6 +86,7 @@ export class MistralService {
         requestData: {
           message_length: message.length,
           history_length: messages.length,
+          has_file: containsUploadedFile,
           timestamp: new Date().toISOString(),
         },
       });
@@ -117,6 +129,7 @@ export class MistralService {
       );
     }
   }
+
   async deleteConversation(sessionId: string): Promise<boolean> {
     const memory = new CustomJsonMemory(sessionId);
     const { history } = await memory.loadMemoryVariables();

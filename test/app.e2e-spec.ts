@@ -218,7 +218,7 @@ describe('App (e2e)', () => {
       describe('Rate Limiting', () => {
         it('should enforce rate limiting after 3 requests', async () => {
           // Make 3 successful requests
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < 50; i++) {
             await request(app.getHttpServer())
               .post('/ask')
               .send({ message: 'test message' })
@@ -414,6 +414,65 @@ describe('App (e2e)', () => {
           .expect(401)
           .expect((res) => {
             expect(res.body.message).toBe('Invalid password for context');
+          });
+      });
+    });
+
+    describe('File Upload with Ask', () => {
+      it('should handle a request with file upload', () => {
+        const testFile = Buffer.from('# This is test markdown content');
+
+        return request(app.getHttpServer())
+          .post('/ask')
+          .attach('file', testFile, 'test.md')
+          .field('message', 'Please analyze this file')
+          .field('model', 'mistral')
+          .expect(201)
+          .expect((res) => {
+            expect(res.body).toMatchObject({
+              output: 'Mocked AI response',
+              model: 'ministral-3b-2410',
+              network: 'arbitrum-sepolia',
+              txHash: MOCK_TX_HASH,
+              sessionId: TEST_SESSION_ID,
+            });
+          });
+      });
+
+      it('should handle a request with all parameters and file', () => {
+        const testFile = Buffer.from('# This is test markdown content');
+
+        return request(app.getHttpServer())
+          .post('/ask')
+          .attach('file', testFile, 'test.md')
+          .field('message', 'Please analyze this file')
+          .field('model', 'mistral')
+          .field('sessionId', TEST_SESSION_ID)
+          .field('walletAddress', TEST_WALLET_ADDRESS)
+          .field('context', 'rukh')
+          .expect(201)
+          .expect((res) => {
+            expect(res.body).toMatchObject({
+              output: 'Mocked AI response',
+              model: 'ministral-3b-2410',
+              network: 'arbitrum-sepolia',
+              txHash: MOCK_TX_HASH,
+              sessionId: TEST_SESSION_ID,
+            });
+          });
+      });
+
+      it('should reject non-markdown files', () => {
+        const testFile = Buffer.from('This is non-markdown content');
+
+        return request(app.getHttpServer())
+          .post('/ask')
+          .attach('file', testFile, 'test.txt')
+          .field('message', 'Please analyze this file')
+          .field('model', 'mistral')
+          .expect(400)
+          .expect((res) => {
+            expect(res.body.message).toContain('markdown');
           });
       });
     });
