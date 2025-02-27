@@ -28,7 +28,6 @@ describe('ContextService', () => {
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => {});
 
-    // Mock readFile for config
     (readFile as jest.Mock).mockImplementation((path) => {
       if (path === configPath) {
         return Promise.resolve(JSON.stringify(mockConfig));
@@ -36,7 +35,6 @@ describe('ContextService', () => {
       return Promise.resolve('');
     });
 
-    // Reset all mocks before each test
     jest.clearAllMocks();
   });
 
@@ -50,21 +48,18 @@ describe('ContextService', () => {
       const password = 'new-password';
       const contextPath = join(testContextsPath, contextName);
 
-      // Setup mocks
+      // Fix the mock chain issue by separating the mocks
       (existsSync as jest.Mock).mockImplementation(
         (path) => path !== contextPath,
-      ); // Allow config to exist but not the new context
+      );
       (mkdir as jest.Mock).mockResolvedValue(undefined);
       (writeFile as jest.Mock).mockResolvedValue(undefined);
 
-      // Execute test
       const result = await service.createContext(contextName, password);
 
-      // Verify results
       expect(result).toBe(contextPath);
       expect(mkdir).toHaveBeenCalledWith(contextPath, { recursive: true });
 
-      // Verify config update - should include both existing and new context
       const expectedConfig = {
         contexts: [
           { name: 'existing-context', password: 'correct-password' },
@@ -99,18 +94,14 @@ describe('ContextService', () => {
       const password = 'correct-password';
       const contextPath = join(testContextsPath, contextName);
 
-      // Setup mocks
       (existsSync as jest.Mock).mockReturnValue(true);
       (rm as jest.Mock).mockResolvedValue(undefined);
       (writeFile as jest.Mock).mockResolvedValue(undefined);
 
-      // Execute test
       await service.deleteContext(contextName, password);
 
-      // Verify results
       expect(rm).toHaveBeenCalledWith(contextPath, { recursive: true });
 
-      // Verify config update - should remove only the deleted context
       const expectedConfig = { contexts: [] };
       expect(writeFile).toHaveBeenCalledWith(
         configPath,

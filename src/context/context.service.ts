@@ -67,10 +67,8 @@ export class ContextService {
     }
 
     try {
-      // Create context directory
       await mkdir(contextPath, { recursive: true });
 
-      // Update config file
       const config = await this.readConfig();
       config.contexts.push({ name, password });
       await this.writeConfig(config);
@@ -95,10 +93,8 @@ export class ContextService {
     }
 
     try {
-      // Remove context directory
       await rm(contextPath, { recursive: true });
 
-      // Update config file
       const config = await this.readConfig();
       config.contexts = config.contexts.filter((ctx) => ctx.name !== name);
       await this.writeConfig(config);

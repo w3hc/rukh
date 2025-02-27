@@ -1,29 +1,39 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
-import { ChatMistralAI } from '@langchain/mistralai';
-import { CustomJsonMemory } from '../memory/custom-memory';
+import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import { CustomJsonMemory } from '../memory/custom-memory';
+
+interface AnthropicMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface AnthropicResponse {
+  id: string;
+  content: Array<{
+    type: string;
+    text?: string;
+  }>;
+  model: string;
+  role: string;
+}
 
 @Injectable()
-export class MistralService {
+export class AnthropicService {
   private readonly apiKey: string;
-  private readonly model: ChatMistralAI;
-  private readonly logger = new Logger(MistralService.name);
+  private readonly logger = new Logger(AnthropicService.name);
+  private readonly model: string = 'claude-3-7-sonnet-20250219';
+  private readonly apiUrl: string = 'https://api.anthropic.com/v1/messages';
+  private readonly apiVersion: string = '2023-06-01';
 
-  constructor() {
-    this.apiKey = process.env.MISTRAL_API_KEY;
+  constructor(private configService: ConfigService) {
+    this.apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     if (!this.apiKey) {
-      this.logger.error('MISTRAL_API_KEY environment variable is not set');
-      throw new Error('MISTRAL_API_KEY environment variable is not set');
+      this.logger.error('ANTHROPIC_API_KEY environment variable is not set');
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
     }
 
-    this.model = new ChatMistralAI({
-      apiKey: this.apiKey,
-      modelName: 'ministral-3b-2410',
-      temperature: 0.3,
-      maxTokens: 1000,
-    });
-
-    this.logger.log('MistralService initialized successfully');
+    this.logger.log('AnthropicService initialized successfully');
   }
 
   async getConversationHistory(sessionId: string) {
@@ -43,20 +53,20 @@ export class MistralService {
     const memory = new CustomJsonMemory(sessionId);
 
     this.logger.log(
-      `Processing message [${requestId}] for session [${sessionId}]`,
+      `Processing message [${requestId}] for session [${sessionId}] with Anthropic`,
     );
 
     try {
       const { history } = await memory.loadMemoryVariables();
 
-      const messages = history.map((msg) => ({
-        role: msg.role,
+      const formattedMessages: AnthropicMessage[] = history.map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content,
       }));
 
       const containsUploadedFile = message.includes('Uploaded file (');
 
-      this.logger.debug('Full message to be sent to Mistral:');
+      this.logger.debug('Full message to be sent to Anthropic:');
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Request ID: ${requestId}`);
       this.logger.debug(`Session ID: ${sessionId}`);
@@ -73,25 +83,49 @@ export class MistralService {
 
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Total message length: ${message.length} characters`);
-      this.logger.debug(`Chat history length: ${messages.length} messages`);
+      this.logger.debug(
+        `Chat history length: ${formattedMessages.length} messages`,
+      );
 
-      messages.push({
+      formattedMessages.push({
         role: 'user',
         content: message,
       });
 
       this.logger.debug({
-        message: `Mistral API request [${requestId}]`,
+        message: `Anthropic API request [${requestId}]`,
         requestData: {
           message_length: message.length,
-          history_length: messages.length,
+          history_length: formattedMessages.length,
           has_file: containsUploadedFile,
           timestamp: new Date().toISOString(),
         },
       });
 
-      const response = await this.model.call(messages);
-      const responseContent = response.content.toString();
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': this.apiVersion,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: formattedMessages,
+          max_tokens: 1000,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Anthropic API error: ${JSON.stringify(errorData)}`);
+      }
+
+      const responseData: AnthropicResponse = await response.json();
+
+      const responseContent =
+        responseData.content[0]?.text || 'No text content in response';
 
       await memory.saveContext(
         { input: message },
@@ -99,9 +133,10 @@ export class MistralService {
       );
 
       this.logger.debug({
-        message: `Mistral API response [${requestId}]`,
+        message: `Anthropic API response [${requestId}]`,
         responseData: {
           response_length: responseContent.length,
+          model: this.model,
           timestamp: new Date().toISOString(),
         },
       });
@@ -112,7 +147,7 @@ export class MistralService {
       };
     } catch (error) {
       this.logger.error({
-        message: `Error processing message [${requestId}]`,
+        message: `Error processing message with Anthropic [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',
         sessionId,
         timestamp: new Date().toISOString(),
@@ -123,7 +158,7 @@ export class MistralService {
       }
 
       throw new HttpException(
-        'Failed to process message with Mistral AI',
+        'Failed to process message with Anthropic',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

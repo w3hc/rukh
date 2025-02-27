@@ -5,7 +5,6 @@ import { AppModule } from '../src/app.module';
 import { MistralService } from '../src/mistral/mistral.service';
 import { AppService } from '../src/app.service';
 import { ConfigService } from '@nestjs/config';
-import { ContextService } from '../src/context/context.service';
 import { existsSync } from 'fs';
 import { mkdir, rm, readFile, writeFile } from 'fs/promises';
 
@@ -57,9 +56,38 @@ describe('App (e2e)', () => {
             ARBITRUM_RPC_URL: 'https://test.arbitrum.xyz',
             PRIVATE_KEY: '0x1234567890',
             RUKH_TOKEN_ADDRESS: '0x1234567890123456789012345678901234567890',
+            ANTHROPIC_API_KEY: 'mock-anthropic-api-key',
+            OPENAI_API_KEY: 'mock-openai-api-key',
+            MISTRAL_API_KEY: 'mock-mistral-api-key',
           };
           return config[key];
         }),
+      })
+      .overrideProvider('ANTHROPIC_SERVICE')
+      .useValue({
+        processMessage: jest.fn().mockResolvedValue({
+          content: 'Mocked Anthropic response',
+          sessionId: TEST_SESSION_ID,
+        }),
+      })
+      .useMocker((token) => {
+        if (
+          typeof token === 'function' &&
+          token.name &&
+          token.name.includes('Anthropic')
+        ) {
+          return {
+            processMessage: jest.fn().mockResolvedValue({
+              content: 'Mocked Anthropic response',
+              sessionId: TEST_SESSION_ID,
+            }),
+            getConversationHistory: jest.fn().mockResolvedValue({
+              history: [],
+              isFirstMessage: true,
+            }),
+          };
+        }
+        return undefined;
       })
       .compile();
 
@@ -179,7 +207,7 @@ describe('App (e2e)', () => {
             .expect(400)
             .expect((res) => {
               expect(res.body.message).toContain(
-                'Model must be either "mistral" or empty',
+                'Model must be "mistral", "anthropic", or empty',
               );
             });
         });
@@ -217,7 +245,6 @@ describe('App (e2e)', () => {
 
       describe('Rate Limiting', () => {
         it('should enforce rate limiting after 3 requests', async () => {
-          // Make 3 successful requests
           for (let i = 0; i < 50; i++) {
             await request(app.getHttpServer())
               .post('/ask')
@@ -225,7 +252,6 @@ describe('App (e2e)', () => {
               .expect(201);
           }
 
-          // Fourth request should be rate limited
           return request(app.getHttpServer())
             .post('/ask')
             .send({ message: 'test message' })
@@ -245,14 +271,12 @@ describe('App (e2e)', () => {
     };
 
     beforeEach(() => {
-      // Reset mocks for each test
       (existsSync as jest.Mock).mockReset();
       (readFile as jest.Mock).mockReset();
       (writeFile as jest.Mock).mockReset();
       (mkdir as jest.Mock).mockReset();
       (rm as jest.Mock).mockReset();
 
-      // Setup default mock behaviors
       (readFile as jest.Mock).mockResolvedValue(JSON.stringify(mockConfig));
       (writeFile as jest.Mock).mockResolvedValue(undefined);
       (mkdir as jest.Mock).mockResolvedValue(undefined);

@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiBody,
   ApiConsumes,
+  ApiProperty,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
@@ -54,25 +55,45 @@ export class AppController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string' },
-        model: { type: 'string' },
-        sessionId: { type: 'string' },
-        walletAddress: { type: 'string' },
-        context: { type: 'string' },
+        message: {
+          type: 'string',
+          example: 'Describe the app in three sentences max.',
+        },
+        model: {
+          type: 'string',
+          example: 'anthropic',
+        },
+        sessionId: {
+          type: 'string',
+          nullable: true,
+          example: '',
+        },
+        walletAddress: {
+          type: 'string',
+          nullable: true,
+          example: '',
+        },
+        context: {
+          type: 'string',
+          nullable: true,
+          example: '',
+        },
         file: {
           type: 'string',
           format: 'binary',
+          nullable: true,
           description:
             'Optional markdown file (.md) to include with the message',
         },
       },
+      required: ['message'],
     },
     examples: {
       Minimal: {
         summary: 'Minimal',
         description: 'Only the message field is provided.',
         value: {
-          message: 'What is Rukh?',
+          message: 'Describe the app in three sentences max.',
         },
       },
       Complete: {
@@ -80,11 +101,11 @@ export class AppController {
         description:
           'Includes additional parameters like model, context, sessionId, and walletAddress.',
         value: {
-          message: 'What is Rukh?',
-          model: 'mistral',
-          context: 'rukh',
-          sessionId: '12345',
-          walletAddress: '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977',
+          message: 'Describe the app in three sentences max.',
+          model: 'anthropic',
+          context: '',
+          sessionId: '',
+          walletAddress: '',
         },
       },
       WithFile: {
@@ -92,7 +113,7 @@ export class AppController {
         description: 'Includes a markdown file upload',
         value: {
           message: 'Analyze this document for me',
-          model: 'mistral',
+          model: 'anthropic',
         },
       },
     },
@@ -123,7 +144,8 @@ export class AppController {
   @UseInterceptors(FileInterceptor('file'))
   async ask(
     @Body() askDto: AskDto,
-    @UploadedFile(new MarkdownFileValidator()) file?: Express.Multer.File,
+    @UploadedFile(new MarkdownFileValidator({ optional: true }))
+    file?: Express.Multer.File,
   ): Promise<AskResponseDto> {
     return this.appService.ask(
       askDto.message,
