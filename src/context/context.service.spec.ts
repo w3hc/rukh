@@ -48,9 +48,11 @@ describe('ContextService', () => {
       const password = 'new-password';
       const contextPath = join(testContextsPath, contextName);
 
-      (existsSync as jest.Mock)
-        .mockImplementation((path) => path !== contextPath)(mkdir as jest.Mock)
-        .mockResolvedValue(undefined);
+      // Fix the mock chain issue by separating the mocks
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+      (mkdir as jest.Mock).mockResolvedValue(undefined);
       (writeFile as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.createContext(contextName, password);
