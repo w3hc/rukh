@@ -24,9 +24,11 @@ Solidity contracts:
 - OpenAPI/Swagger docs
 - JSON-based persistent storage
 - LangChain.js
-- Mistral [`ministral-3b-2410`](https://mistral.ai/en/news/ministraux) 
+- Pre-integrated LLM models:
+  - Mistral [`ministral-3b-2410`](https://mistral.ai/en/news/ministraux)
+  - Anthropic [`claude-3-7-sonnet-20250219`](https://www.anthropic.com/news/claude-3-7-sonnet)
 
-Any other LLM service can be added (Anthropic, OpenAI, DeepSeek, or any).
+Any other LLM service can be easily added (OpenAI, DeepSeek, or any).
 
 ## Install
 
@@ -143,12 +145,23 @@ curl -X 'DELETE' \
 }
 ```
 
-or 
+or with specified model (default is mistral):
 
 ```json
 {
   "message": "What is Rukh?",
   "model": "mistral",
+  "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73",
+  "walletAddress": "0x265E31444C6E279870eB20c15B0547373635840b"
+}
+```
+
+or using Anthropic's Claude:
+
+```json
+{
+  "message": "What is Rukh?",
+  "model": "anthropic",
   "sessionId": "f0ea9dc7-03e8-46a7-b3ad-6c3531211f73",
   "walletAddress": "0x265E31444C6E279870eB20c15B0547373635840b"
 }
@@ -166,6 +179,8 @@ Will return:
   "sessionId": "bdce1931-b09d-49ef-954b-d20074d11ffa"
 }
 ```
+
+When using Anthropic's Claude, the `model` field will show `claude-3-7-sonnet-20250219`.
 
 ### Curl
 
