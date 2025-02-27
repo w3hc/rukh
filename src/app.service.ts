@@ -143,6 +143,8 @@ export class AppService {
     let usedSessionId = sessionId || uuidv4();
     let usedModel = 'none';
 
+    const selectedModel = model || 'mistral';
+
     try {
       const contextContent = this.contexts.get(context);
 
@@ -156,7 +158,7 @@ export class AppService {
         this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
       }
 
-      if (model === 'mistral') {
+      if (selectedModel === 'mistral') {
         const { isFirstMessage } =
           await this.mistralService.getConversationHistory(usedSessionId);
 
@@ -172,7 +174,7 @@ export class AppService {
         output = response.content;
         usedSessionId = response.sessionId;
         usedModel = 'ministral-3b-2410';
-      } else if (model === 'anthropic') {
+      } else if (selectedModel === 'anthropic') {
         const { isFirstMessage } =
           await this.anthropicService.getConversationHistory(usedSessionId);
 
@@ -190,7 +192,10 @@ export class AppService {
         usedModel = 'claude-3-7-sonnet-20250219';
       }
     } catch (error) {
-      this.logger.error(`Error processing message with ${model}:`, error);
+      this.logger.error(
+        `Error processing message with ${selectedModel}:`,
+        error,
+      );
     }
 
     const recipient =
