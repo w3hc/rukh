@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
 import { MistralService } from './mistral/mistral.service';
+import { AnthropicService } from './anthropic/anthropic.service';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
@@ -25,6 +26,7 @@ export class AppService {
 
   constructor(
     private readonly mistralService: MistralService,
+    private readonly anthropicService: AnthropicService,
     private readonly configService: ConfigService,
   ) {
     this.initializeWeb3();
@@ -139,11 +141,9 @@ export class AppService {
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
+    let usedModel = 'none';
 
     try {
-      const { isFirstMessage } =
-        await this.mistralService.getConversationHistory(usedSessionId);
-
       const contextContent = this.contexts.get(context);
 
       let fileContent = '';
@@ -156,19 +156,41 @@ export class AppService {
         this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
       }
 
-      const contextualMessage =
-        isFirstMessage && contextContent
-          ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
-          : `${message}${fileContent}`;
+      if (model === 'mistral') {
+        const { isFirstMessage } =
+          await this.mistralService.getConversationHistory(usedSessionId);
 
-      const response = await this.mistralService.processMessage(
-        contextualMessage,
-        usedSessionId,
-      );
-      output = response.content;
-      usedSessionId = response.sessionId;
+        const contextualMessage =
+          isFirstMessage && contextContent
+            ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
+            : `${message}${fileContent}`;
+
+        const response = await this.mistralService.processMessage(
+          contextualMessage,
+          usedSessionId,
+        );
+        output = response.content;
+        usedSessionId = response.sessionId;
+        usedModel = 'ministral-3b-2410';
+      } else if (model === 'anthropic') {
+        const { isFirstMessage } =
+          await this.anthropicService.getConversationHistory(usedSessionId);
+
+        const contextualMessage =
+          isFirstMessage && contextContent
+            ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
+            : `${message}${fileContent}`;
+
+        const response = await this.anthropicService.processMessage(
+          contextualMessage,
+          usedSessionId,
+        );
+        output = response.content;
+        usedSessionId = response.sessionId;
+        usedModel = 'claude-3-7-sonnet-20250219';
+      }
     } catch (error) {
-      this.logger.error('Error processing message with Mistral:', error);
+      this.logger.error(`Error processing message with ${model}:`, error);
     }
 
     const recipient =
@@ -181,7 +203,7 @@ export class AppService {
 
     return {
       output,
-      model: 'ministral-3b-2410',
+      model: usedModel,
       network: 'arbitrum-sepolia',
       txHash,
       explorerLink,
