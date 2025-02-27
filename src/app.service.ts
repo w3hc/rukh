@@ -156,7 +156,6 @@ export class AppService {
         this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
       }
 
-      // Combine context, message and file content
       const contextualMessage =
         isFirstMessage && contextContent
           ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`

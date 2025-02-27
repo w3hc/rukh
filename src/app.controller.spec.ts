@@ -153,7 +153,6 @@ describe('AppController', () => {
 
   describe('ask with file upload', () => {
     it('should process a request with file upload', async () => {
-      // Just verify that the method works with a file
       const result = await appController.ask(
         {
           message: 'test message with file',
@@ -163,7 +162,6 @@ describe('AppController', () => {
         mockFile,
       );
 
-      // Add type assertion to make TypeScript happy
       const askFunction = appService.ask as jest.Mock;
       expect(askFunction).toHaveBeenCalled();
 
@@ -191,7 +189,6 @@ describe('AppController', () => {
         mockFile,
       );
 
-      // Add type assertion to make TypeScript happy
       const askFunction = appService.ask as jest.Mock;
       const call = askFunction.mock.calls[0];
 
@@ -219,7 +216,6 @@ describe('AppController', () => {
         undefined,
       );
 
-      // Add type assertion to make TypeScript happy
       const askFunction = appService.ask as jest.Mock;
       expect(askFunction).toHaveBeenCalled();
 
