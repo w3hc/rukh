@@ -11,7 +11,7 @@ import {
 export class AskDto {
   @ApiProperty({
     description: 'The message to send',
-    example: 'What is Rukh?',
+    example: 'Describe the app in three sentences max.',
     required: true,
   })
   @IsString()
@@ -20,30 +20,32 @@ export class AskDto {
 
   @ApiProperty({
     description:
-      'The model to use for processing. Use "mistral" to process the message with Mistral AI, or leave empty for no processing.',
-    example: 'mistral',
+      'The model to use for processing. Use "mistral" for Mistral AI, "anthropic" for Anthropic Claude, or leave empty for no processing.',
+    example: 'anthropic',
     required: false,
     default: 'mistral',
-    enum: ['mistral', ''],
+    enum: ['mistral', 'anthropic', ''],
   })
   @IsOptional()
-  @IsIn(['mistral', ''], { message: 'Model must be either "mistral" or empty' })
+  @IsIn(['mistral', 'anthropic', ''], {
+    message: 'Model must be "mistral", "anthropic", or empty',
+  })
   model?: string;
 
   @ApiProperty({
     description: 'Session ID for conversation continuity',
     example: '',
     required: false,
-    default: '',
+    nullable: true,
   })
   @IsOptional()
   sessionId?: string;
 
   @ApiProperty({
-    description:
-      'Ethereum address to receive your RUKH governance token. Can be empty.',
-    example: '0x446200cB329592134989B615d4C02f9f3c9E970F',
+    description: 'Ethereum address to receive your RUKH governance token',
+    example: '',
     required: false,
+    nullable: true,
   })
   @IsOptional()
   @ValidateIf((o) => o.walletAddress !== '' && o.walletAddress !== undefined)
@@ -52,9 +54,9 @@ export class AskDto {
 
   @ApiProperty({
     description: 'Context to use for the conversation',
-    example: 'rukh',
+    example: '',
     required: false,
-    default: 'rukh',
+    nullable: true,
   })
   @IsOptional()
   @IsString()
