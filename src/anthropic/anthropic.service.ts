@@ -112,7 +112,7 @@ export class AnthropicService {
         body: JSON.stringify({
           model: this.model,
           messages: formattedMessages,
-          max_tokens: 1000,
+          max_tokens: 5000,
           temperature: 0.3,
         }),
       });
