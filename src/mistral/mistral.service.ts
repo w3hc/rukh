@@ -8,6 +8,7 @@ export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
+  private readonly modelName: string = 'ministral-3b-2410';
 
   constructor() {
     this.apiKey = process.env.MISTRAL_API_KEY;
@@ -18,7 +19,7 @@ export class MistralService {
 
     this.model = new ChatMistralAI({
       apiKey: this.apiKey,
-      modelName: 'ministral-3b-2410',
+      modelName: this.modelName,
       temperature: 0.3,
       maxTokens: 1000,
     });
@@ -38,7 +39,14 @@ export class MistralService {
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
-  ): Promise<{ content: string; sessionId: string }> {
+  ): Promise<{
+    content: string;
+    sessionId: string;
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+    };
+  }> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
 
@@ -65,7 +73,7 @@ export class MistralService {
 
       if (message.length > 1000) {
         this.logger.debug(
-          `${message.substring(0, 500)}...${message.substring(message.length - 500)}`,
+          `${message.substring(0, 100)}...${message.substring(message.length - 100)}`,
         );
       } else {
         this.logger.debug(message);
@@ -90,25 +98,42 @@ export class MistralService {
         },
       });
 
-      const response = await this.model.call(messages);
+      // Use LangChain's ChatMistralAI
+      const response = await this.model.invoke(messages);
       const responseContent = response.content.toString();
+
+      // LangChain doesn't directly expose token usage in its standard response
+      // So we need to estimate based on text length
+      const usage = {
+        // Roughly estimate: 1 token ≈ 4 characters
+        input_tokens: Math.ceil(
+          messages.reduce((total, msg) => total + msg.content.length, 0) / 4,
+        ),
+        output_tokens: Math.ceil(responseContent.length / 4),
+      };
+
+      // This section is replaced by the modified code above that handles
+      // both direct responses and fallbacks to estimated token counts
+
+      this.logger.debug({
+        message: `Mistral API response [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          timestamp: new Date().toISOString(),
+        },
+      });
 
       await memory.saveContext(
         { input: message },
         { response: responseContent },
       );
 
-      this.logger.debug({
-        message: `Mistral API response [${requestId}]`,
-        responseData: {
-          response_length: responseContent.length,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
       return {
         content: responseContent,
         sessionId,
+        usage,
       };
     } catch (error) {
       this.logger.error({

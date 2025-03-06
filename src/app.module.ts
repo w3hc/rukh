@@ -9,6 +9,7 @@ import { CustomThrottlerGuard } from './throttler.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ContextModule } from './context/context.module';
 import { AnthropicModule } from './anthropic/anthropic.module';
+import { CostTracker } from './memory/cost-tracking.service';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AnthropicModule } from './anthropic/anthropic.module';
     AppService,
     MistralService,
     AnthropicService,
+    CostTracker,
     {
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,

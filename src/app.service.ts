@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
+import { CostTracker } from './memory/cost-tracking.service';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
@@ -27,6 +28,7 @@ export class AppService {
   constructor(
     private readonly mistralService: MistralService,
     private readonly anthropicService: AnthropicService,
+    private readonly costTracker: CostTracker,
     private readonly configService: ConfigService,
   ) {
     this.initializeWeb3();
@@ -95,13 +97,55 @@ export class AppService {
 
     if (rpcUrl && privateKey && tokenAddress) {
       try {
-        this.provider = new ethers.JsonRpcProvider(rpcUrl);
+        // Use a more reliable public RPC endpoint as fallback
+        const fallbackRpcUrls = [
+          rpcUrl,
+          'https://arb-sepolia.g.alchemy.com/v2/demo', // Alchemy public endpoint
+          'https://arbitrum-sepolia.blockpi.network/v1/rpc/public', // BlockPI public endpoint
+          'https://sepolia-rollup.arbitrum.io/rpc', // Arbitrum official endpoint
+        ];
+
+        // Try to create provider with first RPC URL
+        this.provider = new ethers.JsonRpcProvider(fallbackRpcUrls[0]);
+
+        // Test provider connection
+        this.provider.getBlockNumber().catch(async (error) => {
+          this.logger.warn(`Primary RPC connection failed: ${error.message}`);
+
+          // Try fallback RPC URLs if primary fails
+          for (let i = 1; i < fallbackRpcUrls.length; i++) {
+            try {
+              this.logger.log(`Trying fallback RPC URL #${i}...`);
+              const fallbackProvider = new ethers.JsonRpcProvider(
+                fallbackRpcUrls[i],
+              );
+              await fallbackProvider.getBlockNumber(); // Test connection
+
+              this.provider = fallbackProvider;
+              this.signer = new ethers.Wallet(privateKey, this.provider);
+              this.tokenContract = new ethers.Contract(
+                tokenAddress,
+                RUKH_TOKEN_ABI,
+                this.signer,
+              );
+
+              this.logger.log(`Connected to fallback RPC #${i} successfully`);
+              break;
+            } catch (fallbackError) {
+              this.logger.warn(
+                `Fallback RPC #${i} connection failed: ${fallbackError.message}`,
+              );
+            }
+          }
+        });
+
         this.signer = new ethers.Wallet(privateKey, this.provider);
         this.tokenContract = new ethers.Contract(
           tokenAddress,
           RUKH_TOKEN_ABI,
           this.signer,
         );
+
         this.logger.log('Web3 provider and token contract initialized');
       } catch (error) {
         this.logger.error('Failed to initialize Web3:', error);
@@ -112,21 +156,64 @@ export class AppService {
       );
     }
   }
-
   private async mintToken(to: string): Promise<string> {
     try {
       if (!this.tokenContract || !this.signer) {
-        throw new Error('Token contract not initialized');
+        this.logger.warn(
+          'Token contract not initialized, returning dummy tx hash',
+        );
+        return '0x0000000000000000000000000000000000000000000000000000000000000000';
+      }
+
+      // Validate that the provider is connected
+      try {
+        const blockNumber = await this.provider.getBlockNumber();
+        this.logger.debug(`Current block number: ${blockNumber}`);
+      } catch (error) {
+        this.logger.error(
+          'Provider connection failed, returning dummy tx hash:',
+          error,
+        );
+        return '0x0000000000000000000000000000000000000000000000000000000000000000';
       }
 
       const amount = ethers.parseUnits('1');
 
-      const tx = await this.tokenContract.mint(to, amount);
+      try {
+        // Ensure we're the owner
+        const owner = await this.tokenContract.owner();
+        if (owner.toLowerCase() !== this.signer.address.toLowerCase()) {
+          this.logger.warn(
+            `Signer address (${this.signer.address}) is not the contract owner (${owner})`,
+          );
+        }
+      } catch (error) {
+        this.logger.warn('Could not verify contract ownership:', error);
+      }
+
+      // Set a moderate gas price to avoid transaction failures
+      const gasPrice = await this.provider
+        .getFeeData()
+        .then((feeData) => feeData.gasPrice)
+        .catch(() => ethers.parseUnits('1', 'gwei')); // Default if we can't get fee data
+
+      // Send with explicit gas settings
+      const tx = await this.tokenContract.mint(to, amount, {
+        gasLimit: 150000, // Explicit gas limit
+        gasPrice: gasPrice,
+      });
+
       this.logger.debug(`Transaction hash: ${tx.hash}`);
 
       return tx.hash;
     } catch (error) {
       this.logger.error('Error minting token:', error);
+
+      // RPC errors should be handled gracefully
+      if (error.code === 'NETWORK_ERROR' || error.code === 'UNKNOWN_ERROR') {
+        this.logger.warn('Network error encountered, returning dummy tx hash');
+      }
+
       return '0x0000000000000000000000000000000000000000000000000000000000000000';
     }
   }
@@ -142,6 +229,12 @@ export class AppService {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
     let usedModel = 'none';
+    let fullInput = '';
+    let fullOutput = '';
+    let usage = {
+      input_tokens: 0,
+      output_tokens: 0,
+    };
 
     const selectedModel = model || 'mistral';
 
@@ -167,13 +260,23 @@ export class AppService {
             ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
             : `${message}${fileContent}`;
 
+        // Save full input for cost tracking
+        fullInput = contextualMessage;
+
         const response = await this.mistralService.processMessage(
           contextualMessage,
           usedSessionId,
         );
         output = response.content;
+        fullOutput = response.content;
         usedSessionId = response.sessionId;
         usedModel = 'ministral-3b-2410';
+
+        // Make sure we have valid usage data
+        usage = response.usage || {
+          input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+          output_tokens: Math.ceil(fullOutput.length / 4),
+        };
       } else if (selectedModel === 'anthropic') {
         const { isFirstMessage } =
           await this.anthropicService.getConversationHistory(usedSessionId);
@@ -183,37 +286,102 @@ export class AppService {
             ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
             : `${message}${fileContent}`;
 
+        // Save full input for cost tracking
+        fullInput = contextualMessage;
+
         const response = await this.anthropicService.processMessage(
           contextualMessage,
           usedSessionId,
         );
         output = response.content;
+        fullOutput = response.content;
         usedSessionId = response.sessionId;
         usedModel = 'claude-3-7-sonnet-20250219';
+
+        // Make sure we have valid usage data
+        usage = response.usage || {
+          input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+          output_tokens: Math.ceil(fullOutput.length / 4),
+        };
       }
+
+      // STEP 1: Track usage for all successful responses regardless of wallet
+      // We'll do this even if there's no wallet, using DEFAULT_RECIPIENT as the tracker
+      if (output) {
+        const trackingWallet =
+          walletAddress && walletAddress.trim() !== ''
+            ? walletAddress
+            : DEFAULT_RECIPIENT;
+
+        this.logger.debug(
+          `Tracking usage for ${trackingWallet} with model ${usedModel}`,
+        );
+        this.logger.debug(
+          `Token usage: input=${usage.input_tokens}, output=${usage.output_tokens}`,
+        );
+
+        try {
+          await this.costTracker.trackUsageWithTokens(
+            trackingWallet,
+            message,
+            usedSessionId,
+            usedModel,
+            fullInput,
+            fullOutput,
+            usage.input_tokens,
+            usage.output_tokens,
+          );
+          this.logger.debug('Usage tracking completed successfully');
+        } catch (error) {
+          this.logger.error('Failed to track usage:', error);
+        }
+      } else {
+        this.logger.warn('Skipping usage tracking - no output was generated');
+      }
+
+      // STEP 2: Only after tracking is complete, mint tokens
+      const recipient =
+        walletAddress && walletAddress.trim() !== ''
+          ? walletAddress
+          : DEFAULT_RECIPIENT;
+
+      this.logger.debug(`Minting token reward to ${recipient}`);
+      const txHash = await this.mintToken(recipient);
+      this.logger.debug(`Token minting completed with tx hash: ${txHash}`);
+
+      return {
+        output,
+        model: usedModel,
+        network: 'arbitrum-sepolia',
+        txHash,
+        explorerLink: `https://sepolia.arbiscan.io/tx/${txHash}`,
+        sessionId: usedSessionId,
+        usage: usage, // Include token usage in response
+      };
     } catch (error) {
       this.logger.error(
         `Error processing message with ${selectedModel}:`,
         error,
       );
+
+      // Still return a response with available information
+      const recipient =
+        walletAddress && walletAddress.trim() !== ''
+          ? walletAddress
+          : DEFAULT_RECIPIENT;
+
+      const txHash = await this.mintToken(recipient);
+
+      return {
+        output,
+        model: usedModel,
+        network: 'arbitrum-sepolia',
+        txHash,
+        explorerLink: `https://sepolia.arbiscan.io/tx/${txHash}`,
+        sessionId: usedSessionId,
+        usage: usage,
+      };
     }
-
-    const recipient =
-      walletAddress && walletAddress.trim() !== ''
-        ? walletAddress
-        : DEFAULT_RECIPIENT;
-
-    const txHash = await this.mintToken(recipient);
-    const explorerLink = `https://sepolia.arbiscan.io/tx/${txHash}`;
-
-    return {
-      output,
-      model: usedModel,
-      network: 'arbitrum-sepolia',
-      txHash,
-      explorerLink,
-      sessionId: usedSessionId,
-    };
   }
 
   getHello(): string {
