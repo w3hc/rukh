@@ -16,6 +16,10 @@ interface AnthropicResponse {
   }>;
   model: string;
   role: string;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 @Injectable()
@@ -48,7 +52,14 @@ export class AnthropicService {
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
-  ): Promise<{ content: string; sessionId: string }> {
+  ): Promise<{
+    content: string;
+    sessionId: string;
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+    };
+  }> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
 
@@ -75,7 +86,7 @@ export class AnthropicService {
 
       if (message.length > 1000) {
         this.logger.debug(
-          `${message.substring(0, 500)}...${message.substring(message.length - 500)}`,
+          `${message.substring(0, 100)}...${message.substring(message.length - 100)}`,
         );
       } else {
         this.logger.debug(message);
@@ -112,7 +123,7 @@ export class AnthropicService {
         body: JSON.stringify({
           model: this.model,
           messages: formattedMessages,
-          max_tokens: 1000,
+          max_tokens: 5000,
           temperature: 0.3,
         }),
       });
@@ -127,23 +138,31 @@ export class AnthropicService {
       const responseContent =
         responseData.content[0]?.text || 'No text content in response';
 
-      await memory.saveContext(
-        { input: message },
-        { response: responseContent },
-      );
+      const usage = responseData.usage || {
+        input_tokens: 0,
+        output_tokens: 0,
+      };
 
       this.logger.debug({
         message: `Anthropic API response [${requestId}]`,
         responseData: {
           response_length: responseContent.length,
           model: this.model,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
           timestamp: new Date().toISOString(),
         },
       });
 
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
       return {
         content: responseContent,
         sessionId,
+        usage,
       };
     } catch (error) {
       this.logger.error({
