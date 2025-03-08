@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,7 @@ import { CostTracker } from './memory/cost-tracking.service';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
+import { SubsService } from './subs/subs.service';
 
 const RUKH_TOKEN_ABI = [
   'function mint(address to, uint256 amount) external',
@@ -30,6 +31,7 @@ export class AppService {
     private readonly anthropicService: AnthropicService,
     private readonly costTracker: CostTracker,
     private readonly configService: ConfigService,
+    private readonly subsService: SubsService,
   ) {
     this.initializeWeb3();
     this.loadContexts();
@@ -238,6 +240,17 @@ export class AppService {
     };
 
     const selectedModel = model || 'mistral';
+
+    // Check subscription status
+    if (!(await this.subsService.isSubscribed(walletAddress, data))) {
+      this.logger.warn(
+        `Access denied for wallet: ${walletAddress || 'anonymous'} - No subscription`,
+      );
+      throw new HttpException(
+        'Subscription required to access this service',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
 
     try {
       const contextContent = this.contexts.get(context);

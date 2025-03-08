@@ -11,6 +11,9 @@ import { ContextModule } from './context/context.module';
 import { AnthropicModule } from './anthropic/anthropic.module';
 import { CostTracker } from './memory/cost-tracking.service';
 import { SiweModule } from './siwe/siwe.module';
+import { SubsService } from './subs/subs.service';
+import { SiweController } from './siwe/siwe.controller';
+import { SiweService } from './siwe/siwe.service';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { SiweModule } from './siwe/siwe.module';
     MistralService,
     AnthropicService,
     CostTracker,
+    SubsService,
+    SiweController,
+    SiweService,
     {
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,
