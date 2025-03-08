@@ -10,6 +10,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ContextModule } from './context/context.module';
 import { AnthropicModule } from './anthropic/anthropic.module';
 import { CostTracker } from './memory/cost-tracking.service';
+import { SiweModule } from './siwe/siwe.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CostTracker } from './memory/cost-tracking.service';
     ]),
     ContextModule,
     AnthropicModule,
+    SiweModule,
   ],
   controllers: [AppController],
   providers: [
