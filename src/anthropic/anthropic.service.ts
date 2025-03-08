@@ -113,57 +113,73 @@ export class AnthropicService {
         },
       });
 
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': this.apiVersion,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: formattedMessages,
-          max_tokens: 5000,
-          temperature: 0.3,
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Anthropic API error: ${JSON.stringify(errorData)}`);
+      try {
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.apiKey,
+            'anthropic-version': this.apiVersion,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: formattedMessages,
+            max_tokens: 10000,
+            temperature: 0.3,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Anthropic API error: ${JSON.stringify(errorData)}`);
+        }
+
+        const responseData: AnthropicResponse = await response.json();
+
+        const responseContent =
+          responseData.content[0]?.text || 'No text content in response';
+
+        await memory.saveContext(
+          { input: message },
+          { response: responseContent },
+        );
+
+        const usage = responseData.usage || {
+          input_tokens: 0,
+          output_tokens: 0,
+        };
+
+        this.logger.debug({
+          message: `Anthropic API response [${requestId}]`,
+          responseData: {
+            response_length: responseContent.length,
+            model: this.model,
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        await memory.saveContext(
+          { input: message },
+          { response: responseContent },
+        );
+
+        return {
+          content: responseContent,
+          sessionId,
+          usage,
+        };
+      } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId);
+        throw error;
       }
-
-      const responseData: AnthropicResponse = await response.json();
-
-      const responseContent =
-        responseData.content[0]?.text || 'No text content in response';
-
-      const usage = responseData.usage || {
-        input_tokens: 0,
-        output_tokens: 0,
-      };
-
-      this.logger.debug({
-        message: `Anthropic API response [${requestId}]`,
-        responseData: {
-          response_length: responseContent.length,
-          model: this.model,
-          input_tokens: usage.input_tokens,
-          output_tokens: usage.output_tokens,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      await memory.saveContext(
-        { input: message },
-        { response: responseContent },
-      );
-
-      return {
-        content: responseContent,
-        sessionId,
-        usage,
-      };
     } catch (error) {
       this.logger.error({
         message: `Error processing message with Anthropic [${requestId}]`,

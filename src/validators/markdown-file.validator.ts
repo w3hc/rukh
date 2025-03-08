@@ -28,10 +28,10 @@ export class MarkdownFileValidator implements PipeTransform {
       );
     }
 
-    const maxSize = 1024 * 1024; // 1MB
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (value.size > maxSize) {
       throw new BadRequestException(
-        `File size exceeds the maximum allowed size (1MB)`,
+        `File size exceeds the maximum allowed size (5MB)`,
       );
     }
 
