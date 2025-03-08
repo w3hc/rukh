@@ -110,7 +110,7 @@ export class ContextController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 1024 * 1024 }), // 1MB
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
         ],
       }),
     )
