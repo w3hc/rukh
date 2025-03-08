@@ -81,7 +81,7 @@ export class AppController {
         data: {
           type: 'object',
           nullable: true,
-          example: {},
+          example: { githubUserName: 'julienbrg' },
           description:
             'Additional data to be passed with the request (used in certain contexts)',
         },
@@ -113,7 +113,7 @@ export class AppController {
           context: '',
           sessionId: '',
           walletAddress: '',
-          data: {},
+          data: { githubUserName: 'julienbrg' },
         },
       },
       WithFile: {
@@ -131,11 +131,10 @@ export class AppController {
           message: 'Process this data for me',
           model: 'anthropic',
           data: {
-            key1: 'value1',
-            key2: 'value2',
-            nested: {
-              property: 'value',
-            },
+            type: 'object',
+            nullable: true,
+            example: { githubUserName: 'julienbrg' },
+            description: 'Additional data to be passed with the request',
           },
         },
       },

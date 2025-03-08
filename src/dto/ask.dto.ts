@@ -64,7 +64,7 @@ export class AskDto {
 
   @ApiProperty({
     description: 'Additional data to be passed with the request',
-    example: {},
+    example: { githubUserName: 'julienbrg' },
     required: false,
     nullable: true,
   })
