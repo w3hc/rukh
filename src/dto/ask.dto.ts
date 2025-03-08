@@ -61,4 +61,13 @@ export class AskDto {
   @IsOptional()
   @IsString()
   context?: string;
+
+  @ApiProperty({
+    description: 'Additional data to be passed with the request',
+    example: {},
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  data?: Record<string, any>;
 }
