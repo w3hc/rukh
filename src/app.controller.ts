@@ -78,6 +78,13 @@ export class AppController {
           nullable: true,
           example: '',
         },
+        data: {
+          type: 'object',
+          nullable: true,
+          example: { githubUserName: 'julienbrg' },
+          description:
+            'Additional data to be passed with the request (used in certain contexts)',
+        },
         file: {
           type: 'string',
           format: 'binary',
@@ -106,6 +113,7 @@ export class AppController {
           context: '',
           sessionId: '',
           walletAddress: '',
+          data: { githubUserName: 'julienbrg' },
         },
       },
       WithFile: {
@@ -114,6 +122,20 @@ export class AppController {
         value: {
           message: 'Analyze this document for me',
           model: 'anthropic',
+        },
+      },
+      WithData: {
+        summary: 'With Data',
+        description: 'Includes additional data object',
+        value: {
+          message: 'Process this data for me',
+          model: 'anthropic',
+          data: {
+            type: 'object',
+            nullable: true,
+            example: { githubUserName: 'julienbrg' },
+            description: 'Additional data to be passed with the request',
+          },
         },
       },
     },
@@ -154,6 +176,7 @@ export class AppController {
       askDto.walletAddress,
       askDto.context,
       file,
+      askDto.data,
     );
   }
 }

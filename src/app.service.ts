@@ -225,6 +225,7 @@ export class AppService {
     walletAddress?: string,
     context: string = 'rukh',
     file?: Express.Multer.File,
+    data?: Record<string, any>,
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = sessionId || uuidv4();
