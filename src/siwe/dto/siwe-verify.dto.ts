@@ -18,4 +18,12 @@ export class SiweVerifyDto {
   @IsString()
   @IsNotEmpty()
   signature: string;
+
+  @ApiProperty({
+    description: 'Nonce from the challenge',
+    example: 'f0ea9dc7-03e8-46a7-b3ad-6c3531211f73',
+  })
+  @IsString()
+  @IsNotEmpty()
+  nonce: string;
 }

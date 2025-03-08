@@ -5,40 +5,80 @@ import * as ethers from 'ethers';
 @Injectable()
 export class SiweService {
   private readonly logger = new Logger(SiweService.name);
-  private nonceStore: Map<string, number> = new Map(); // nonce -> expiration time
+  private messageStore: Map<string, string> = new Map(); // nonce -> original message
+  private nonceStore: Map<string, { expiration: number; used: boolean }> =
+    new Map(); // nonce -> {expiration time, used status}
   private readonly EXPIRATION_TIME = 15 * 60 * 1000; // 15 minutes in ms
 
   /**
-   * Generates a unique nonce
-   * @returns A unique nonce
+   * Generates a unique nonce with a message for the client to sign
+   * @returns A message and nonce for the client to sign
    */
-  generateNonce(): string {
+  generateMessage(): { message: string; nonce: string } {
     const nonce = randomUUID();
+    const timestamp = new Date().toISOString();
+    const message = `Sign this message to authenticate with Rukh API. Nonce: ${nonce}. Timestamp: ${timestamp}`;
+
+    // Store the original message with the nonce so we can verify exactly the same message
+    this.messageStore.set(nonce, message);
 
     // Store nonce with expiration
-    this.nonceStore.set(nonce, Date.now() + this.EXPIRATION_TIME);
+    this.nonceStore.set(nonce, {
+      expiration: Date.now() + this.EXPIRATION_TIME,
+      used: false,
+    });
 
     // Clean expired nonces
     this.cleanExpiredNonces();
 
-    return nonce;
+    return { message, nonce };
   }
 
   /**
    * Verifies a signature against an address
-   * For testing, this always returns true.
-   * In production, implement proper signature verification.
+   * @param address The Ethereum address claimed by the user
+   * @param signature The signature provided by the user
+   * @param nonce The nonce previously issued to the user
+   * @returns true if the signature is valid, false otherwise
    */
-  verifySignature(address: string, signature: string): boolean {
+  verifySignature(address: string, signature: string, nonce: string): boolean {
     try {
+      // First check if the nonce is valid and unused
+      if (!this.isNonceValid(nonce)) {
+        this.logger.warn(`Invalid or expired nonce: ${nonce}`);
+        return false;
+      }
+
       // Ensure address is in checksummed format
       const checksummedAddress = ethers.getAddress(address);
 
-      this.logger.debug(
-        `Verifying signature for address: ${checksummedAddress}`,
-      );
+      // Get the original message that was signed
+      const originalMessage = this.messageStore.get(nonce);
+      if (!originalMessage) {
+        this.logger.warn(`No stored message found for nonce: ${nonce}`);
+        return false;
+      }
 
-      return true;
+      // Mark the nonce as used so it can't be reused
+      const nonceData = this.nonceStore.get(nonce);
+      if (nonceData) {
+        nonceData.used = true;
+      }
+
+      // Recover address from signature
+      const recoveredAddress = ethers.verifyMessage(originalMessage, signature);
+
+      // Check if the recovered address matches the claimed address
+      const isValid =
+        recoveredAddress.toLowerCase() === checksummedAddress.toLowerCase();
+
+      this.logger.debug(
+        `Signature verification: ${isValid ? 'VALID' : 'INVALID'}`,
+      );
+      this.logger.debug(`- Claimed address: ${checksummedAddress}`);
+      this.logger.debug(`- Recovered address: ${recoveredAddress}`);
+
+      return isValid;
     } catch (error) {
       this.logger.error(`Error verifying signature: ${error.message}`);
       return false;
@@ -46,22 +86,27 @@ export class SiweService {
   }
 
   /**
-   * Checks if a nonce exists and hasn't expired
+   * Checks if a nonce exists, hasn't expired, and hasn't been used
    */
   isNonceValid(nonce: string): boolean {
-    const expiresAt = this.nonceStore.get(nonce);
+    const nonceData = this.nonceStore.get(nonce);
 
-    if (!expiresAt) {
+    if (!nonceData) {
       return false;
     }
 
-    if (Date.now() > expiresAt) {
+    // Check if expired
+    if (Date.now() > nonceData.expiration) {
       this.nonceStore.delete(nonce);
+      this.messageStore.delete(nonce);
       return false;
     }
 
-    // Delete the nonce so it can't be used again
-    this.nonceStore.delete(nonce);
+    // Check if already used
+    if (nonceData.used) {
+      return false;
+    }
+
     return true;
   }
 
@@ -70,9 +115,10 @@ export class SiweService {
    */
   private cleanExpiredNonces(): void {
     const now = Date.now();
-    for (const [nonce, expiresAt] of this.nonceStore.entries()) {
-      if (now > expiresAt) {
+    for (const [nonce, data] of this.nonceStore.entries()) {
+      if (now > data.expiration) {
         this.nonceStore.delete(nonce);
+        this.messageStore.delete(nonce);
       }
     }
   }

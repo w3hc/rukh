@@ -19,13 +19,17 @@ export class SiweController {
 
   constructor(private readonly siweService: SiweService) {}
 
-  @Get('nonce')
-  @ApiOperation({ summary: 'Get a nonce for SIWE' })
+  @Get('challenge')
+  @ApiOperation({ summary: 'Get a challenge message for SIWE authentication' })
   @ApiResponse({
     status: 200,
-    description: 'Returns a nonce',
+    description: 'Returns a message to sign and a nonce',
     schema: {
       properties: {
+        message: {
+          type: 'string',
+          description: 'Message that should be signed by the client',
+        },
         nonce: {
           type: 'string',
           description: 'Unique nonce to use in verification',
@@ -33,14 +37,16 @@ export class SiweController {
       },
     },
   })
-  getNonce() {
-    const nonce = this.siweService.generateNonce();
-    this.logger.log(`Generated nonce: ${nonce}`);
-    return { nonce };
+  getChallenge() {
+    const { message, nonce } = this.siweService.generateMessage();
+    this.logger.log(`Generated challenge with nonce: ${nonce}`);
+    return { message, nonce };
   }
 
   @Post('verify')
-  @ApiOperation({ summary: 'Verify an address based on its signature' })
+  @ApiOperation({
+    summary: 'Verify a signed message from client (Etherscan, Zhankai, ...)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Returns verification result',
@@ -58,17 +64,21 @@ export class SiweController {
     },
   })
   async verifySignature(@Body() verifyDto: SiweVerifyDto) {
-    const { address, signature } = verifyDto;
+    const { address, signature, nonce } = verifyDto;
 
-    if (!address || !signature) {
+    if (!address || !signature || !nonce) {
       throw new HttpException(
-        'Address and signature are required',
+        'Address, signature, and nonce are required',
         HttpStatus.BAD_REQUEST,
       );
     }
 
     try {
-      const isValid = this.siweService.verifySignature(address, signature);
+      const isValid = this.siweService.verifySignature(
+        address,
+        signature,
+        nonce,
+      );
 
       if (isValid) {
         this.logger.log(
