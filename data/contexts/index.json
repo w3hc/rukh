@@ -2,7 +2,8 @@
   "contexts": [
     {
       "name": "rukh",
-      "password": "88888"
+      "password": "88888",
+      "queries": []
     }
   ]
 }
