@@ -242,15 +242,49 @@ export class AppService {
     const selectedModel = model || 'mistral';
 
     // Check subscription status
-    if (!(await this.subsService.isSubscribed(walletAddress, data))) {
-      this.logger.warn(
-        `Access denied for wallet: ${walletAddress || 'anonymous'} - No subscription`,
+    try {
+      // This is the key change - add more debug info and handle any errors
+      this.logger.debug(
+        `Checking subscription for ${walletAddress || 'anonymous'} with data: ${JSON.stringify(data || {})}`,
       );
-      throw new HttpException(
-        'Subscription required to access this service',
-        HttpStatus.PAYMENT_REQUIRED,
+
+      const isSubscribed = await this.subsService.isSubscribed(
+        walletAddress,
+        data,
+      );
+
+      if (!isSubscribed) {
+        this.logger.warn(
+          `Access denied for wallet: ${walletAddress || 'anonymous'} - No subscription`,
+        );
+        throw new HttpException(
+          'Subscription required to access this service',
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error; // Re-throw if it's already a proper HTTP exception
+      }
+
+      // Log the error but don't block access during development
+      this.logger.error(`Error checking subscription: ${error.message}`);
+
+      // In production, you might want to throw an error here
+      if (process.env.NODE_ENV === 'production') {
+        throw new HttpException(
+          'Error verifying subscription',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      // In development, log warning but continue
+      this.logger.warn(
+        'Continuing despite subscription verification error (development mode)',
       );
     }
+
+    return;
 
     try {
       const contextContent = this.contexts.get(context);
