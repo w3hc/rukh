@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,8 +6,9 @@ import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { AskResponseDto } from './dto/ask-response.dto';
-import { readFile, readdir } from 'fs/promises';
+import { readFile, readdir, writeFile } from 'fs/promises';
 import { join } from 'path';
+import { SubsService } from './subs/subs.service';
 
 const RUKH_TOKEN_ABI = [
   'function mint(address to, uint256 amount) external',
@@ -30,6 +31,7 @@ export class AppService {
     private readonly anthropicService: AnthropicService,
     private readonly costTracker: CostTracker,
     private readonly configService: ConfigService,
+    private readonly subsService: SubsService,
   ) {
     this.initializeWeb3();
     this.loadContexts();
@@ -240,6 +242,92 @@ export class AppService {
     const selectedModel = model || 'mistral';
 
     try {
+      if (context && context.toLowerCase() === 'zhankai') {
+        this.logger.debug(
+          `Zhankai context detected - checking usage for ${walletAddress || 'anonymous'}`,
+        );
+
+        // Skip subscription check if wallet address is undefined
+        if (!walletAddress) {
+          this.logger.debug(
+            `Anonymous user - proceeding without subscription check`,
+          );
+        } else {
+          // Read context config to check query count
+          const configPath = join(
+            process.cwd(),
+            'data',
+            'contexts',
+            'index.json',
+          );
+          let contextConfig;
+          try {
+            const configData = await readFile(configPath, 'utf-8');
+            contextConfig = JSON.parse(configData);
+          } catch (error) {
+            this.logger.error(
+              `Failed to read context config: ${error.message}`,
+            );
+            contextConfig = { contexts: [] };
+          }
+
+          // Find zhankai context
+          const zhankaiContext = contextConfig.contexts.find(
+            (ctx) => ctx.name.toLowerCase() === 'zhankai',
+          );
+
+          // Count occurrences of this wallet address in queries
+          const queryCount =
+            zhankaiContext?.queries?.filter(
+              (addr) => addr.toLowerCase() === walletAddress.toLowerCase(),
+            ).length || 0;
+
+          this.logger.debug(
+            `User ${walletAddress} has used ${queryCount} queries for Zhankai context`,
+          );
+
+          // If user has used 3 or more queries, verify subscription
+          if (queryCount >= 3) {
+            this.logger.debug(
+              `Free query limit reached - checking subscription status`,
+            );
+
+            const isSubscribed = await this.subsService.isSubscribed(
+              walletAddress,
+              data,
+            );
+
+            if (!isSubscribed) {
+              this.logger.warn(
+                `Access denied for wallet: ${walletAddress} - No subscription for Zhankai context after free queries`,
+              );
+              throw new HttpException(
+                'Free query limit reached. Subscription required to continue using the Zhankai context.',
+                HttpStatus.PAYMENT_REQUIRED,
+              );
+            }
+
+            this.logger.debug(
+              `Subscription verified for Zhankai context access`,
+            );
+          } else {
+            this.logger.debug(
+              `User has ${3 - queryCount} free queries remaining`,
+            );
+          }
+        }
+      } else {
+        this.logger.debug(
+          `Skipping subscription check - not using Zhankai context`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error; // Re-throw if it's already a proper HTTP exception
+      }
+    }
+
+    try {
       const contextContent = this.contexts.get(context);
 
       let fileContent = '';
@@ -304,6 +392,58 @@ export class AppService {
           input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
           output_tokens: Math.ceil(fullOutput.length / 4),
         };
+      }
+
+      // Write user address for the specified context
+      if (context && walletAddress) {
+        try {
+          const configPath = join(
+            process.cwd(),
+            'data',
+            'contexts',
+            'index.json',
+          );
+          let contextConfig = { contexts: [] };
+
+          try {
+            const configData = await readFile(configPath, 'utf-8');
+            contextConfig = JSON.parse(configData);
+          } catch (error) {
+            this.logger.error(
+              `Failed to read context config: ${error.message}`,
+            );
+          }
+
+          // Find the specified context
+          const contextEntry = contextConfig.contexts.find(
+            (ctx) => ctx.name === context,
+          );
+
+          if (contextEntry) {
+            // Initialize queries array if it doesn't exist
+            if (!contextEntry.queries) {
+              contextEntry.queries = [];
+            }
+
+            // Add wallet address to queries array
+            contextEntry.queries.push(walletAddress);
+
+            // Save updated config
+            await writeFile(
+              configPath,
+              JSON.stringify(contextConfig, null, 2),
+              'utf-8',
+            );
+            this.logger.debug(
+              `Added ${walletAddress} to queries for context: ${context}`,
+            );
+          } else {
+            this.logger.debug(`Context ${context} not found in config`);
+          }
+        } catch (error) {
+          this.logger.error(`Failed to update queries: ${error.message}`);
+          // Continue with processing - don't fail the request due to this
+        }
       }
 
       // STEP 1: Track usage for all successful responses regardless of wallet

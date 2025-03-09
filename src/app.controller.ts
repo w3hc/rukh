@@ -6,7 +6,6 @@ import {
   Header,
   UseInterceptors,
   UploadedFile,
-  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -81,7 +80,11 @@ export class AppController {
         data: {
           type: 'object',
           nullable: true,
-          example: { githubUserName: 'julienbrg' },
+          example: {
+            githubUserName: 'julienbrg',
+            nonce: '88888',
+            signature: 'zzzzz',
+          },
           description:
             'Additional data to be passed with the request (used in certain contexts)',
         },
@@ -113,7 +116,11 @@ export class AppController {
           context: '',
           sessionId: '',
           walletAddress: '',
-          data: { githubUserName: 'julienbrg' },
+          data: {
+            githubUserName: 'julienbrg',
+            nonce: '88888',
+            signature: 'zzzzz',
+          },
         },
       },
       WithFile: {
@@ -133,7 +140,11 @@ export class AppController {
           data: {
             type: 'object',
             nullable: true,
-            example: { githubUserName: 'julienbrg' },
+            example: {
+              githubUserName: 'julienbrg',
+              nonce: '88888',
+              signature: 'zzzzz',
+            },
             description: 'Additional data to be passed with the request',
           },
         },
