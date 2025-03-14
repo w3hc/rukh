@@ -2,14 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
-interface UserCosts {
-  totalCosts: {
-    inputCost: number;
-    outputCost: number;
-    totalCost: number;
-    inputTokens: number;
-    outputTokens: number;
-  };
+interface CostDatabase {
   requests: {
     timestamp: string;
     inputCost: number;
@@ -19,14 +12,8 @@ interface UserCosts {
     outputTokens: number;
     message: string;
     sessionId: string;
-    model?: string;
+    model: string;
   }[];
-}
-
-interface CostDatabase {
-  users: {
-    [walletAddress: string]: UserCosts;
-  };
   global: {
     totalInputCost: number;
     totalOutputCost: number;
@@ -34,7 +21,7 @@ interface CostDatabase {
     totalInputTokens: number;
     totalOutputTokens: number;
     totalRequests: number;
-    modelsUsage?: {
+    modelsUsage: {
       [modelName: string]: {
         requests: number;
         inputTokens: number;
@@ -54,20 +41,35 @@ export class CostTracker implements OnModuleInit {
 
   // Cost per 1K tokens in USD
   private readonly COST_RATES = {
+    // Mistral rates
     'ministral-3b-2410': {
-      inputCost: 0.015,
-      outputCost: 0.075,
+      inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
+      outputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
     },
+    // Claude 3.7 Sonnet rates
     'claude-3-7-sonnet-20250219': {
-      inputCost: 0.015,
-      outputCost: 0.075,
+      inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
+      outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
+    },
+    // Add other Claude models for completeness
+    'claude-3-opus-20240229': {
+      inputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
+      outputCost: 0.075, // $75 per million tokens = $0.075 per 1K tokens
+    },
+    'claude-3-sonnet-20240229': {
+      inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
+      outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
+    },
+    'claude-3-haiku-20240307': {
+      inputCost: 0.0005, // $0.5 per million tokens = $0.0005 per 1K tokens
+      outputCost: 0.0025, // $2.5 per million tokens = $0.0025 per 1K tokens
     },
   };
 
   constructor() {
     this.dbPath = join(process.cwd(), 'data', 'costs.json');
     this.data = {
-      users: {},
+      requests: [],
       global: {
         totalInputCost: 0,
         totalOutputCost: 0,
@@ -113,19 +115,14 @@ export class CostTracker implements OnModuleInit {
       try {
         await fs.access(this.dbPath);
         const content = await fs.readFile(this.dbPath, 'utf-8');
+
         this.data = JSON.parse(content);
-
-        // Ensure modelsUsage exists (for backwards compatibility)
-        if (!this.data.global.modelsUsage) {
-          this.data.global.modelsUsage = {};
-        }
-
         this.logger.debug('Successfully loaded costs data from file');
       } catch (error) {
-        this.logger.warn('Could not load costs data, using default data');
+        this.logger.warn('Creating new costs data file');
         // Use default data structure
         this.data = {
-          users: {},
+          requests: [],
           global: {
             totalInputCost: 0,
             totalOutputCost: 0,
@@ -170,7 +167,7 @@ export class CostTracker implements OnModuleInit {
   }
 
   async trackUsageWithTokens(
-    walletAddress: string,
+    walletAddress: string, // Unused
     message: string,
     sessionId: string,
     modelName: string,
@@ -180,15 +177,7 @@ export class CostTracker implements OnModuleInit {
     outputTokens: number = 0,
   ): Promise<void> {
     try {
-      this.logger.debug(
-        `Tracking usage for wallet: ${walletAddress}, model: ${modelName}`,
-      );
-
-      // Skip tracking if no wallet address
-      if (!walletAddress || walletAddress === '') {
-        this.logger.debug('No wallet address provided, skipping tracking');
-        return;
-      }
+      this.logger.debug(`Tracking usage for model: ${modelName}`);
 
       // If token counts are zero or invalid, use estimates
       if (!inputTokens || inputTokens <= 0) {
@@ -221,33 +210,8 @@ export class CostTracker implements OnModuleInit {
         `Calculated costs: input=$${inputCost}, output=$${outputCost}, total=$${totalCost}`,
       );
 
-      // Initialize user data if it doesn't exist
-      if (!this.data.users[walletAddress]) {
-        this.logger.debug(
-          `Creating new user data for wallet: ${walletAddress}`,
-        );
-        this.data.users[walletAddress] = {
-          totalCosts: {
-            inputCost: 0,
-            outputCost: 0,
-            totalCost: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-          },
-          requests: [],
-        };
-      }
-
-      // Update user totals
-      const user = this.data.users[walletAddress];
-      user.totalCosts.inputCost += inputCost;
-      user.totalCosts.outputCost += outputCost;
-      user.totalCosts.totalCost += totalCost;
-      user.totalCosts.inputTokens += inputTokens;
-      user.totalCosts.outputTokens += outputTokens;
-
-      // Add request to user history
-      user.requests.push({
+      // Add request to history
+      this.data.requests.push({
         timestamp: new Date().toISOString(),
         inputCost,
         outputCost,
@@ -293,7 +257,7 @@ export class CostTracker implements OnModuleInit {
       await this.saveData();
 
       this.logger.debug(
-        `Successfully tracked usage for ${walletAddress} with ${modelName}: $${totalCost.toFixed(4)} (${inputTokens} input tokens, ${outputTokens} output tokens)`,
+        `Successfully tracked usage with ${modelName}: $${totalCost.toFixed(4)} (${inputTokens} input tokens, ${outputTokens} output tokens)`,
       );
     } catch (error) {
       this.logger.error('Error tracking usage:', error);
@@ -335,28 +299,9 @@ export class CostTracker implements OnModuleInit {
     );
   }
 
-  // Add a method to generate usage reports
-  async generateUsageReport(walletAddress?: string): Promise<any> {
-    if (walletAddress) {
-      // Return report for specific user
-      return (
-        this.data.users[walletAddress] || {
-          message: 'No usage data found for this wallet address',
-        }
-      );
-    } else {
-      // Return global stats
-      return {
-        global: {
-          totalRequests: this.data.global.totalRequests,
-          totalCost: this.data.global.totalCost.toFixed(4),
-          totalInputTokens: this.data.global.totalInputTokens,
-          totalOutputTokens: this.data.global.totalOutputTokens,
-          modelsBreakdown: this.data.global.modelsUsage,
-          lastUpdated: this.data.global.lastUpdated,
-        },
-        totalUsers: Object.keys(this.data.users).length,
-      };
-    }
+  // Simple report that returns the exact format requested
+  async generateUsageReport(): Promise<any> {
+    // Return a direct reference to our data structure
+    return this.data;
   }
 }
