@@ -6,9 +6,10 @@ import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { AskResponseDto } from './dto/ask-response.dto';
-import { readFile, readdir, writeFile } from 'fs/promises';
+import { readFile, readdir, writeFile, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { SubsService } from './subs/subs.service';
+import { existsSync } from 'fs';
 
 const RUKH_TOKEN_ABI = [
   'function mint(address to, uint256 amount) external',
@@ -40,46 +41,69 @@ export class AppService {
   private async loadContexts() {
     try {
       const contextsPath = join(process.cwd(), 'data', 'contexts');
-      const indexPath = join(contextsPath, 'index.json');
 
-      let validContexts: string[] = [];
-      try {
-        const indexContent = await readFile(indexPath, 'utf-8');
-        const { contexts } = JSON.parse(indexContent);
-        validContexts = contexts.map((ctx) => ctx.name);
-      } catch (error) {
-        this.logger.warn('No index.json found or invalid format');
+      // Create contexts directory if it doesn't exist
+      if (!existsSync(contextsPath)) {
+        this.logger.log('Creating contexts directory');
+        await mkdir(contextsPath, { recursive: true });
         return;
       }
 
+      // Get the list of context directories
       const items = await readdir(contextsPath);
-      const directories = items.filter((item) => {
-        const itemPath = join(contextsPath, item);
-        return validContexts.includes(item) && !item.endsWith('.json');
-      });
+      const directories = [];
 
+      for (const item of items) {
+        const itemPath = join(contextsPath, item);
+        if (existsSync(itemPath) && (await this.isDirectory(itemPath))) {
+          directories.push(item);
+        }
+      }
+
+      if (directories.length === 0) {
+        this.logger.warn('No context directories found');
+        return;
+      }
+
+      // Process each context directory
       for (const dir of directories) {
         const contextPath = join(contextsPath, dir);
-        const files = await readdir(contextPath);
+        const indexPath = join(contextPath, 'index.json');
 
-        const mdFiles = files.filter((file) => file.endsWith('.md'));
-        if (mdFiles.length === 0) {
-          this.logger.warn(`No markdown files found in context: ${dir}`);
+        // Skip directories without an index.json file
+        if (!existsSync(indexPath)) {
+          this.logger.warn(`Skipping directory ${dir}: No index.json found`);
           continue;
         }
 
-        let contextContent = '';
-        this.logger.log(`Loading files for context '${dir}':`);
-        for (const file of mdFiles) {
-          this.logger.log(`- Loading file: ${file}`);
-          const content = await readFile(join(contextPath, file), 'utf-8');
-          contextContent += content + '\n\n';
-        }
+        // Read and process the context files
+        try {
+          const files = await readdir(contextPath);
+          const mdFiles = files.filter(
+            (file) => file.endsWith('.md') && file !== 'README.md',
+          );
 
-        this.contexts.set(dir, contextContent.trim());
-        this.logger.log(
-          `Successfully loaded context: ${dir} with ${mdFiles.length} files`,
-        );
+          if (mdFiles.length === 0) {
+            this.logger.warn(`No markdown files found in context: ${dir}`);
+            continue;
+          }
+
+          let contextContent = '';
+          this.logger.log(`Loading files for context '${dir}':`);
+
+          for (const file of mdFiles) {
+            this.logger.log(`- Loading file: ${file}`);
+            const content = await readFile(join(contextPath, file), 'utf-8');
+            contextContent += `\n\n# File: ${file}\n\n${content}`;
+          }
+
+          this.contexts.set(dir, contextContent.trim());
+          this.logger.log(
+            `Successfully loaded context: ${dir} with ${mdFiles.length} files`,
+          );
+        } catch (error) {
+          this.logger.error(`Error processing context ${dir}:`, error);
+        }
       }
 
       if (this.contexts.size === 0) {
@@ -89,6 +113,134 @@ export class AppService {
       }
     } catch (error) {
       this.logger.error('Failed to load contexts:', error);
+    }
+  }
+
+  private async isDirectory(path: string): Promise<boolean> {
+    try {
+      const stats = await stat(path);
+      return stats.isDirectory();
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async processContextData(
+    contextName: string,
+    walletAddress?: string,
+  ): Promise<string> {
+    try {
+      // Skip if no context is specified
+      if (!contextName || contextName === '') {
+        return '';
+      }
+
+      const contextPath = join(process.cwd(), 'data', 'contexts', contextName);
+
+      // Check if the context exists
+      if (!existsSync(contextPath)) {
+        this.logger.warn(`Context ${contextName} not found`);
+        return `Context '${contextName}' not found.`;
+      }
+
+      // Get list of markdown files in the context directly from disk
+      const files = await this.getMarkdownFiles(contextPath);
+      if (files.length === 0) {
+        return `No markdown files found in context '${contextName}'.`;
+      }
+
+      // Track which files are used for this query
+      const usedFiles: string[] = [];
+
+      // Read and concatenate all markdown files directly from disk
+      let contextContent = '';
+
+      this.logger.log(`Loading files for context '${contextName}':`);
+      for (const file of files) {
+        try {
+          const filePath = join(contextPath, file);
+          this.logger.log(`- Loading file: ${file}`);
+          const content = await readFile(filePath, 'utf-8');
+          contextContent += `\n\n# File: ${file}\n\n${content}`;
+          usedFiles.push(file);
+        } catch (error) {
+          this.logger.error(`Error reading file ${file}: ${error.message}`);
+          // Continue with other files
+        }
+      }
+
+      // Record this query in the context's index file if a wallet address is provided
+      if (walletAddress) {
+        try {
+          await this.recordContextQuery(contextName, walletAddress, usedFiles);
+        } catch (error) {
+          // Non-critical operation, just log the error
+          this.logger.warn(`Failed to record context query: ${error.message}`);
+        }
+      }
+
+      this.logger.log(
+        `Successfully loaded ${usedFiles.length} files from context: ${contextName}`,
+      );
+      return contextContent.trim();
+    } catch (error) {
+      this.logger.error(`Error processing context data: ${error.message}`);
+      return `Error processing context data: ${error.message}`;
+    }
+  }
+
+  private async getMarkdownFiles(directoryPath: string): Promise<string[]> {
+    try {
+      const files = await readdir(directoryPath);
+      return files.filter(
+        (file) =>
+          file.toLowerCase().endsWith('.md') &&
+          file !== 'README.md' &&
+          file !== 'index.json',
+      );
+    } catch (error) {
+      this.logger.error(`Error reading directory: ${error.message}`);
+      return [];
+    }
+  }
+
+  private async recordContextQuery(
+    contextName: string,
+    walletAddress: string,
+    filesUsed: string[],
+  ): Promise<void> {
+    const indexPath = join(
+      process.cwd(),
+      'data',
+      'contexts',
+      contextName,
+      'index.json',
+    );
+
+    if (!existsSync(indexPath)) {
+      throw new Error(`Context index file not found for ${contextName}`);
+    }
+
+    try {
+      // Read the current index
+      const indexData = await readFile(indexPath, 'utf-8');
+      const index = JSON.parse(indexData);
+
+      // Add the query
+      if (!index.queries) {
+        index.queries = [];
+      }
+
+      index.queries.push({
+        timestamp: new Date().toISOString(),
+        origin: walletAddress,
+        contextFilesUsed: filesUsed,
+      });
+
+      // Write back the updated index
+      await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    } catch (error) {
+      throw new Error(`Failed to record context query: ${error.message}`);
     }
   }
 
@@ -158,6 +310,7 @@ export class AppService {
       );
     }
   }
+
   private async mintToken(to: string): Promise<string> {
     try {
       if (!this.tokenContract || !this.signer) {
@@ -242,6 +395,7 @@ export class AppService {
     const selectedModel = model || 'mistral';
 
     try {
+      // Check Zhankai subscription status if applicable
       if (context && context.toLowerCase() === 'zhankai') {
         this.logger.debug(
           `Zhankai context detected - checking usage for ${walletAddress || 'anonymous'}`,
@@ -253,67 +407,70 @@ export class AppService {
             `Anonymous user - proceeding without subscription check`,
           );
         } else {
-          // Read context config to check query count
-          const configPath = join(
+          const zhankaiPath = join(
             process.cwd(),
             'data',
             'contexts',
-            'index.json',
+            'zhankai',
           );
-          let contextConfig;
-          try {
-            const configData = await readFile(configPath, 'utf-8');
-            contextConfig = JSON.parse(configData);
-          } catch (error) {
-            this.logger.error(
-              `Failed to read context config: ${error.message}`,
-            );
-            contextConfig = { contexts: [] };
-          }
+          const indexPath = join(zhankaiPath, 'index.json');
 
-          // Find zhankai context
-          const zhankaiContext = contextConfig.contexts.find(
-            (ctx) => ctx.name.toLowerCase() === 'zhankai',
-          );
+          // Check if zhankai context exists
+          if (existsSync(indexPath)) {
+            try {
+              const indexData = await readFile(indexPath, 'utf-8');
+              const contextIndex = JSON.parse(indexData);
 
-          // Count occurrences of this wallet address in queries
-          const queryCount =
-            zhankaiContext?.queries?.filter(
-              (addr) => addr.toLowerCase() === walletAddress.toLowerCase(),
-            ).length || 0;
+              // Count queries from this wallet address
+              const walletQueries =
+                contextIndex.queries?.filter(
+                  (query) =>
+                    query.origin?.toLowerCase() === walletAddress.toLowerCase(),
+                ) || [];
 
-          this.logger.debug(
-            `User ${walletAddress} has used ${queryCount} queries for Zhankai context`,
-          );
+              const queryCount = walletQueries.length;
 
-          // If user has used 3 or more queries, verify subscription
-          if (queryCount >= 3) {
-            this.logger.debug(
-              `Free query limit reached - checking subscription status`,
-            );
-
-            const isSubscribed = await this.subsService.isSubscribed(
-              walletAddress,
-              data,
-            );
-
-            if (!isSubscribed) {
-              this.logger.warn(
-                `Access denied for wallet: ${walletAddress} - No subscription for Zhankai context after free queries`,
+              this.logger.debug(
+                `User ${walletAddress} has used ${queryCount} queries for Zhankai context`,
               );
-              throw new HttpException(
-                'Free query limit reached. Subscription required to continue using the Zhankai context.',
-                HttpStatus.PAYMENT_REQUIRED,
+
+              // If user has used 3 or more queries, verify subscription
+              if (queryCount >= 3) {
+                this.logger.debug(
+                  `Free query limit reached - checking subscription status`,
+                );
+
+                const isSubscribed = await this.subsService.isSubscribed(
+                  walletAddress,
+                  data,
+                );
+
+                if (!isSubscribed) {
+                  this.logger.warn(
+                    `Access denied for wallet: ${walletAddress} - No subscription for Zhankai context after free queries`,
+                  );
+                  throw new HttpException(
+                    'Free query limit reached. Subscription required to continue using the Zhankai context.',
+                    HttpStatus.PAYMENT_REQUIRED,
+                  );
+                }
+
+                this.logger.debug(
+                  `Subscription verified for Zhankai context access`,
+                );
+              } else {
+                this.logger.debug(
+                  `User has ${3 - queryCount} free queries remaining`,
+                );
+              }
+            } catch (error) {
+              this.logger.error(
+                `Error checking Zhankai context queries: ${error.message}`,
               );
+              // Continue with processing despite error
             }
-
-            this.logger.debug(
-              `Subscription verified for Zhankai context access`,
-            );
           } else {
-            this.logger.debug(
-              `User has ${3 - queryCount} free queries remaining`,
-            );
+            this.logger.debug(`Zhankai context index not found`);
           }
         }
       } else {
@@ -321,15 +478,14 @@ export class AppService {
           `Skipping subscription check - not using Zhankai context`,
         );
       }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error; // Re-throw if it's already a proper HTTP exception
+
+      // Process context data with new method
+      let contextContent = '';
+      if (context && context !== '') {
+        contextContent = await this.processContextData(context, walletAddress);
       }
-    }
 
-    try {
-      const contextContent = this.contexts.get(context);
-
+      // Handle file upload if present
       let fileContent = '';
       if (file && file.originalname.toLowerCase().endsWith('.md')) {
         fileContent = `\n\nUploaded file (${file.originalname}):\n${file.buffer.toString('utf-8')}`;
@@ -340,114 +496,73 @@ export class AppService {
         this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
       }
 
-      if (selectedModel === 'mistral') {
-        const { isFirstMessage } =
-          await this.mistralService.getConversationHistory(usedSessionId);
+      // Process the message with the selected model
+      switch (selectedModel) {
+        case 'mistral': {
+          const { isFirstMessage } =
+            await this.mistralService.getConversationHistory(usedSessionId);
 
-        const contextualMessage =
-          isFirstMessage && contextContent
-            ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
-            : `${message}${fileContent}`;
+          const contextualMessage =
+            isFirstMessage && contextContent
+              ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
+              : `${message}${fileContent}`;
 
-        // Save full input for cost tracking
-        fullInput = contextualMessage;
+          // Save full input for cost tracking
+          fullInput = contextualMessage;
 
-        const response = await this.mistralService.processMessage(
-          contextualMessage,
-          usedSessionId,
-        );
-        output = response.content;
-        fullOutput = response.content;
-        usedSessionId = response.sessionId;
-        usedModel = 'ministral-3b-2410';
-
-        // Make sure we have valid usage data
-        usage = response.usage || {
-          input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-          output_tokens: Math.ceil(fullOutput.length / 4),
-        };
-      } else if (selectedModel === 'anthropic') {
-        const { isFirstMessage } =
-          await this.anthropicService.getConversationHistory(usedSessionId);
-
-        const contextualMessage =
-          isFirstMessage && contextContent
-            ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
-            : `${message}${fileContent}`;
-
-        // Save full input for cost tracking
-        fullInput = contextualMessage;
-
-        const response = await this.anthropicService.processMessage(
-          contextualMessage,
-          usedSessionId,
-        );
-        output = response.content;
-        fullOutput = response.content;
-        usedSessionId = response.sessionId;
-        usedModel = 'claude-3-7-sonnet-20250219';
-
-        // Make sure we have valid usage data
-        usage = response.usage || {
-          input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-          output_tokens: Math.ceil(fullOutput.length / 4),
-        };
-      }
-
-      // Write user address for the specified context
-      if (context && walletAddress) {
-        try {
-          const configPath = join(
-            process.cwd(),
-            'data',
-            'contexts',
-            'index.json',
+          const response = await this.mistralService.processMessage(
+            contextualMessage,
+            usedSessionId,
           );
-          let contextConfig = { contexts: [] };
+          output = response.content;
+          fullOutput = response.content;
+          usedSessionId = response.sessionId;
+          usedModel = 'ministral-3b-2410';
 
-          try {
-            const configData = await readFile(configPath, 'utf-8');
-            contextConfig = JSON.parse(configData);
-          } catch (error) {
-            this.logger.error(
-              `Failed to read context config: ${error.message}`,
-            );
-          }
+          // Make sure we have valid usage data
+          usage = response.usage || {
+            input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+            output_tokens: Math.ceil(fullOutput.length / 4),
+          };
+          break;
+        }
 
-          // Find the specified context
-          const contextEntry = contextConfig.contexts.find(
-            (ctx) => ctx.name === context,
+        case 'anthropic': {
+          const { isFirstMessage } =
+            await this.anthropicService.getConversationHistory(usedSessionId);
+
+          const contextualMessage =
+            isFirstMessage && contextContent
+              ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
+              : `${message}${fileContent}`;
+
+          // Save full input for cost tracking
+          fullInput = contextualMessage;
+
+          const response = await this.anthropicService.processMessage(
+            contextualMessage,
+            usedSessionId,
           );
+          output = response.content;
+          fullOutput = response.content;
+          usedSessionId = response.sessionId;
+          usedModel = 'claude-3-7-sonnet-20250219';
 
-          if (contextEntry) {
-            // Initialize queries array if it doesn't exist
-            if (!contextEntry.queries) {
-              contextEntry.queries = [];
-            }
+          // Make sure we have valid usage data
+          usage = response.usage || {
+            input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+            output_tokens: Math.ceil(fullOutput.length / 4),
+          };
+          break;
+        }
 
-            // Add wallet address to queries array
-            contextEntry.queries.push(walletAddress);
-
-            // Save updated config
-            await writeFile(
-              configPath,
-              JSON.stringify(contextConfig, null, 2),
-              'utf-8',
-            );
-            this.logger.debug(
-              `Added ${walletAddress} to queries for context: ${context}`,
-            );
-          } else {
-            this.logger.debug(`Context ${context} not found in config`);
-          }
-        } catch (error) {
-          this.logger.error(`Failed to update queries: ${error.message}`);
-          // Continue with processing - don't fail the request due to this
+        default: {
+          this.logger.warn(`Unsupported model: ${selectedModel}`);
+          break;
         }
       }
 
       // STEP 1: Track usage for all successful responses regardless of wallet
-      // We'll do this even if there's no wallet, using DEFAULT_RECIPIENT as the tracker
       if (output) {
         const trackingWallet =
           walletAddress && walletAddress.trim() !== ''
