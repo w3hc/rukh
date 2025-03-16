@@ -12,6 +12,7 @@ import { AnthropicModule } from './anthropic/anthropic.module';
 import { CostTracker } from './memory/cost-tracking.service';
 import { SiweModule } from './siwe/siwe.module';
 import { SubsService } from './subs/subs.service';
+import { WebReaderModule } from './web/web-reader.module';
 
 @Module({
   imports: [
@@ -24,10 +25,16 @@ import { SubsService } from './subs/subs.service';
         limit: 50,
         name: 'ask',
       },
+      {
+        ttl: 60000,
+        limit: 20,
+        name: 'web',
+      },
     ]),
     ContextModule,
     AnthropicModule,
     SiweModule,
+    WebReaderModule,
   ],
   controllers: [AppController],
   providers: [
