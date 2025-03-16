@@ -127,10 +127,9 @@ export class AnthropicService {
           body: JSON.stringify({
             model: this.model,
             messages: formattedMessages,
-            max_tokens: 10000,
+            max_tokens: 64000,
             temperature: 0.3,
           }),
-          signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
