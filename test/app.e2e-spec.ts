@@ -5,6 +5,9 @@ import { AppModule } from '../src/app.module';
 import * as fs from 'fs';
 import { join } from 'path';
 
+process.env.MISTRAL_API_KEY = 'test_api_key_dummy';
+process.env.ANTHROPIC_API_KEY = 'test_api_key_dummy';
+
 // Set global timeout for all tests
 jest.setTimeout(60000);
 
