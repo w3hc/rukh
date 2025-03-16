@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Delete,
   Body,
   Param,
@@ -13,6 +14,7 @@ import {
   Headers,
   BadRequestException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -22,16 +24,23 @@ import {
   ApiConsumes,
   ApiBody,
   ApiHeader,
+  ApiParam,
 } from '@nestjs/swagger';
 import { ContextService } from './context.service';
 import { UploadContextFileDto, DeleteFileDto } from '../dto/upload-file.dto';
-import { CreateContextDto } from '../dto/context.dto';
+import {
+  CreateContextDto,
+  ContextFileDto,
+  ContextFile,
+} from '../dto/context.dto';
 import { SkipThrottle } from '@nestjs/throttler';
 
 @ApiTags('Context')
 @Controller('context')
 @SkipThrottle()
 export class ContextController {
+  private readonly logger = new Logger(ContextController.name);
+
   constructor(private readonly contextService: ContextService) {}
 
   @Post()
@@ -56,6 +65,7 @@ export class ContextController {
       const result = await this.contextService.createContext(
         createContextDto.name,
         createContextDto.password,
+        createContextDto.description || '',
       );
       return {
         message: 'Context created successfully',
@@ -67,6 +77,151 @@ export class ContextController {
       }
       throw new HttpException(
         error.message || 'Failed to create context',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List all available contexts' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of available contexts',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+        },
+      },
+    },
+  })
+  async listContexts() {
+    try {
+      return await this.contextService.listContexts();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to list contexts',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':name/files')
+  @ApiOperation({ summary: 'List files in a context' })
+  @ApiParam({
+    name: 'name',
+    description: 'Name of the context',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of files in the context',
+    type: [ContextFileDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context not found',
+  })
+  async listContextFiles(
+    @Param('name') name: string,
+    @Headers('x-context-password') password: string,
+  ): Promise<ContextFileDto[]> {
+    try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      const files = await this.contextService.listContextFiles(name, password);
+      // Convert ContextFile[] to ContextFileDto[] if needed
+      return files.map((file) => ({
+        name: file.name,
+        description: file.description,
+        size: file.size,
+      }));
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to list context files',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':name/file/:filename')
+  @ApiOperation({ summary: 'Get file content from a context' })
+  @ApiParam({
+    name: 'name',
+    description: 'Name of the context',
+    required: true,
+  })
+  @ApiParam({
+    name: 'filename',
+    description: 'Name of the file',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'File content',
+    schema: {
+      type: 'string',
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context or file not found',
+  })
+  async getFileContent(
+    @Param('name') name: string,
+    @Param('filename') filename: string,
+    @Headers('x-context-password') password: string,
+  ): Promise<string> {
+    try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      return await this.contextService.getFileContent(name, filename, password);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to get file content',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -107,6 +262,7 @@ export class ContextController {
   async uploadFile(
     @Headers('x-context-password') password: string,
     @Body('contextName') contextName: string,
+    @Body('fileDescription') fileDescription: string,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -130,6 +286,7 @@ export class ContextController {
         file.originalname,
         file.buffer.toString('utf-8'),
         password,
+        fileDescription || '',
       );
 
       return {

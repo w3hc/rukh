@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsOptional } from 'class-validator';
 
 export class UploadContextFileDto {
   @ApiProperty({
@@ -13,6 +13,15 @@ export class UploadContextFileDto {
       'Context name can only contain lowercase letters, numbers, and hyphens',
   })
   contextName: string;
+
+  @ApiProperty({
+    description: 'Description of the file (optional)',
+    example: 'Best practices for Ethereum development',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  fileDescription?: string;
 
   @ApiProperty({
     type: 'string',
