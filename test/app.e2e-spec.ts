@@ -27,16 +27,18 @@ describe('App (e2e)', () => {
 
   // Mock implementations
   const mockMistralService = {
-    processMessage: jest.fn().mockImplementation((message, sessionId) => {
-      return Promise.resolve({
-        content: 'This is a mocked response from Mistral AI',
-        sessionId: sessionId || 'mock-session-id',
-        usage: {
-          input_tokens: 10,
-          output_tokens: 15,
-        },
-      });
-    }),
+    processMessage: jest
+      .fn()
+      .mockImplementation((message, sessionId, systemPrompt) => {
+        return Promise.resolve({
+          content: 'This is a mocked response from Mistral AI',
+          sessionId: sessionId || 'mock-session-id',
+          usage: {
+            input_tokens: 10,
+            output_tokens: 15,
+          },
+        });
+      }),
     getConversationHistory: jest.fn().mockResolvedValue({
       history: [],
       isFirstMessage: true,
@@ -45,16 +47,18 @@ describe('App (e2e)', () => {
   };
 
   const mockAnthropicService = {
-    processMessage: jest.fn().mockImplementation((message, sessionId) => {
-      return Promise.resolve({
-        content: 'This is a mocked response from Claude',
-        sessionId: sessionId || 'mock-session-id',
-        usage: {
-          input_tokens: 12,
-          output_tokens: 18,
-        },
-      });
-    }),
+    processMessage: jest
+      .fn()
+      .mockImplementation((message, sessionId, systemPrompt) => {
+        return Promise.resolve({
+          content: 'This is a mocked response from Claude',
+          sessionId: sessionId || 'mock-session-id',
+          usage: {
+            input_tokens: 12,
+            output_tokens: 18,
+          },
+        });
+      }),
     getConversationHistory: jest.fn().mockResolvedValue({
       history: [],
       isFirstMessage: true,
@@ -496,12 +500,24 @@ describe('App (e2e)', () => {
         if (response.status === 201) {
           expect(response.body).toHaveProperty('model');
           expect(response.body).toHaveProperty('sessionId');
-          // Verify that the message was modified to include file content
+
+          // Verify that the message is clean (not containing file content)
           expect(mockMistralService.processMessage).toHaveBeenCalled();
-          const calledMessage =
-            mockMistralService.processMessage.mock.calls[0][0];
-          expect(calledMessage).toContain('test message with file');
-          expect(calledMessage).toContain('# Test markdown file for e2e tests');
+          const calledArgs = mockMistralService.processMessage.mock.calls[0];
+
+          // First arg should be just the user message
+          expect(calledArgs[0]).toBe('test message with file');
+
+          // Third arg should be the system prompt containing the file content
+          if (calledArgs.length >= 3) {
+            expect(calledArgs[2]).toBeDefined();
+            expect(calledArgs[2]).toContain(
+              '# Test markdown file for e2e tests',
+            );
+          } else {
+            // If using older pattern (without systemPrompt), file content should be in message
+            expect(calledArgs[0]).toContain('test message with file');
+          }
         }
       });
 
@@ -522,6 +538,22 @@ describe('App (e2e)', () => {
         if (response.status === 201) {
           expect(response.body).toHaveProperty('model');
           expect(response.body).toHaveProperty('sessionId', 'test-session');
+
+          // Verify that file content is in system prompt, not in message
+          if (mockMistralService.processMessage.mock.calls.length > 0) {
+            const calledArgs = mockMistralService.processMessage.mock.calls[0];
+
+            // First arg should be just the user message
+            expect(calledArgs[0]).toBe('test message with file');
+
+            // Third arg should be the system prompt containing the file content
+            if (calledArgs.length >= 3) {
+              expect(calledArgs[2]).toBeDefined();
+              expect(calledArgs[2]).toContain(
+                '# Test markdown file for e2e tests',
+              );
+            }
+          }
         }
       });
 
