@@ -132,6 +132,7 @@ export class AppService {
   async processContextData(
     contextName: string,
     walletAddress?: string,
+    message?: string,
   ): Promise<string> {
     try {
       // Skip if no context is specified
@@ -212,10 +213,14 @@ export class AppService {
         }
       }
 
-      // Record this query in the context's index file if a wallet address is provided
-      if (walletAddress && usedFiles.length > 0) {
+      if (usedFiles.length > 0) {
         try {
-          await this.recordContextQuery(contextName, walletAddress, usedFiles);
+          await this.recordContextQuery(
+            contextName,
+            walletAddress,
+            usedFiles,
+            message,
+          );
         } catch (error) {
           // Non-critical operation, just log the error
           this.logger.warn(`Failed to record context query: ${error.message}`);
@@ -232,25 +237,11 @@ export class AppService {
     }
   }
 
-  private async getMarkdownFiles(directoryPath: string): Promise<string[]> {
-    try {
-      const files = await readdir(directoryPath);
-      return files.filter(
-        (file) =>
-          file.toLowerCase().endsWith('.md') &&
-          file !== 'README.md' &&
-          file !== 'index.json',
-      );
-    } catch (error) {
-      this.logger.error(`Error reading directory: ${error.message}`);
-      return [];
-    }
-  }
-
   private async recordContextQuery(
     contextName: string,
     walletAddress: string,
     filesUsed: string[],
+    message: string,
   ): Promise<void> {
     const indexPath = join(
       process.cwd(),
@@ -274,9 +265,14 @@ export class AppService {
         index.queries = [];
       }
 
+      // Use "anon" as default value when walletAddress is empty
+      const origin =
+        walletAddress && walletAddress.trim() !== '' ? walletAddress : 'anon';
+
       index.queries.push({
         timestamp: new Date().toISOString(),
-        origin: walletAddress,
+        origin: origin,
+        message: message,
         contextFilesUsed: filesUsed,
       });
 
@@ -416,12 +412,206 @@ export class AppService {
     }
   }
 
+  /**
+   * Loads context information to be used as system prompt
+   * @param contextName The name of the context to load
+   * @param origin The origin (usually wallet address) for tracking context usage
+   * @param userMessage The original user message for tracking
+   * @returns Formatted context information for use in system prompt
+   */
+  private async loadContextInformation(
+    contextName: string,
+    origin: string,
+    userMessage: string = '', // Add user message parameter with default empty value
+  ): Promise<string> {
+    try {
+      // Skip if no context is specified
+      if (!contextName || contextName === '') {
+        return '';
+      }
+
+      const contextPath = join(process.cwd(), 'data', 'contexts', contextName);
+
+      // Check if the context exists
+      if (!existsSync(contextPath)) {
+        this.logger.warn(`Context ${contextName} not found`);
+        return '';
+      }
+
+      // First, try to get the context index to check for links and password
+      const indexPath = join(contextPath, 'index.json');
+      let contextIndex = null;
+      let contextPassword = '';
+
+      if (existsSync(indexPath)) {
+        try {
+          const indexData = await readFile(indexPath, 'utf-8');
+          contextIndex = JSON.parse(indexData);
+
+          // If we have a context index with password, store it for future use
+          if (contextIndex && contextIndex.password) {
+            contextPassword = contextIndex.password;
+            this.contexts.set(contextName, contextPassword);
+          }
+        } catch (error) {
+          this.logger.error(`Error reading context index: ${error.message}`);
+        }
+      }
+
+      // If we still don't have a password, check if we have it stored already
+      if (!contextPassword && this.contexts.has(contextName)) {
+        contextPassword = this.contexts.get(contextName);
+      }
+
+      // Get list of markdown files in the context
+      let files: string[] = [];
+      try {
+        if (contextPassword) {
+          // If we have a password, try to use the ContextService
+          const contextFiles = await this.contextService.listContextFiles(
+            contextName,
+            contextPassword,
+          );
+          files = contextFiles.map((file) => file.name);
+        } else {
+          // Fallback to direct file system access
+          files = await this.getMarkdownFiles(contextPath);
+        }
+      } catch (error) {
+        this.logger.error(`Error listing context files: ${error.message}`);
+        // Fallback to direct file system access
+        files = await this.getMarkdownFiles(contextPath);
+      }
+
+      // Track which files and links are used for this query
+      const usedFiles: string[] = [];
+
+      // Build context content for system prompt
+      let contextContent = `# Context: ${contextName}\n\n`;
+
+      // Read and add content from all markdown files
+      if (files && files.length > 0) {
+        this.logger.log(
+          `Loading ${files.length} files for context '${contextName}':`,
+        );
+        contextContent += `## Context Files\n\n`;
+
+        for (const file of files) {
+          try {
+            let fileContent = '';
+
+            if (contextPassword) {
+              // Try to get file content using ContextService
+              fileContent = await this.contextService.getFileContent(
+                contextName,
+                file,
+                contextPassword,
+              );
+            } else {
+              // Fallback to direct file system access
+              const filePath = join(contextPath, file);
+              fileContent = await readFile(filePath, 'utf-8');
+            }
+
+            contextContent += `### File: ${file}\n${fileContent}\n\n`;
+            usedFiles.push(file);
+            this.logger.debug(`- Added file: ${file}`);
+          } catch (error) {
+            this.logger.error(`Error reading file ${file}: ${error.message}`);
+            // Continue with other files
+          }
+        }
+      }
+
+      // Process links if they exist in the context index
+      if (contextIndex && contextIndex.links && contextIndex.links.length > 0) {
+        const links = contextIndex.links;
+        this.logger.log(
+          `Processing ${links.length} links for context '${contextName}'`,
+        );
+        contextContent += `## Context Links\n\n`;
+
+        for (const link of links) {
+          try {
+            this.logger.debug(`- Fetching content from link: ${link.url}`);
+
+            // Use WebReaderService to extract content from the link
+            const extractedContent = await this.webReaderService.extractForLLM(
+              link.url,
+            );
+
+            // Add the extracted content to the context
+            contextContent += `### Link: ${link.title} (${link.url})\n${extractedContent.text}\n\n`;
+
+            // Track the link usage
+            usedFiles.push(`link:${link.url}`);
+          } catch (error) {
+            this.logger.error(
+              `Error processing link ${link.url}: ${error.message}`,
+            );
+            // Add a fallback note about the link
+            contextContent += `### Link: ${link.title} (${link.url})\nCould not fetch content from this link.\n\n`;
+            usedFiles.push(`link:${link.url}`);
+          }
+        }
+      }
+
+      // Record the context query for analytics purposes
+      if (usedFiles.length > 0) {
+        try {
+          await this.recordContextQuery(
+            contextName,
+            origin,
+            usedFiles,
+            userMessage, // Use the actual user message instead of static text
+          );
+          this.logger.debug(
+            `Recorded context usage of ${usedFiles.length} files/links for message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`,
+          );
+        } catch (error) {
+          // Non-critical operation, just log the error
+          this.logger.warn(`Failed to record context query: ${error.message}`);
+        }
+      }
+
+      this.logger.log(
+        `Generated system prompt from context: ${contextName} (${contextContent.length} characters, ${usedFiles.length} items)`,
+      );
+      return contextContent.trim();
+    } catch (error) {
+      this.logger.error(
+        `Error generating system prompt from context: ${error.message}`,
+      );
+      return '';
+    }
+  }
+
+  /**
+   * Gets a list of markdown files in the given directory
+   * @param directoryPath Path to directory containing markdown files
+   * @returns Array of markdown filenames
+   */
+  private async getMarkdownFiles(directoryPath: string): Promise<string[]> {
+    try {
+      const files = await readdir(directoryPath);
+      return files.filter(
+        (file) =>
+          file.toLowerCase().endsWith('.md') &&
+          file !== 'README.md' &&
+          file !== 'index.json',
+      );
+    } catch (error) {
+      this.logger.error(`Error reading directory: ${error.message}`);
+      return [];
+    }
+  }
+
   async ask(
     message: string,
     model?: string,
     sessionId?: string,
     walletAddress?: string,
-    context: string = 'rukh',
+    contextName: string = 'rukh',
     file?: Express.Multer.File,
     data?: Record<string, any>,
   ): Promise<AskResponseDto> {
@@ -439,7 +629,7 @@ export class AppService {
 
     try {
       // Check Zhankai subscription status if applicable
-      if (context && context.toLowerCase() === 'zhankai') {
+      if (contextName && contextName.toLowerCase() === 'zhankai') {
         this.logger.debug(
           `Zhankai context detected - checking usage for ${walletAddress || 'anonymous'}`,
         );
@@ -522,40 +712,63 @@ export class AppService {
         );
       }
 
-      let contextContent = '';
-      if (context && context !== '') {
-        contextContent = await this.processContextData(context, walletAddress);
+      // Initialize a system prompt to contain context information
+      let systemPrompt = '';
+
+      // Load context information if context is specified
+      if (contextName && contextName !== '') {
+        this.logger.log(`Loading context information: ${contextName}`);
+        systemPrompt = await this.loadContextInformation(
+          contextName,
+          walletAddress || 'anonymous',
+          message, // Pass the original user message
+        );
+        this.logger.debug(
+          `Generated system prompt with context information (${systemPrompt.length} characters)`,
+        );
       }
 
       // Handle file upload if present
-      let fileContent = '';
       if (file && file.originalname.toLowerCase().endsWith('.md')) {
-        fileContent = `\n\nUploaded file (${file.originalname}):\n${file.buffer.toString('utf-8')}`;
+        const fileContent = file.buffer.toString('utf-8');
         this.logger.log(
           `Processing uploaded file: ${file.originalname} (${file.size} bytes)`,
         );
+
+        // Add file content to system prompt
+        if (systemPrompt) {
+          systemPrompt += '\n\n';
+        }
+        systemPrompt += `Uploaded file (${file.originalname}):\n${fileContent}`;
       } else if (file) {
         this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
       }
 
-      // Process the message with the selected model
+      // Store full input for cost tracking (combining system prompt and user message)
+      fullInput = systemPrompt ? systemPrompt + '\n\n' + message : message;
+
+      // Process the message with the selected model using system prompt
       switch (selectedModel) {
         case 'mistral': {
+          // Check if there's existing conversation
           const { isFirstMessage } =
             await this.mistralService.getConversationHistory(usedSessionId);
 
-          const contextualMessage =
-            isFirstMessage && contextContent
-              ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
-              : `${message}${fileContent}`;
+          // Only use system prompt for first message or if no history is available
+          const effectiveSystemPrompt = isFirstMessage
+            ? systemPrompt
+            : undefined;
 
-          // Save full input for cost tracking
-          fullInput = contextualMessage;
+          this.logger.debug(
+            `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Mistral`,
+          );
 
           const response = await this.mistralService.processMessage(
-            contextualMessage,
+            message, // Send the clean message without context
             usedSessionId,
+            effectiveSystemPrompt,
           );
+
           output = response.content;
           fullOutput = response.content;
           usedSessionId = response.sessionId;
@@ -570,21 +783,25 @@ export class AppService {
         }
 
         case 'anthropic': {
+          // Check if there's existing conversation
           const { isFirstMessage } =
             await this.anthropicService.getConversationHistory(usedSessionId);
 
-          const contextualMessage =
-            isFirstMessage && contextContent
-              ? `Context: ${contextContent}\n\nUser Query: ${message}${fileContent}`
-              : `${message}${fileContent}`;
+          // Only use system prompt for first message or if no history is available
+          const effectiveSystemPrompt = isFirstMessage
+            ? systemPrompt
+            : undefined;
 
-          // Save full input for cost tracking
-          fullInput = contextualMessage;
+          this.logger.debug(
+            `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic`,
+          );
 
           const response = await this.anthropicService.processMessage(
-            contextualMessage,
+            message, // Send the clean message without context
             usedSessionId,
+            effectiveSystemPrompt,
           );
+
           output = response.content;
           fullOutput = response.content;
           usedSessionId = response.sessionId;
@@ -624,7 +841,7 @@ export class AppService {
             message,
             usedSessionId,
             usedModel,
-            fullInput,
+            fullInput, // Full input includes both system prompt and user message
             fullOutput,
             usage.input_tokens,
             usage.output_tokens,
