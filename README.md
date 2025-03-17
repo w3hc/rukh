@@ -225,6 +225,101 @@ curl -X 'DELETE' \
   }'
 ```
 
+### Managing Context Links
+
+Rukh now supports adding web links to your contexts. When you query a context, the content of these links will be automatically fetched, processed, and included in the LLM's context alongside your context files.
+
+#### Context Index Structure with Links
+
+The context's `index.json` now includes a `links` array:
+
+```json
+{
+  "name": "rukh",
+  "password": "rukh",
+  "description": "Just Rukh.",
+  "numberOfFiles": 2,
+  "totalSize": 16,
+  "files": [
+    {
+      "name": "file1.md",
+      "description": "File #1",
+      "size": 8
+    },
+    {
+      "name": "file2.md",
+      "description": "File #2",
+      "size": 8
+    }
+  ],
+  "links": [
+    {
+      "title": "Rukh GitHub Repository",
+      "url": "https://github.com/w3hc/rukh",
+      "description": "Official GitHub repository for the Rukh project",
+      "timestamp": "2025-03-16T12:34:06.046Z"
+    }
+  ],
+  "queries": [
+    {
+      "timestamp": "2025-03-16T12:34:06.046Z",
+      "origin": "0x...",
+      "contextFilesUsed": [
+        "file1.md",
+        "file2.md",
+        "link:https://github.com/w3hc/rukh"
+      ]
+    }
+  ]
+}
+```
+
+#### Managing Context Links
+
+All link operations require the context password to be provided in the `x-context-password` header:
+
+```bash
+# Add a link to a context
+curl -X 'POST' \
+  'http://localhost:3000/context/my-context/link' \
+  -H 'x-context-password: my-secure-password' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "title": "Rukh GitHub Repository",
+    "url": "https://github.com/w3hc/rukh",
+    "description": "Official GitHub repository for the Rukh project"
+  }'
+
+# List all links in a context
+curl -X 'GET' \
+  'http://localhost:3000/context/my-context/links' \
+  -H 'x-context-password: my-secure-password'
+
+# Delete a link from a context
+curl -X 'DELETE' \
+  'http://localhost:3000/context/my-context/link' \
+  -H 'x-context-password: my-secure-password' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://github.com/w3hc/rukh"
+  }'
+```
+
+#### How Context Links Work
+
+When you query an API with a specific context, Rukh will:
+
+1. Process all the markdown files in the context folder
+2. Fetch and extract content from all links in the context using the Web Reader API
+3. Combine all this information into a single context for the LLM
+4. Record which files and links were used in the context's query history
+
+This allows you to include live web content in your AI responses without having to manually update your context files. The content is fetched fresh with each query, ensuring you always have the most up-to-date information.
+
+#### Query Tracking with Links
+
+Query tracking now includes links in the `contextFilesUsed` array with a `link:` prefix to distinguish them from files.
+
 ### Security Considerations
 
 - Context passwords are stored in plain text in each context's `index.json` file. For production use, consider implementing encryption.
@@ -352,6 +447,7 @@ curl -X 'POST' \
     "nonce": "nonce-from-challenge"
   }'
 ```
+
 
 ## Support
 
