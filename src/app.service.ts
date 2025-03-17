@@ -132,6 +132,7 @@ export class AppService {
   async processContextData(
     contextName: string,
     walletAddress?: string,
+    message?: string,
   ): Promise<string> {
     try {
       // Skip if no context is specified
@@ -212,10 +213,14 @@ export class AppService {
         }
       }
 
-      // Record this query in the context's index file if a wallet address is provided
-      if (walletAddress && usedFiles.length > 0) {
+      if (usedFiles.length > 0) {
         try {
-          await this.recordContextQuery(contextName, walletAddress, usedFiles);
+          await this.recordContextQuery(
+            contextName,
+            walletAddress,
+            usedFiles,
+            message,
+          );
         } catch (error) {
           // Non-critical operation, just log the error
           this.logger.warn(`Failed to record context query: ${error.message}`);
@@ -251,6 +256,7 @@ export class AppService {
     contextName: string,
     walletAddress: string,
     filesUsed: string[],
+    message: string,
   ): Promise<void> {
     const indexPath = join(
       process.cwd(),
@@ -274,9 +280,14 @@ export class AppService {
         index.queries = [];
       }
 
+      // Use "anon" as default value when walletAddress is empty
+      const origin =
+        walletAddress && walletAddress.trim() !== '' ? walletAddress : 'anon';
+
       index.queries.push({
         timestamp: new Date().toISOString(),
-        origin: walletAddress,
+        origin: origin,
+        message: message,
         contextFilesUsed: filesUsed,
       });
 
@@ -524,7 +535,11 @@ export class AppService {
 
       let contextContent = '';
       if (context && context !== '') {
-        contextContent = await this.processContextData(context, walletAddress);
+        contextContent = await this.processContextData(
+          context,
+          walletAddress,
+          message,
+        );
       }
 
       // Handle file upload if present
