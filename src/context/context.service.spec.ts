@@ -86,6 +86,7 @@ describe('ContextService', () => {
         numberOfFiles: 0,
         totalSize: 0,
         files: [],
+        links: [], // Add this line to match the new structure
         queries: [],
       };
 
