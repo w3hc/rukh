@@ -32,6 +32,8 @@ import {
   CreateContextDto,
   ContextFileDto,
   ContextFile,
+  ContextLink,
+  ContextLinkDto,
 } from '../dto/context.dto';
 import { SkipThrottle } from '@nestjs/throttler';
 
@@ -431,6 +433,220 @@ export class ContextController {
       }
       throw new HttpException(
         error.message || 'Failed to delete file',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':name/link')
+  @ApiOperation({ summary: 'Add a link to a context' })
+  @ApiParam({
+    name: 'name',
+    description: 'Name of the context',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
+  @ApiBody({
+    description: 'Link details',
+    type: ContextLinkDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Link added successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        link: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            url: { type: 'string' },
+            description: { type: 'string' },
+            timestamp: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context not found',
+  })
+  async addLink(
+    @Param('name') name: string,
+    @Headers('x-context-password') password: string,
+    @Body() linkDto: ContextLinkDto,
+  ): Promise<{ success: boolean; link: ContextLink }> {
+    try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      return await this.contextService.addLink(name, linkDto, password);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to add link',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':name/links')
+  @ApiOperation({ summary: 'List links in a context' })
+  @ApiParam({
+    name: 'name',
+    description: 'Name of the context',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of links in the context',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          url: { type: 'string' },
+          description: { type: 'string' },
+          timestamp: { type: 'string' },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context not found',
+  })
+  async listLinks(
+    @Param('name') name: string,
+    @Headers('x-context-password') password: string,
+  ): Promise<ContextLink[]> {
+    try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      return await this.contextService.listLinks(name, password);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to list links',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':name/link')
+  @ApiOperation({ summary: 'Delete a link from a context' })
+  @ApiParam({
+    name: 'name',
+    description: 'Name of the context',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-context-password',
+    description: 'Password for the context',
+    required: true,
+  })
+  @ApiBody({
+    description: 'URL of the link to delete',
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'URL of the link to delete',
+          example: 'https://github.com/w3hc/rukh',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Link deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Context or link not found',
+  })
+  async deleteLink(
+    @Param('name') name: string,
+    @Headers('x-context-password') password: string,
+    @Body() body: { url: string },
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!password) {
+        throw new BadRequestException('x-context-password header is required');
+      }
+
+      if (!body.url) {
+        throw new BadRequestException('URL is required');
+      }
+
+      await this.contextService.deleteLink(name, body.url, password);
+      return {
+        success: true,
+        message: 'Link deleted successfully',
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      if (error.message?.includes('not found')) {
+        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        error.message || 'Failed to delete link',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

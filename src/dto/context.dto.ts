@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsNumber,
   IsArray,
+  IsUrl,
 } from 'class-validator';
 
 // Export these interfaces so they can be imported by other modules
@@ -13,6 +14,13 @@ export interface ContextFile {
   name: string;
   description: string;
   size: number;
+}
+
+export interface ContextLink {
+  title: string;
+  url: string;
+  description?: string;
+  timestamp: string;
 }
 
 export interface ContextQuery {
@@ -28,6 +36,7 @@ export interface ContextIndex {
   numberOfFiles: number;
   totalSize: number;
   files: ContextFile[];
+  links: ContextLink[];
   queries: ContextQuery[];
 }
 
@@ -95,6 +104,34 @@ export class ContextFileDto {
   size: number;
 }
 
+export class ContextLinkDto {
+  @ApiProperty({
+    description: 'Title of the link',
+    example: 'Rukh GitHub Repository',
+  })
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @ApiProperty({
+    description: 'URL of the link',
+    example: 'https://github.com/w3hc/rukh',
+  })
+  @IsUrl({}, { message: 'Invalid URL format' })
+  @IsString()
+  @IsNotEmpty()
+  url: string;
+
+  @ApiProperty({
+    description: 'Description of the link (optional)',
+    example: 'Official GitHub repository for the Rukh project',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
 export class ContextQueryDto {
   @ApiProperty({
     description: 'Timestamp of the query',
@@ -153,6 +190,13 @@ export class ContextMetadataDto {
   })
   @IsArray()
   files: ContextFileDto[];
+
+  @ApiProperty({
+    description: 'Links associated with the context',
+    type: [ContextLinkDto],
+  })
+  @IsArray()
+  links: ContextLinkDto[];
 
   @ApiProperty({
     description: 'Queries made to the context',

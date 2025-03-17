@@ -10,6 +10,8 @@ import { readFile, readdir, writeFile, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { SubsService } from './subs/subs.service';
 import { existsSync } from 'fs';
+import { ContextService } from './context/context.service';
+import { WebReaderService } from './web/web-reader.service';
 
 const RUKH_TOKEN_ABI = [
   'function mint(address to, uint256 amount) external',
@@ -33,6 +35,8 @@ export class AppService {
     private readonly costTracker: CostTracker,
     private readonly configService: ConfigService,
     private readonly subsService: SubsService,
+    private readonly contextService: ContextService,
+    private readonly webReaderService: WebReaderService,
   ) {
     this.initializeWeb3();
     this.loadContexts();
@@ -143,13 +147,23 @@ export class AppService {
         return `Context '${contextName}' not found.`;
       }
 
-      // Get list of markdown files in the context directly from disk
-      const files = await this.getMarkdownFiles(contextPath);
-      if (files.length === 0) {
-        return `No markdown files found in context '${contextName}'.`;
+      // First, try to get the context index to check for links
+      const indexPath = join(contextPath, 'index.json');
+      let contextIndex = null;
+
+      if (existsSync(indexPath)) {
+        try {
+          const indexData = await readFile(indexPath, 'utf-8');
+          contextIndex = JSON.parse(indexData);
+        } catch (error) {
+          this.logger.error(`Error reading context index: ${error.message}`);
+        }
       }
 
-      // Track which files are used for this query
+      // Get list of markdown files in the context directly from disk
+      const files = await this.getMarkdownFiles(contextPath);
+
+      // Track which files and links are used for this query
       const usedFiles: string[] = [];
 
       // Read and concatenate all markdown files directly from disk
@@ -161,7 +175,7 @@ export class AppService {
           const filePath = join(contextPath, file);
           this.logger.log(`- Loading file: ${file}`);
           const content = await readFile(filePath, 'utf-8');
-          contextContent += `\n\n# File: ${file}\n\n${content}`;
+          contextContent += `\n\n### Context File: ${file}\n${content}`;
           usedFiles.push(file);
         } catch (error) {
           this.logger.error(`Error reading file ${file}: ${error.message}`);
@@ -169,8 +183,37 @@ export class AppService {
         }
       }
 
+      // Process links if they exist in the context index
+      if (contextIndex && contextIndex.links && contextIndex.links.length > 0) {
+        this.logger.log(
+          `Processing ${contextIndex.links.length} links for context '${contextName}'`,
+        );
+
+        for (const link of contextIndex.links) {
+          try {
+            this.logger.log(`Fetching content from link: ${link.url}`);
+
+            // Use WebReaderService to extract content from the link
+            const extractedContent = await this.webReaderService.extractForLLM(
+              link.url,
+            );
+
+            // Add the extracted content to the context
+            contextContent += `\n\n### Context Link: ${link.title} (${link.url})\n${extractedContent.text}`;
+
+            // Track the link usage
+            usedFiles.push(`link:${link.url}`);
+          } catch (error) {
+            this.logger.error(
+              `Error processing link ${link.url}: ${error.message}`,
+            );
+            // Continue with other links
+          }
+        }
+      }
+
       // Record this query in the context's index file if a wallet address is provided
-      if (walletAddress) {
+      if (walletAddress && usedFiles.length > 0) {
         try {
           await this.recordContextQuery(contextName, walletAddress, usedFiles);
         } catch (error) {
@@ -180,7 +223,7 @@ export class AppService {
       }
 
       this.logger.log(
-        `Successfully loaded ${usedFiles.length} files from context: ${contextName}`,
+        `Successfully loaded ${usedFiles.length} items from context: ${contextName}`,
       );
       return contextContent.trim();
     } catch (error) {
@@ -479,7 +522,6 @@ export class AppService {
         );
       }
 
-      // Process context data with new method
       let contextContent = '';
       if (context && context !== '') {
         contextContent = await this.processContextData(context, walletAddress);

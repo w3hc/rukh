@@ -1,8 +1,13 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { mkdir, rm, writeFile, readFile, stat } from 'fs/promises';
+import { mkdir, rm, writeFile, readFile, stat, readdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { ContextFile, ContextIndex, ContextQuery } from '../dto/context.dto';
+import {
+  ContextFile,
+  ContextIndex,
+  ContextQuery,
+  ContextLink,
+} from '../dto/context.dto';
 
 @Injectable()
 export class ContextService {
@@ -100,6 +105,7 @@ export class ContextService {
         numberOfFiles: 0,
         totalSize: 0,
         files: [],
+        links: [], // Initialize empty links array
         queries: [],
       };
 
@@ -322,32 +328,38 @@ export class ContextService {
   }
 
   /**
-   * Get a list of all available contexts
+   * List all contexts
    */
   async listContexts(): Promise<{ name: string; description: string }[]> {
     try {
+      // Create contexts directory if it doesn't exist
       if (!existsSync(this.contextsPath)) {
         await mkdir(this.contextsPath, { recursive: true });
-        return [];
       }
 
-      const directories = await this.getDirectories(this.contextsPath);
-      const contexts = [];
+      const contextFolders = await readdir(this.contextsPath);
+      const contexts: { name: string; description: string }[] = [];
 
-      for (const dir of directories) {
-        const contextIndex = await this.getContextIndex(dir);
-        if (contextIndex) {
+      for (const folderName of contextFolders) {
+        const indexPath = join(
+          this.contextsPath,
+          folderName.toString(),
+          'index.json',
+        );
+        if (existsSync(indexPath)) {
+          const indexContent = await readFile(indexPath, 'utf-8');
+          const index = JSON.parse(indexContent) as ContextIndex;
           contexts.push({
-            name: dir,
-            description: contextIndex.description,
+            name: index.name,
+            description: index.description,
           });
         }
       }
 
       return contexts;
     } catch (error) {
-      this.logger.error(`Failed to list contexts: ${error.message}`);
-      throw new Error(`Failed to list contexts: ${error.message}`);
+      this.logger.error('Error listing contexts:', error);
+      return [];
     }
   }
 
@@ -416,6 +428,140 @@ export class ContextService {
     } catch (error) {
       this.logger.error(`Failed to read file content: ${error.message}`);
       throw new Error(`Failed to read file content: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add a link to a context
+   */
+  async addLink(
+    contextName: string,
+    link: {
+      title: string;
+      url: string;
+      description?: string;
+    },
+    password: string,
+  ): Promise<{ success: boolean; link: ContextLink }> {
+    const contextPath = join(this.contextsPath, contextName);
+
+    if (!existsSync(contextPath)) {
+      throw new Error(`Context '${contextName}' not found`);
+    }
+
+    if (!(await this.validatePassword(contextName, password))) {
+      throw new UnauthorizedException('Invalid password for context');
+    }
+
+    try {
+      // Get the current context index
+      const contextIndex = await this.getContextIndex(contextName);
+      if (!contextIndex) {
+        throw new Error(`Context index not found for ${contextName}`);
+      }
+
+      // Initialize links array if it doesn't exist (for backward compatibility)
+      if (!contextIndex.links) {
+        contextIndex.links = [];
+      }
+
+      // Create the new link object with timestamp
+      const newLink: ContextLink = {
+        title: link.title,
+        url: link.url,
+        description: link.description || '',
+        timestamp: new Date().toISOString(),
+      };
+
+      // Add the link to the context
+      contextIndex.links.push(newLink);
+
+      // Save the updated index
+      await this.saveContextIndex(contextName, contextIndex);
+
+      this.logger.log(`Added link "${link.title}" to context: ${contextName}`);
+
+      return {
+        success: true,
+        link: newLink,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to add link to context: ${error.message}`);
+      throw new Error(`Failed to add link: ${error.message}`);
+    }
+  }
+
+  /**
+   * List all links in a context
+   */
+  async listLinks(
+    contextName: string,
+    password: string,
+  ): Promise<ContextLink[]> {
+    if (!(await this.validatePassword(contextName, password))) {
+      throw new UnauthorizedException('Invalid password for context');
+    }
+
+    const contextIndex = await this.getContextIndex(contextName);
+    if (!contextIndex) {
+      throw new Error(`Context '${contextName}' not found`);
+    }
+
+    // Return the links array or an empty array if it doesn't exist
+    return contextIndex.links || [];
+  }
+
+  /**
+   * Delete a link from a context by its URL
+   */
+  async deleteLink(
+    contextName: string,
+    url: string,
+    password: string,
+  ): Promise<boolean> {
+    const contextPath = join(this.contextsPath, contextName);
+
+    if (!existsSync(contextPath)) {
+      throw new Error(`Context '${contextName}' not found`);
+    }
+
+    if (!(await this.validatePassword(contextName, password))) {
+      throw new UnauthorizedException('Invalid password for context');
+    }
+
+    try {
+      // Get the current context index
+      const contextIndex = await this.getContextIndex(contextName);
+      if (!contextIndex) {
+        throw new Error(`Context index not found for ${contextName}`);
+      }
+
+      // Check if links array exists
+      if (!contextIndex.links || contextIndex.links.length === 0) {
+        throw new Error(`No links found in context '${contextName}'`);
+      }
+
+      // Find the link to delete
+      const initialLength = contextIndex.links.length;
+      contextIndex.links = contextIndex.links.filter(
+        (link) => link.url !== url,
+      );
+
+      // Check if any link was removed
+      if (contextIndex.links.length === initialLength) {
+        throw new Error(`Link with URL '${url}' not found in context`);
+      }
+
+      // Save the updated index
+      await this.saveContextIndex(contextName, contextIndex);
+
+      this.logger.log(
+        `Deleted link with URL "${url}" from context: ${contextName}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to delete link from context: ${error.message}`);
+      throw new Error(`Failed to delete link: ${error.message}`);
     }
   }
 }
