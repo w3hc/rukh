@@ -1,5 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { mkdir, rm, writeFile, readFile, stat } from 'fs/promises';
+import { mkdir, rm, writeFile, readFile, stat, readdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import {
@@ -328,32 +328,38 @@ export class ContextService {
   }
 
   /**
-   * Get a list of all available contexts
+   * List all contexts
    */
   async listContexts(): Promise<{ name: string; description: string }[]> {
     try {
+      // Create contexts directory if it doesn't exist
       if (!existsSync(this.contextsPath)) {
         await mkdir(this.contextsPath, { recursive: true });
-        return [];
       }
 
-      const directories = await this.getDirectories(this.contextsPath);
-      const contexts = [];
+      const contextFolders = await readdir(this.contextsPath);
+      const contexts: { name: string; description: string }[] = [];
 
-      for (const dir of directories) {
-        const contextIndex = await this.getContextIndex(dir);
-        if (contextIndex) {
+      for (const folderName of contextFolders) {
+        const indexPath = join(
+          this.contextsPath,
+          folderName.toString(),
+          'index.json',
+        );
+        if (existsSync(indexPath)) {
+          const indexContent = await readFile(indexPath, 'utf-8');
+          const index = JSON.parse(indexContent) as ContextIndex;
           contexts.push({
-            name: dir,
-            description: contextIndex.description,
+            name: index.name,
+            description: index.description,
           });
         }
       }
 
       return contexts;
     } catch (error) {
-      this.logger.error(`Failed to list contexts: ${error.message}`);
-      throw new Error(`Failed to list contexts: ${error.message}`);
+      this.logger.error('Error listing contexts:', error);
+      return [];
     }
   }
 
