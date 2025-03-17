@@ -52,6 +52,7 @@ export class AnthropicService {
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
+    systemPrompt?: string,
   ): Promise<{
     content: string;
     sessionId: string;
@@ -82,6 +83,7 @@ export class AnthropicService {
       this.logger.debug(`Request ID: ${requestId}`);
       this.logger.debug(`Session ID: ${sessionId}`);
       this.logger.debug(`Contains uploaded file: ${containsUploadedFile}`);
+      this.logger.debug(`System prompt provided: ${!!systemPrompt}`);
       this.logger.debug('Message Content:');
 
       if (message.length > 1000) {
@@ -92,8 +94,20 @@ export class AnthropicService {
         this.logger.debug(message);
       }
 
+      if (systemPrompt && systemPrompt.length > 1000) {
+        this.logger.debug('System prompt: (truncated for log)');
+        this.logger.debug(
+          `${systemPrompt.substring(0, 100)}...${systemPrompt.substring(systemPrompt.length - 100)}`,
+        );
+      } else if (systemPrompt) {
+        this.logger.debug(`System prompt: ${systemPrompt}`);
+      }
+
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Total message length: ${message.length} characters`);
+      this.logger.debug(
+        `System prompt length: ${systemPrompt?.length || 0} characters`,
+      );
       this.logger.debug(
         `Chat history length: ${formattedMessages.length} messages`,
       );
@@ -108,7 +122,9 @@ export class AnthropicService {
         requestData: {
           message_length: message.length,
           history_length: formattedMessages.length,
+          system_prompt_length: systemPrompt?.length || 0,
           has_file: containsUploadedFile,
+          has_system_prompt: !!systemPrompt,
           timestamp: new Date().toISOString(),
         },
       });
@@ -117,6 +133,19 @@ export class AnthropicService {
       const timeoutId = setTimeout(() => controller.abort(), 300000);
 
       try {
+        // Build request body with system prompt as a top-level parameter (not as a message)
+        const requestBody: any = {
+          model: this.model,
+          max_tokens: 64000,
+          temperature: 0.3,
+          messages: formattedMessages,
+        };
+
+        // Add system as a top-level parameter if provided
+        if (systemPrompt) {
+          requestBody.system = systemPrompt;
+        }
+
         const response = await fetch(this.apiUrl, {
           method: 'POST',
           headers: {
@@ -124,18 +153,19 @@ export class AnthropicService {
             'x-api-key': this.apiKey,
             'anthropic-version': this.apiVersion,
           },
-          body: JSON.stringify({
-            model: this.model,
-            messages: formattedMessages,
-            max_tokens: 64000,
-            temperature: 0.3,
-          }),
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response
+            .json()
+            .catch(() => ({ error: 'Unknown error' }));
+          this.logger.error(
+            `Anthropic API error response: ${JSON.stringify(errorData)}`,
+          );
           throw new Error(`Anthropic API error: ${JSON.stringify(errorData)}`);
         }
 
@@ -144,6 +174,8 @@ export class AnthropicService {
         const responseContent =
           responseData.content[0]?.text || 'No text content in response';
 
+        // Save only the user message and response to the conversation history
+        // We don't want to save the system prompt in the conversation history
         await memory.saveContext(
           { input: message },
           { response: responseContent },
@@ -164,11 +196,6 @@ export class AnthropicService {
             timestamp: new Date().toISOString(),
           },
         });
-
-        await memory.saveContext(
-          { input: message },
-          { response: responseContent },
-        );
 
         return {
           content: responseContent,

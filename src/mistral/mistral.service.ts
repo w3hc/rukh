@@ -39,6 +39,7 @@ export class MistralService {
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
+    systemPrompt?: string, // Added system prompt parameter
   ): Promise<{
     content: string;
     sessionId: string;
@@ -69,6 +70,7 @@ export class MistralService {
       this.logger.debug(`Request ID: ${requestId}`);
       this.logger.debug(`Session ID: ${sessionId}`);
       this.logger.debug(`Contains uploaded file: ${containsUploadedFile}`);
+      this.logger.debug(`System prompt provided: ${!!systemPrompt}`);
       this.logger.debug('Message Content:');
 
       if (message.length > 1000) {
@@ -83,6 +85,14 @@ export class MistralService {
       this.logger.debug(`Total message length: ${message.length} characters`);
       this.logger.debug(`Chat history length: ${messages.length} messages`);
 
+      // Add system message at the beginning if provided
+      if (systemPrompt) {
+        messages.unshift({
+          role: 'system',
+          content: systemPrompt,
+        });
+      }
+
       messages.push({
         role: 'user',
         content: message,
@@ -94,11 +104,12 @@ export class MistralService {
           message_length: message.length,
           history_length: messages.length,
           has_file: containsUploadedFile,
+          has_system_prompt: !!systemPrompt,
           timestamp: new Date().toISOString(),
         },
       });
 
-      // Use LangChain's ChatMistralAI
+      // Use LangChain's ChatMistralAI with system message
       const response = await this.model.invoke(messages);
       const responseContent = response.content.toString();
 
@@ -111,9 +122,6 @@ export class MistralService {
         ),
         output_tokens: Math.ceil(responseContent.length / 4),
       };
-
-      // This section is replaced by the modified code above that handles
-      // both direct responses and fallbacks to estimated token counts
 
       this.logger.debug({
         message: `Mistral API response [${requestId}]`,
