@@ -2,13 +2,15 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ChatMistralAI } from '@langchain/mistralai';
 import { CustomJsonMemory } from '../memory/custom-memory';
 import { v4 as uuidv4 } from 'uuid';
+import { HumanMessage, AIMessage } from '@langchain/core/messages';
 
 @Injectable()
 export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
-  private readonly modelName: string = 'ministral-3b-2410';
+  // private readonly modelName: string = 'ministral-3b-2410';
+  private readonly modelName: string = 'mistral-large-2411';
 
   constructor() {
     this.apiKey = process.env.MISTRAL_API_KEY;
@@ -39,7 +41,7 @@ export class MistralService {
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
-    systemPrompt?: string, // Added system prompt parameter
+    contextContent,
   ): Promise<{
     content: string;
     sessionId: string;
@@ -48,6 +50,9 @@ export class MistralService {
       output_tokens: number;
     };
   }> {
+    this.logger.log(
+      `Processing message with contextContent: ${contextContent}]`,
+    );
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
 
@@ -57,20 +62,39 @@ export class MistralService {
 
     try {
       const { history } = await memory.loadMemoryVariables();
+      const { isFirstMessage } = await this.getConversationHistory(sessionId);
 
-      const messages = history.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
+      // Convert history to LangChain message format
+      const langChainMessages = [];
 
-      const containsUploadedFile = message.includes('Uploaded file (');
+      // First message should include context content
+      if (isFirstMessage && contextContent && contextContent.length > 0) {
+        this.logger.debug(
+          `Using context content (${contextContent.length} characters)`,
+        );
+
+        // Add the first message with context prepended
+        langChainMessages.push(
+          new HumanMessage(`${contextContent}\n\n${message}`),
+        );
+      } else {
+        // Add all history messages
+        history.forEach((msg) => {
+          if (msg.role === 'user') {
+            langChainMessages.push(new HumanMessage(msg.content));
+          } else {
+            langChainMessages.push(new AIMessage(msg.content));
+          }
+        });
+
+        // Add the current message
+        langChainMessages.push(new HumanMessage(message));
+      }
 
       this.logger.debug('Full message to be sent to Mistral:');
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Request ID: ${requestId}`);
       this.logger.debug(`Session ID: ${sessionId}`);
-      this.logger.debug(`Contains uploaded file: ${containsUploadedFile}`);
-      this.logger.debug(`System prompt provided: ${!!systemPrompt}`);
       this.logger.debug('Message Content:');
 
       if (message.length > 1000) {
@@ -83,43 +107,59 @@ export class MistralService {
 
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Total message length: ${message.length} characters`);
-      this.logger.debug(`Chat history length: ${messages.length} messages`);
-
-      // Add system message at the beginning if provided
-      if (systemPrompt) {
-        messages.unshift({
-          role: 'system',
-          content: systemPrompt,
-        });
-      }
-
-      messages.push({
-        role: 'user',
-        content: message,
-      });
+      this.logger.debug(
+        `Chat history length: ${langChainMessages.length} messages`,
+      );
+      this.logger.debug(`Is first message: ${isFirstMessage}`);
+      this.logger.debug(
+        `Context content length: ${contextContent ? contextContent.length : 0} characters`,
+      );
 
       this.logger.debug({
         message: `Mistral API request [${requestId}]`,
         requestData: {
           message_length: message.length,
-          history_length: messages.length,
-          has_file: containsUploadedFile,
-          has_system_prompt: !!systemPrompt,
+          history_length: langChainMessages.length,
           timestamp: new Date().toISOString(),
         },
       });
 
-      // Use LangChain's ChatMistralAI with system message
-      const response = await this.model.invoke(messages);
+      // Log full message content to verify context inclusion
+      this.logger.debug('Messages to be sent to Mistral:');
+      this.logger.debug(
+        JSON.stringify(
+          langChainMessages.map((msg) => ({
+            role: msg._getType(),
+            content:
+              msg.content.substring(0, 100) +
+              (msg.content.length > 100 ? '...' : ''),
+          })),
+          null,
+          2,
+        ),
+      );
+
+      if (isFirstMessage && contextContent) {
+        this.logger.debug(
+          `First message includes ${contextContent.length} characters of context content`,
+        );
+      }
+
+      // Use LangChain's ChatMistralAI
+      const response = await this.model.invoke(langChainMessages);
       const responseContent = response.content.toString();
 
-      // LangChain doesn't directly expose token usage in its standard response
-      // So we need to estimate based on text length
+      // Estimate token usage
+      const allText = langChainMessages.reduce((total, msg) => {
+        if (typeof msg.content === 'string') {
+          return total + msg.content.length;
+        }
+        return total;
+      }, 0);
+
       const usage = {
         // Roughly estimate: 1 token ≈ 4 characters
-        input_tokens: Math.ceil(
-          messages.reduce((total, msg) => total + msg.content.length, 0) / 4,
-        ),
+        input_tokens: Math.ceil(allText / 4),
         output_tokens: Math.ceil(responseContent.length / 4),
       };
 
@@ -133,6 +173,7 @@ export class MistralService {
         },
       });
 
+      // Save the original message to conversation history
       await memory.saveContext(
         { input: message },
         { response: responseContent },
