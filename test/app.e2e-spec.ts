@@ -167,7 +167,7 @@ describe('App (e2e)', () => {
             })
             .expect(201);
 
-          expect(response.body).toHaveProperty('model', 'ministral-3b-2410');
+          expect(response.body).toHaveProperty('model', 'mistral-large-2411');
           expect(response.body).toHaveProperty('sessionId', 'test-session');
 
           // Verify the service was called (without checking exact parameters)

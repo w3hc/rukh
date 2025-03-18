@@ -625,7 +625,29 @@ export class AppService {
       output_tokens: 0,
     };
 
-    const selectedModel = model || 'mistral';
+    // Define available models for fallback
+    const availableModels = ['mistral', 'anthropic'];
+
+    // Initialize with the selected model, or default to anthropic
+    let selectedModel = model || 'anthropic';
+
+    // Validate the model and prepare fallback sequence
+    if (!availableModels.includes(selectedModel)) {
+      this.logger.warn(
+        `Invalid model specified: ${selectedModel}, defaulting to mistral`,
+      );
+      selectedModel = 'mistral';
+    }
+
+    // Create a fallback sequence starting with the selected model
+    const modelsToTry = [
+      selectedModel,
+      ...availableModels.filter((m) => m !== selectedModel),
+    ];
+
+    this.logger.log(
+      `Processing request with models in fallback sequence: ${modelsToTry.join(', ')}`,
+    );
 
     try {
       // Check Zhankai subscription status if applicable
@@ -747,78 +769,113 @@ export class AppService {
       // Store full input for cost tracking (combining system prompt and user message)
       fullInput = systemPrompt ? systemPrompt + '\n\n' + message : message;
 
-      // Process the message with the selected model using system prompt
-      switch (selectedModel) {
-        case 'mistral': {
-          // Check if there's existing conversation
-          const { isFirstMessage } =
-            await this.mistralService.getConversationHistory(usedSessionId);
+      // Try each model in the fallback sequence
+      let lastError: Error | null = null;
+      let modelProcessed = false;
 
-          // Only use system prompt for first message or if no history is available
-          const effectiveSystemPrompt = isFirstMessage
-            ? systemPrompt
-            : undefined;
-
-          this.logger.debug(
-            `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Mistral`,
-          );
-
-          const response = await this.mistralService.processMessage(
-            message, // Send the clean message without context
-            usedSessionId,
-            effectiveSystemPrompt,
-          );
-
-          output = response.content;
-          fullOutput = response.content;
-          usedSessionId = response.sessionId;
-          usedModel = 'ministral-3b-2410';
-
-          // Make sure we have valid usage data
-          usage = response.usage || {
-            input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-            output_tokens: Math.ceil(fullOutput.length / 4),
-          };
-          break;
+      for (const currentModel of modelsToTry) {
+        if (modelProcessed) {
+          break; // Skip if we already have a successful response
         }
 
-        case 'anthropic': {
-          // Check if there's existing conversation
-          const { isFirstMessage } =
-            await this.anthropicService.getConversationHistory(usedSessionId);
+        try {
+          this.logger.log(`Attempting to process with model: ${currentModel}`);
 
-          // Only use system prompt for first message or if no history is available
-          const effectiveSystemPrompt = isFirstMessage
-            ? systemPrompt
-            : undefined;
+          // Process the message with the current model
+          switch (currentModel) {
+            case 'mistral': {
+              // Check if there's existing conversation
+              const { isFirstMessage } =
+                await this.mistralService.getConversationHistory(usedSessionId);
 
-          this.logger.debug(
-            `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic`,
+              // Only use system prompt for first message or if no history is available
+              const effectiveSystemPrompt = isFirstMessage
+                ? systemPrompt
+                : undefined;
+
+              this.logger.debug(
+                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Mistral`,
+              );
+
+              const response = await this.mistralService.processMessage(
+                message, // Send the clean message without context
+                usedSessionId,
+                effectiveSystemPrompt,
+              );
+
+              output = response.content;
+              fullOutput = response.content;
+              usedSessionId = response.sessionId;
+              usedModel = 'mistral-large-2411';
+
+              // Make sure we have valid usage data
+              usage = response.usage || {
+                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+                output_tokens: Math.ceil(fullOutput.length / 4),
+              };
+
+              modelProcessed = true;
+              this.logger.log(`Successfully processed with Mistral model`);
+              break;
+            }
+
+            case 'anthropic': {
+              // Check if there's existing conversation
+              const { isFirstMessage } =
+                await this.anthropicService.getConversationHistory(
+                  usedSessionId,
+                );
+
+              // Only use system prompt for first message or if no history is available
+              const effectiveSystemPrompt = isFirstMessage
+                ? systemPrompt
+                : undefined;
+
+              this.logger.debug(
+                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic`,
+              );
+
+              const response = await this.anthropicService.processMessage(
+                message, // Send the clean message without context
+                usedSessionId,
+                effectiveSystemPrompt,
+              );
+
+              output = response.content;
+              fullOutput = response.content;
+              usedSessionId = response.sessionId;
+              usedModel = 'claude-3-7-sonnet-20250219';
+
+              // Make sure we have valid usage data
+              usage = response.usage || {
+                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+                output_tokens: Math.ceil(fullOutput.length / 4),
+              };
+
+              modelProcessed = true;
+              this.logger.log(`Successfully processed with Anthropic model`);
+              break;
+            }
+
+            default: {
+              this.logger.warn(`Unsupported model: ${currentModel}, skipping`);
+              break;
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error processing with model ${currentModel}: ${error.message}`,
           );
-
-          const response = await this.anthropicService.processMessage(
-            message, // Send the clean message without context
-            usedSessionId,
-            effectiveSystemPrompt,
-          );
-
-          output = response.content;
-          fullOutput = response.content;
-          usedSessionId = response.sessionId;
-          usedModel = 'claude-3-7-sonnet-20250219';
-
-          // Make sure we have valid usage data
-          usage = response.usage || {
-            input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-            output_tokens: Math.ceil(fullOutput.length / 4),
-          };
-          break;
+          lastError = error as Error;
+          this.logger.log(`Falling back to next model in sequence...`);
         }
+      }
 
-        default: {
-          this.logger.warn(`Unsupported model: ${selectedModel}`);
-          break;
-        }
+      // If all models failed, log the last error
+      if (!modelProcessed && lastError) {
+        this.logger.error(
+          `All models in fallback sequence failed. Last error: ${lastError.message}`,
+        );
       }
 
       // STEP 1: Track usage for all successful responses regardless of wallet
@@ -874,10 +931,7 @@ export class AppService {
         usage: usage, // Include token usage in response
       };
     } catch (error) {
-      this.logger.error(
-        `Error processing message with ${selectedModel}:`,
-        error,
-      );
+      this.logger.error(`Error in overall request processing:`, error);
 
       // Still return a response with available information
       const recipient =

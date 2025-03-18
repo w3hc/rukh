@@ -23,7 +23,7 @@ export class AskResponseDto {
 
   @ApiProperty({
     description: 'The model used for processing',
-    example: 'ministral-3b-2410',
+    example: 'mistral-large-2411',
   })
   model: string;
 
