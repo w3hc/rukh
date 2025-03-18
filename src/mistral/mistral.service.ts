@@ -9,7 +9,7 @@ export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
-  // private readonly modelName: string = 'ministral-3b-2410';
+  // private readonly modelName: string = 'mistral-large-2411';
   private readonly modelName: string = 'mistral-large-2411';
 
   constructor() {

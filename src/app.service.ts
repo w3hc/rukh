@@ -806,7 +806,7 @@ export class AppService {
               output = response.content;
               fullOutput = response.content;
               usedSessionId = response.sessionId;
-              usedModel = 'ministral-3b-2410';
+              usedModel = 'mistral-large-2411';
 
               // Make sure we have valid usage data
               usage = response.usage || {

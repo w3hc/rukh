@@ -27,7 +27,7 @@ Solidity contracts:
 - LangChain.js
 - Built-in Web Reader API for fetching webpage content
 - Pre-integrated LLM models:
-  - Mistral [`ministral-3b-2410`](https://mistral.ai/en/news/ministraux)
+  - Mistral [`mistral-large-2411`](https://mistral.ai/en/news/ministraux)
   - Anthropic [`claude-3-7-sonnet-20250219`](https://www.anthropic.com/news/claude-3-7-sonnet)
 
 Any other LLM service can be easily added (OpenAI, DeepSeek, or any).
@@ -143,7 +143,7 @@ Usage and cost data is stored in `costs.json`:
       "outputTokens": 138,
       "message": "What's Rukh",
       "sessionId": "e7ebac4f-e177-4461-a0f7-8266f78ff1f9",
-      "model": "ministral-3b-2410"
+      "model": "mistral-large-2411"
     }
   ],
   "global": {
@@ -155,7 +155,7 @@ Usage and cost data is stored in `costs.json`:
     "totalRequests": 46,
     "lastUpdated": "2025-03-16T14:32:06.276Z",
     "modelsUsage": {
-      "ministral-3b-2410": {
+      "mistral-large-2411": {
         "requests": 46,
         "inputTokens": 98158,
         "outputTokens": 19440,
@@ -401,7 +401,7 @@ The API will return a response like:
 ```json
 {
   "output": "Rukh is a lightweight, developer-friendly toolkit for building AI agents with Web3 integration. It's built with Nest.js (TypeScript) and makes it easy to create, deploy, and scale AI applications. The name 'Rukh' comes from a legendary enormous bird from mythology, also known as the Roc. The toolkit includes features such as quick setup, session management, Web3 integration, modular architecture for LLM integration, token-gated access control, and more.",
-  "model": "ministral-3b-2410",
+  "model": "mistral-large-2411",
   "network": "arbitrum-sepolia",
   "txHash": "0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",
   "explorerLink": "https://sepolia.arbiscan.io/tx/0xd96b35d1daefd6dc8368f7a075a1a627df960a541eb30268b1b85cedbae0214a",

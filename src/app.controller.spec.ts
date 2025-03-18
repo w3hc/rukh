@@ -53,7 +53,7 @@ describe('AppController', () => {
                   file,
                 ) => ({
                   output: model === 'mistral' ? 'AI response' : undefined,
-                  model: model === 'mistral' ? 'ministral-3b-2410' : 'none',
+                  model: model === 'mistral' ? 'mistral-large-2411' : 'none',
                   network: 'arbitrum-sepolia',
                   txHash: mockTxHash,
                   explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
@@ -126,7 +126,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'ministral-3b-2410',
+        model: 'mistral-large-2411',
         network: 'arbitrum-sepolia',
         txHash: mockTxHash,
         explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
@@ -142,7 +142,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'ministral-3b-2410',
+        model: 'mistral-large-2411',
         network: 'arbitrum-sepolia',
         txHash: mockTxHash,
         explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
@@ -167,7 +167,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'ministral-3b-2410',
+        model: 'mistral-large-2411',
         network: 'arbitrum-sepolia',
         txHash: mockTxHash,
         explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
@@ -199,7 +199,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'ministral-3b-2410',
+        model: 'mistral-large-2411',
         network: 'arbitrum-sepolia',
         txHash: mockTxHash,
         explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
@@ -221,7 +221,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'ministral-3b-2410',
+        model: 'mistral-large-2411',
         network: 'arbitrum-sepolia',
         txHash: mockTxHash,
         explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,

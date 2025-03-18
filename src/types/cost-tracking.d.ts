@@ -54,7 +54,7 @@ export class CostTracker implements OnModuleInit {
 
   // Cost per 1K tokens in USD
   private readonly COST_RATES = {
-    'ministral-3b-2410': {
+    'mistral-large-2411': {
       inputCost: 0.015,
       outputCost: 0.075,
     },
