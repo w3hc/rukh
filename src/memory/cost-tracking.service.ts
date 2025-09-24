@@ -39,12 +39,12 @@ export class CostTracker implements OnModuleInit {
   private readonly dbPath: string;
   private data: CostDatabase;
 
-  // Cost per 1K tokens in USD
+  // Cost per 1K tokens in USD - CORRECTED PRICING
   private readonly COST_RATES = {
-    // Mistral rates
-    'mistral-large-2411': {
-      inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
-      outputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
+    // Ministral rates - CORRECTED: $0.04 per million = $0.00004 per 1K tokens
+    'ministral-3b-2410': {
+      inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
+      outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
     },
     // Claude 3.7 Sonnet rates
     'claude-3-7-sonnet-20250219': {
@@ -199,12 +199,12 @@ export class CostTracker implements OnModuleInit {
 
       // Calculate costs based on token counts
       const inputCost = Number(
-        ((inputTokens / 1000) * modelRates.inputCost).toFixed(4),
+        ((inputTokens / 1000) * modelRates.inputCost).toFixed(6),
       );
       const outputCost = Number(
-        ((outputTokens / 1000) * modelRates.outputCost).toFixed(4),
+        ((outputTokens / 1000) * modelRates.outputCost).toFixed(6),
       );
-      const totalCost = Number((inputCost + outputCost).toFixed(4));
+      const totalCost = Number((inputCost + outputCost).toFixed(6));
 
       this.logger.debug(
         `Calculated costs: input=$${inputCost}, output=$${outputCost}, total=$${totalCost}`,
@@ -257,7 +257,7 @@ export class CostTracker implements OnModuleInit {
       await this.saveData();
 
       this.logger.debug(
-        `Successfully tracked usage with ${modelName}: $${totalCost.toFixed(4)} (${inputTokens} input tokens, ${outputTokens} output tokens)`,
+        `Successfully tracked usage with ${modelName}: $${totalCost.toFixed(6)} (${inputTokens} input tokens, ${outputTokens} output tokens)`,
       );
     } catch (error) {
       this.logger.error('Error tracking usage:', error);

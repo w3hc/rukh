@@ -4,13 +4,24 @@ import { CustomJsonMemory } from '../memory/custom-memory';
 import { v4 as uuidv4 } from 'uuid';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 
+interface CostInfo {
+  input_cost: number;
+  output_cost: number;
+  total_cost: number;
+}
+
 @Injectable()
 export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
-  // private readonly modelName: string = 'mistral-large-2411';
-  private readonly modelName: string = 'mistral-large-2411';
+  private readonly modelName: string = 'ministral-3b-2410';
+
+  // Cost per 1K tokens in USD - Ministral 3B rates
+  private readonly COST_RATES = {
+    inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
+    outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
+  };
 
   constructor() {
     this.apiKey = process.env.MISTRAL_API_KEY;
@@ -38,10 +49,26 @@ export class MistralService {
     };
   }
 
+  private calculateCost(inputTokens: number, outputTokens: number): CostInfo {
+    const inputCost = Number(
+      ((inputTokens / 1000) * this.COST_RATES.inputCost).toFixed(6),
+    );
+    const outputCost = Number(
+      ((outputTokens / 1000) * this.COST_RATES.outputCost).toFixed(6),
+    );
+    const totalCost = Number((inputCost + outputCost).toFixed(6));
+
+    return {
+      input_cost: inputCost,
+      output_cost: outputCost,
+      total_cost: totalCost,
+    };
+  }
+
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
-    contextContent,
+    systemPrompt?: string,
   ): Promise<{
     content: string;
     sessionId: string;
@@ -49,40 +76,37 @@ export class MistralService {
       input_tokens: number;
       output_tokens: number;
     };
+    cost: CostInfo;
   }> {
-    this.logger.log(
-      `Processing message with contextContent: ${contextContent}]`,
-    );
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
 
     this.logger.log(
-      `Processing message [${requestId}] for session [${sessionId}]`,
+      `Processing message [${requestId}] for session [${sessionId}] with Mistral`,
     );
 
     try {
-      const { history } = await memory.loadMemoryVariables();
-      const { isFirstMessage } = await this.getConversationHistory(sessionId);
+      const { history, isFirstMessage } =
+        await this.getConversationHistory(sessionId);
 
       // Convert history to LangChain message format
       const langChainMessages = [];
 
-      // First message should include context content
-      if (isFirstMessage && contextContent && contextContent.length > 0) {
+      // Add system message first if provided and it's the first message
+      if (isFirstMessage && systemPrompt) {
         this.logger.debug(
-          `Using context content (${contextContent.length} characters)`,
+          `Using system prompt (${systemPrompt.length} characters)`,
         );
-
-        // Add the first message with context prepended
+        // For Mistral via LangChain, we add system content as the first user message
         langChainMessages.push(
-          new HumanMessage(`${contextContent}\n\n${message}`),
+          new HumanMessage(`System: ${systemPrompt}\n\nUser: ${message}`),
         );
       } else {
-        // Add all history messages
+        // Add all history messages first
         history.forEach((msg) => {
           if (msg.role === 'user') {
             langChainMessages.push(new HumanMessage(msg.content));
-          } else {
+          } else if (msg.role === 'assistant') {
             langChainMessages.push(new AIMessage(msg.content));
           }
         });
@@ -91,10 +115,14 @@ export class MistralService {
         langChainMessages.push(new HumanMessage(message));
       }
 
+      const containsUploadedFile = message.includes('Uploaded file (');
+
       this.logger.debug('Full message to be sent to Mistral:');
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Request ID: ${requestId}`);
       this.logger.debug(`Session ID: ${sessionId}`);
+      this.logger.debug(`Contains uploaded file: ${containsUploadedFile}`);
+      this.logger.debug(`System prompt provided: ${!!systemPrompt}`);
       this.logger.debug('Message Content:');
 
       if (message.length > 1000) {
@@ -105,14 +133,22 @@ export class MistralService {
         this.logger.debug(message);
       }
 
+      if (systemPrompt && systemPrompt.length > 1000) {
+        this.logger.debug('System prompt: (truncated for log)');
+        this.logger.debug(
+          `${systemPrompt.substring(0, 100)}...${systemPrompt.substring(systemPrompt.length - 100)}`,
+        );
+      } else if (systemPrompt) {
+        this.logger.debug(`System prompt: ${systemPrompt}`);
+      }
+
       this.logger.debug('----------------------------------------');
       this.logger.debug(`Total message length: ${message.length} characters`);
       this.logger.debug(
-        `Chat history length: ${langChainMessages.length} messages`,
+        `System prompt length: ${systemPrompt?.length || 0} characters`,
       );
-      this.logger.debug(`Is first message: ${isFirstMessage}`);
       this.logger.debug(
-        `Context content length: ${contextContent ? contextContent.length : 0} characters`,
+        `Chat history length: ${langChainMessages.length} messages`,
       );
 
       this.logger.debug({
@@ -120,28 +156,33 @@ export class MistralService {
         requestData: {
           message_length: message.length,
           history_length: langChainMessages.length,
+          system_prompt_length: systemPrompt?.length || 0,
+          has_file: containsUploadedFile,
+          has_system_prompt: !!systemPrompt,
           timestamp: new Date().toISOString(),
         },
       });
 
-      // Log full message content to verify context inclusion
+      // Log message structure for debugging
       this.logger.debug('Messages to be sent to Mistral:');
       this.logger.debug(
         JSON.stringify(
           langChainMessages.map((msg) => ({
-            role: msg._getType(),
-            content:
-              msg.content.substring(0, 100) +
-              (msg.content.length > 100 ? '...' : ''),
+            type: msg._getType(),
+            content_preview:
+              typeof msg.content === 'string'
+                ? msg.content.substring(0, 100) +
+                  (msg.content.length > 100 ? '...' : '')
+                : String(msg.content).substring(0, 100),
           })),
           null,
           2,
         ),
       );
 
-      if (isFirstMessage && contextContent) {
+      if (isFirstMessage && systemPrompt) {
         this.logger.debug(
-          `First message includes ${contextContent.length} characters of context content`,
+          `First message includes ${systemPrompt.length} characters of system prompt`,
         );
       }
 
@@ -149,7 +190,7 @@ export class MistralService {
       const response = await this.model.invoke(langChainMessages);
       const responseContent = response.content.toString();
 
-      // Estimate token usage
+      // Estimate token usage based on all message content
       const allText = langChainMessages.reduce((total, msg) => {
         if (typeof msg.content === 'string') {
           return total + msg.content.length;
@@ -163,17 +204,24 @@ export class MistralService {
         output_tokens: Math.ceil(responseContent.length / 4),
       };
 
+      // Calculate cost based on estimated token usage
+      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+
       this.logger.debug({
         message: `Mistral API response [${requestId}]`,
         responseData: {
           response_length: responseContent.length,
+          model: this.modelName,
           input_tokens: usage.input_tokens,
           output_tokens: usage.output_tokens,
+          input_cost: cost.input_cost,
+          output_cost: cost.output_cost,
+          total_cost: cost.total_cost,
           timestamp: new Date().toISOString(),
         },
       });
 
-      // Save the original message to conversation history
+      // Save the original message (without system prompt) to conversation history
       await memory.saveContext(
         { input: message },
         { response: responseContent },
@@ -183,10 +231,11 @@ export class MistralService {
         content: responseContent,
         sessionId,
         usage,
+        cost,
       };
     } catch (error) {
       this.logger.error({
-        message: `Error processing message [${requestId}]`,
+        message: `Error processing message with Mistral [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',
         sessionId,
         timestamp: new Date().toISOString(),

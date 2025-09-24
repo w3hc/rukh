@@ -624,6 +624,7 @@ export class AppService {
       input_tokens: 0,
       output_tokens: 0,
     };
+    let cost: any = undefined;
 
     // Define available models for fallback
     const availableModels = ['mistral', 'anthropic'];
@@ -806,6 +807,7 @@ export class AppService {
               output = response.content;
               fullOutput = response.content;
               usedSessionId = response.sessionId;
+              cost = response.cost;
               usedModel = 'mistral-large-2411';
 
               // Make sure we have valid usage data
@@ -845,6 +847,7 @@ export class AppService {
               fullOutput = response.content;
               usedSessionId = response.sessionId;
               usedModel = 'claude-3-7-sonnet-20250219';
+              cost = response.cost;
 
               // Make sure we have valid usage data
               usage = response.usage || {
@@ -921,15 +924,24 @@ export class AppService {
       const txHash = await this.mintToken(recipient);
       this.logger.debug(`Token minting completed with tx hash: ${txHash}`);
 
-      return {
+      const response: AskResponseDto = {
         output,
         model: usedModel,
         network: 'arbitrum-sepolia',
         txHash,
         explorerLink: `https://sepolia.arbiscan.io/tx/${txHash}`,
         sessionId: usedSessionId,
-        usage: usage, // Include token usage in response
+        usage: usage,
       };
+
+      if (cost) {
+        response.cost = cost;
+        this.logger.log(
+          `Request completed with cost: $${cost.total_cost.toFixed(6)} (input: $${cost.input_cost.toFixed(6)}, output: $${cost.output_cost.toFixed(6)})`,
+        );
+      }
+
+      return response;
     } catch (error) {
       this.logger.error(`Error in overall request processing:`, error);
 

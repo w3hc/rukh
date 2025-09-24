@@ -22,6 +22,12 @@ interface AnthropicResponse {
   };
 }
 
+interface CostInfo {
+  input_cost: number;
+  output_cost: number;
+  total_cost: number;
+}
+
 @Injectable()
 export class AnthropicService {
   private readonly apiKey: string;
@@ -29,6 +35,12 @@ export class AnthropicService {
   private readonly model: string = 'claude-3-7-sonnet-20250219';
   private readonly apiUrl: string = 'https://api.anthropic.com/v1/messages';
   private readonly apiVersion: string = '2023-06-01';
+
+  // Cost per 1K tokens in USD - Claude 3.7 Sonnet rates
+  private readonly COST_RATES = {
+    inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
+    outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
+  };
 
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
@@ -49,6 +61,22 @@ export class AnthropicService {
     };
   }
 
+  private calculateCost(inputTokens: number, outputTokens: number): CostInfo {
+    const inputCost = Number(
+      ((inputTokens / 1000) * this.COST_RATES.inputCost).toFixed(6),
+    );
+    const outputCost = Number(
+      ((outputTokens / 1000) * this.COST_RATES.outputCost).toFixed(6),
+    );
+    const totalCost = Number((inputCost + outputCost).toFixed(6));
+
+    return {
+      input_cost: inputCost,
+      output_cost: outputCost,
+      total_cost: totalCost,
+    };
+  }
+
   async processMessage(
     message: string,
     sessionId: string = uuidv4(),
@@ -60,6 +88,7 @@ export class AnthropicService {
       input_tokens: number;
       output_tokens: number;
     };
+    cost: CostInfo;
   }> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -186,6 +215,12 @@ export class AnthropicService {
           output_tokens: 0,
         };
 
+        // Calculate cost based on actual token usage
+        const cost = this.calculateCost(
+          usage.input_tokens,
+          usage.output_tokens,
+        );
+
         this.logger.debug({
           message: `Anthropic API response [${requestId}]`,
           responseData: {
@@ -193,6 +228,9 @@ export class AnthropicService {
             model: this.model,
             input_tokens: usage.input_tokens,
             output_tokens: usage.output_tokens,
+            input_cost: cost.input_cost,
+            output_cost: cost.output_cost,
+            total_cost: cost.total_cost,
             timestamp: new Date().toISOString(),
           },
         });
@@ -201,6 +239,7 @@ export class AnthropicService {
           content: responseContent,
           sessionId,
           usage,
+          cost,
         };
       } catch (error) {
         if (timeoutId) clearTimeout(timeoutId);

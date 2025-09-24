@@ -14,6 +14,26 @@ export class UsageDto {
   output_tokens: number;
 }
 
+export class CostDto {
+  @ApiProperty({
+    description: 'Cost of input tokens in USD',
+    example: 0.0054,
+  })
+  input_cost: number;
+
+  @ApiProperty({
+    description: 'Cost of output tokens in USD',
+    example: 0.0022,
+  })
+  output_cost: number;
+
+  @ApiProperty({
+    description: 'Total cost for this request in USD',
+    example: 0.0076,
+  })
+  total_cost: number;
+}
+
 export class AskResponseDto {
   @ApiProperty({
     description: 'The network used for processing',
@@ -60,4 +80,11 @@ export class AskResponseDto {
     required: false,
   })
   usage?: UsageDto;
+
+  @ApiProperty({
+    description: 'Cost breakdown for this request (when using Anthropic)',
+    type: CostDto,
+    required: false,
+  })
+  cost?: CostDto;
 }
