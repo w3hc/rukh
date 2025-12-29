@@ -1,18 +1,56 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import * as cheerio from 'cheerio';
+import * as puppeteer from 'puppeteer-core';
+import { execSync } from 'child_process';
 
 @Injectable()
 export class WebReaderService {
   private readonly logger = new Logger(WebReaderService.name);
+  private browserExecutablePath: string | null = null;
+
+  /**
+   * Find Chrome/Chromium executable on the system
+   */
+  private findChrome(): string {
+    if (this.browserExecutablePath) {
+      return this.browserExecutablePath;
+    }
+
+    const possiblePaths = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+    ];
+
+    for (const path of possiblePaths) {
+      try {
+        execSync(`test -f "${path}"`, { stdio: 'ignore' });
+        this.browserExecutablePath = path;
+        this.logger.log(`Found browser at: ${path}`);
+        return path;
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error('Could not find Chrome or Chromium installation');
+  }
 
   /**
    * Fetches the content of a webpage from a given URL
    * @param url The URL to fetch content from
+   * @param timeout Optional timeout in seconds (default: 5)
    * @returns The raw HTML content of the webpage
    */
-  async readWebPage(url: string): Promise<{ content: string; url: string }> {
+  async readWebPage(
+    url: string,
+    timeout: number = 3,
+  ): Promise<{ content: string; url: string }> {
+    let browser = null;
     try {
-      this.logger.log(`Fetching content from: ${url}`);
+      this.logger.log(`Fetching content from: ${url} with ${timeout}s timeout`);
 
       // Validate URL
       let targetUrl: URL;
@@ -22,55 +60,57 @@ export class WebReaderService {
         throw new HttpException('Invalid URL format', HttpStatus.BAD_REQUEST);
       }
 
-      // Set up timeout with AbortController
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // Launch browser with puppeteer-core
+      const executablePath = this.findChrome();
+      browser = await puppeteer.launch({
+        executablePath,
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
 
-      try {
-        // Fetch the web page
-        const response = await fetch(targetUrl.toString(), {
-          headers: {
-            'User-Agent': 'Rukh Web Reader Service/1.0',
-          },
-          signal: controller.signal,
-        });
+      const page = await browser.newPage();
 
-        // Clear the timeout since we got a response
-        clearTimeout(timeoutId);
+      // Set user agent
+      await page.setUserAgent('Rukh Web Reader Service/1.0');
 
-        if (!response.ok) {
-          throw new HttpException(
-            `Failed to fetch URL: ${response.status} ${response.statusText}`,
-            HttpStatus.BAD_GATEWAY,
-          );
-        }
+      // Set navigation timeout
+      page.setDefaultNavigationTimeout(timeout * 1000);
+      page.setDefaultTimeout(timeout * 1000);
 
-        // Get the text content
-        const content = await response.text();
-        this.logger.log(
-          `Successfully fetched ${content.length} characters from ${url}`,
-        );
+      // Navigate to the page and wait for network to be idle
+      await page.goto(targetUrl.toString(), {
+        waitUntil: 'networkidle2',
+        timeout: timeout * 1000,
+      });
 
-        return {
-          content,
-          url: targetUrl.toString(),
-        };
-      } catch (error) {
-        // Make sure to clear the timeout in case of error
-        clearTimeout(timeoutId);
-        throw error;
-      }
+      // Get the rendered HTML content
+      const content = await page.content();
+
+      this.logger.log(
+        `Successfully fetched ${content.length} characters from ${url}`,
+      );
+
+      await browser.close();
+
+      return {
+        content,
+        url: targetUrl.toString(),
+      };
     } catch (error) {
+      if (browser) {
+        await browser.close();
+      }
+
       this.logger.error(`Error fetching URL content: ${error.message}`);
 
       if (error instanceof HttpException) {
         throw error;
       }
 
-      // Handle abort errors specifically
-      if (error.name === 'AbortError') {
+      // Handle timeout errors
+      if (error.name === 'TimeoutError') {
         throw new HttpException(
-          'Request timed out after 10 seconds',
+          `Request timed out after ${timeout} seconds`,
           HttpStatus.REQUEST_TIMEOUT,
         );
       }
@@ -85,15 +125,19 @@ export class WebReaderService {
   /**
    * Extracts text and links from a webpage for LLM processing
    * @param url The URL to fetch content from
+   * @param timeout Optional timeout in seconds (default: 5)
    * @returns Clean text with preserved links for LLM processing
    */
-  async extractForLLM(url: string): Promise<{
+  async extractForLLM(
+    url: string,
+    timeout: number = 5,
+  ): Promise<{
     text: string;
     links: { text: string; url: string }[];
     title: string;
     url: string;
   }> {
-    const { content, url: resolvedUrl } = await this.readWebPage(url);
+    const { content, url: resolvedUrl } = await this.readWebPage(url, timeout);
 
     try {
       this.logger.log(
