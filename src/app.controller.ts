@@ -56,11 +56,11 @@ export class AppController {
       properties: {
         message: {
           type: 'string',
-          example: 'Describe the app in three sentences max.',
+          example: "What's Rukh?",
         },
         model: {
           type: 'string',
-          example: 'anthropic',
+          example: 'mistral',
         },
         sessionId: {
           type: 'string',
@@ -75,15 +75,13 @@ export class AppController {
         context: {
           type: 'string',
           nullable: true,
-          example: '',
+          example: 'rukh',
         },
         data: {
           type: 'object',
           nullable: true,
           example: {
-            githubUserName: 'julienbrg',
-            nonce: '88888',
-            signature: 'zzzzz',
+            
           },
           description:
             'Additional data to be passed with the request (used in certain contexts)',
