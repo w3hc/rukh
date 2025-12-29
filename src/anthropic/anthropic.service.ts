@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { CustomJsonMemory } from '../memory/custom-memory';
 
 interface AnthropicMessage {
@@ -79,7 +79,7 @@ export class AnthropicService {
 
   async processMessage(
     message: string,
-    sessionId: string = uuidv4(),
+    sessionId: string = randomUUID(),
     systemPrompt?: string,
   ): Promise<{
     content: string;
