@@ -1,6 +1,10 @@
 # Rukh
 
-A lightweight, developer-friendly toolkit for building AI agents with Web3 integration. Built with Nest.js (TypeScript), Rukh makes it easy to create, deploy, and scale AI applications with:
+Modular AI framework allowing personalized contexts and support for multiple LLMs.
+
+Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
+
+## Features 
 
 - Quick setup and minimal configuration
 - Built-in session management and persistent storage
@@ -10,9 +14,7 @@ A lightweight, developer-friendly toolkit for building AI agents with Web3 integ
 - Production-ready with rate limiting and error handling
 - Password-protected contexts for secure data management
 
-Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
-
-Solidity contracts: 
+## Solidity contracts
 
 - [Rukh governance token](https://sepolia.arbiscan.io/address/0x281d3F386A48D31DC65E366081f5E3E3fA49B663#code)
 - [Rukh DAO](https://sepolia.arbiscan.io/address/0xf79c712228Bf3b8E71760291822c88A41C510244#code)
