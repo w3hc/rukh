@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ChatMistralAI } from '@langchain/mistralai';
 import { CustomJsonMemory } from '../memory/custom-memory';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 
 interface CostInfo {
@@ -67,7 +67,7 @@ export class MistralService {
 
   async processMessage(
     message: string,
-    sessionId: string = uuidv4(),
+    sessionId: string = randomUUID(),
     systemPrompt?: string,
   ): Promise<{
     content: string;

@@ -1,7 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { CostTracker } from './memory/cost-tracking.service';
@@ -616,7 +616,7 @@ export class AppService {
     data?: Record<string, any>,
   ): Promise<AskResponseDto> {
     let output: string | undefined;
-    let usedSessionId = sessionId || uuidv4();
+    let usedSessionId = sessionId || randomUUID();
     let usedModel = 'none';
     let fullInput = '';
     let fullOutput = '';
