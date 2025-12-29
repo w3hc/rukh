@@ -33,6 +33,7 @@
     "class-validator": "^0.14.3",
     "ethers": "^6.16.0",
     "multer": "2.0.2",
+    "puppeteer-core": "^24.34.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "swagger-ui-express": "^5.0.1"

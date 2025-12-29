@@ -1,13 +1,20 @@
 import { Controller, Get, Query, Logger, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { IsUrl, IsNotEmpty } from 'class-validator';
+import { IsUrl, IsNotEmpty, IsOptional, IsNumber, Min } from 'class-validator';
 import { WebReaderService } from './web-reader.service';
 import { Throttle } from '@nestjs/throttler';
+import { Type } from 'class-transformer';
 
 class WebReaderDto {
   @IsUrl({}, { message: 'Please provide a valid URL' })
   @IsNotEmpty({ message: 'URL is required' })
   url: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  timeout?: number;
 }
 
 @ApiTags('Web Reader')
@@ -26,6 +33,13 @@ export class WebReaderController {
     description: 'The URL to fetch content from',
     required: true,
     example: 'https://example.com',
+  })
+  @ApiQuery({
+    name: 'timeout',
+    type: Number,
+    description: 'Timeout in seconds (default: 3)',
+    required: false,
+    example: 3,
   })
   @ApiResponse({
     status: 200,
@@ -58,7 +72,7 @@ export class WebReaderController {
   })
   async readWebPage(@Query(new ValidationPipe()) query: WebReaderDto) {
     this.logger.log(`Processing web read request for URL: ${query.url}`);
-    return this.webReaderService.readWebPage(query.url);
+    return this.webReaderService.readWebPage(query.url, query.timeout);
   }
 
   @Get('llm')
@@ -72,6 +86,13 @@ export class WebReaderController {
     description: 'The URL to fetch content from',
     required: true,
     example: 'https://julienberanger.com/',
+  })
+  @ApiQuery({
+    name: 'timeout',
+    type: Number,
+    description: 'Timeout in seconds (default: 3)',
+    required: false,
+    example: 3,
   })
   @ApiResponse({
     status: 200,
@@ -125,6 +146,6 @@ export class WebReaderController {
   })
   async extractForLLM(@Query(new ValidationPipe()) query: WebReaderDto) {
     this.logger.log(`Processing LLM extraction request for URL: ${query.url}`);
-    return this.webReaderService.extractForLLM(query.url);
+    return this.webReaderService.extractForLLM(query.url, query.timeout);
   }
 }

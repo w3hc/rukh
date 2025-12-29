@@ -385,16 +385,17 @@ export class AppService {
         this.logger.warn('Could not verify contract ownership:', error);
       }
 
-      // Set a moderate gas price to avoid transaction failures
-      const gasPrice = await this.provider
-        .getFeeData()
-        .then((feeData) => feeData.gasPrice)
-        .catch(() => ethers.parseUnits('1', 'gwei')); // Default if we can't get fee data
+      // Get current fee data for EIP-1559 transaction
+      const feeData = await this.provider.getFeeData().catch(() => ({
+        maxFeePerGas: ethers.parseUnits('0.1', 'gwei'),
+        maxPriorityFeePerGas: ethers.parseUnits('0.01', 'gwei'),
+      }));
 
-      // Send with explicit gas settings
+      // Send with explicit EIP-1559 gas settings
       const tx = await this.tokenContract.mint(to, amount, {
-        gasLimit: 150000, // Explicit gas limit
-        gasPrice: gasPrice,
+        gasLimit: 150000,
+        maxFeePerGas: feeData.maxFeePerGas,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
       });
 
       this.logger.debug(`Transaction hash: ${tx.hash}`);
@@ -1050,13 +1051,13 @@ export class AppService {
 </head>
 <body>
     <div class="container">
-        <h1>Welcome to Rukh!</h1>
-        <p>A lightweight, developer-friendly toolkit for building AI agents with Web3 integration</p>
-        <p>🚀 Quick setup • 🔄 Built-in session management • 🔗 Web3 integration • 🛠️ Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, DeepSeek, etc.)</p>
+        <h1>Rukh</h1>
+        <p>Modular AI framework allowing personalized contexts and support for multiple LLMs</p>
         <div class="links">
             <a href="/api" class="button">Swagger UI</a>
             <a href="https://github.com/w3hc/rukh" target="_blank" rel="noopener noreferrer" class="button">GitHub Repo</a>
         </div>
+        <br />
         <br />
         <img src="https://bafkreid5xwxz4bed67bxb2wjmwsec4uhlcjviwy7pkzwoyu5oesjd3sp64.ipfs.w3s.link" alt="built-with-ethereum-w3hc" width="150"/>
     </div>
