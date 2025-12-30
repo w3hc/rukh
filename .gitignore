@@ -62,3 +62,4 @@ data/chat-history.json
 test/test.md
 test/test.txt
 data
+contracts/node_modules
