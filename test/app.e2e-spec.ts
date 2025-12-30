@@ -126,6 +126,32 @@ describe('App (e2e)', () => {
     }
   });
 
+  afterAll(async () => {
+    // Clean up test-created context directories
+    const contextsDir = join(process.cwd(), 'data', 'contexts');
+    if (fs.existsSync(contextsDir)) {
+      const items = fs.readdirSync(contextsDir);
+
+      // Remove directories that match test patterns
+      for (const item of items) {
+        if (
+          item.startsWith('test-context') ||
+          item.startsWith('upload-context') ||
+          item.startsWith('file-delete-context') ||
+          item.startsWith('delete-context') ||
+          item === 'incomplete-context'
+        ) {
+          const itemPath = join(contextsDir, item);
+          try {
+            fs.rmSync(itemPath, { recursive: true, force: true });
+          } catch (error) {
+            console.error(`Failed to clean up test context ${item}:`, error);
+          }
+        }
+      }
+    }
+  });
+
   describe('Root Endpoint', () => {
     describe('/ (GET)', () => {
       it('should return HTML welcome page', () => {
