@@ -50,11 +50,12 @@ export class OpenAIService {
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!this.apiKey) {
-      this.logger.error('OPENAI_API_KEY environment variable is not set');
-      throw new Error('OPENAI_API_KEY environment variable is not set');
+      this.logger.warn(
+        'OPENAI_API_KEY environment variable is not set. OpenAI service will be unavailable.',
+      );
+    } else {
+      this.logger.log('OpenAIService initialized successfully');
     }
-
-    this.logger.log('OpenAIService initialized successfully');
   }
 
   async getConversationHistory(sessionId: string) {
@@ -101,6 +102,15 @@ export class OpenAIService {
     this.logger.log(
       `Processing message [${requestId}] for session [${sessionId}] with OpenAI`,
     );
+
+    // Check if API key is available
+    if (!this.apiKey) {
+      this.logger.error('OpenAI API key is not configured');
+      throw new HttpException(
+        'OpenAI service unavailable',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
 
     try {
       const { history } = await memory.loadMemoryVariables();
