@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
+import { OpenAIService } from './openai/openai.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { readFile, readdir, writeFile, mkdir, stat } from 'fs/promises';
@@ -32,6 +33,7 @@ export class AppService {
   constructor(
     private readonly mistralService: MistralService,
     private readonly anthropicService: AnthropicService,
+    private readonly openaiService: OpenAIService,
     private readonly costTracker: CostTracker,
     private readonly configService: ConfigService,
     private readonly subsService: SubsService,
@@ -628,7 +630,7 @@ export class AppService {
     let cost: any = undefined;
 
     // Define available models for fallback
-    const availableModels = ['mistral', 'anthropic'];
+    const availableModels = ['mistral', 'anthropic', 'openai'];
 
     // Initialize with the selected model, or default to anthropic
     let selectedModel = model || 'anthropic';
@@ -858,6 +860,43 @@ export class AppService {
 
               modelProcessed = true;
               this.logger.log(`Successfully processed with Anthropic model`);
+              break;
+            }
+
+            case 'openai': {
+              // Check if there's existing conversation
+              const { isFirstMessage } =
+                await this.openaiService.getConversationHistory(usedSessionId);
+
+              // Only use system prompt for first message or if no history is available
+              const effectiveSystemPrompt = isFirstMessage
+                ? systemPrompt
+                : undefined;
+
+              this.logger.debug(
+                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with OpenAI`,
+              );
+
+              const response = await this.openaiService.processMessage(
+                message, // Send the clean message without context
+                usedSessionId,
+                effectiveSystemPrompt,
+              );
+
+              output = response.content;
+              fullOutput = response.content;
+              usedSessionId = response.sessionId;
+              usedModel = 'gpt-4o';
+              cost = response.cost;
+
+              // Make sure we have valid usage data
+              usage = response.usage || {
+                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+                output_tokens: Math.ceil(fullOutput.length / 4),
+              };
+
+              modelProcessed = true;
+              this.logger.log(`Successfully processed with OpenAI model`);
               break;
             }
 

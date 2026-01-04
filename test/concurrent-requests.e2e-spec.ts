@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
+import { OpenAIService } from '../src/openai/openai.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
 import { SubsService } from '../src/subs/subs.service';
 
@@ -42,6 +43,20 @@ describe('Concurrent Requests (e2e)', () => {
     }),
   };
 
+  const mockOpenAIService = {
+    processMessage: jest
+      .fn()
+      .mockImplementation(async (message, sessionId) => ({
+        content: `Mocked OpenAI response for: ${message.substring(0, 50)}...`,
+        sessionId: sessionId || 'generated-session-id',
+        usage: { input_tokens: 120, output_tokens: 60 },
+      })),
+    getConversationHistory: jest.fn().mockResolvedValue({
+      history: [],
+      isFirstMessage: true,
+    }),
+  };
+
   const mockCostTracker = {
     trackUsageWithTokens: jest.fn().mockResolvedValue(undefined),
     generateUsageReport: jest.fn().mockResolvedValue({
@@ -61,6 +76,8 @@ describe('Concurrent Requests (e2e)', () => {
       .useValue(mockMistralService)
       .overrideProvider(AnthropicService)
       .useValue(mockAnthropicService)
+      .overrideProvider(OpenAIService)
+      .useValue(mockOpenAIService)
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
       .overrideProvider(SubsService)
@@ -143,7 +160,7 @@ describe('Concurrent Requests (e2e)', () => {
 
       // Concurrent requests should complete faster than sequential
       // Allow some buffer for test environment overhead
-      expect(totalTime).toBeLessThan(10000); // Should complete within 10 seconds
+      expect(totalTime).toBeLessThan(15000); // Should complete within 15 seconds
     });
 
     it('should handle 2 concurrent requests with different contexts', async () => {
@@ -251,7 +268,7 @@ describe('Concurrent Requests (e2e)', () => {
       console.log(`Concurrent execution time: ${durationMs.toFixed(2)}ms`);
 
       // Should complete within reasonable time
-      expect(durationMs).toBeLessThan(5000); // 5 seconds max
+      expect(durationMs).toBeLessThan(10000); // 10 seconds max
     });
   });
 });

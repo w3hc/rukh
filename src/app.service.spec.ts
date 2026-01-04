@@ -1,14 +1,12 @@
-// src/app.service.spec.ts
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
+import { OpenAIService } from './openai/openai.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { ContextService } from './context/context.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
-import { HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as ethers from 'ethers';
 
@@ -113,6 +111,16 @@ describe('AppService - Model Fallback', () => {
         },
         {
           provide: AnthropicService,
+          useValue: {
+            processMessage: jest.fn(),
+            getConversationHistory: jest.fn().mockResolvedValue({
+              history: [],
+              isFirstMessage: true,
+            }),
+          },
+        },
+        {
+          provide: OpenAIService,
           useValue: {
             processMessage: jest.fn(),
             getConversationHistory: jest.fn().mockResolvedValue({
