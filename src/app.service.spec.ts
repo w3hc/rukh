@@ -7,6 +7,7 @@ import { CostTracker } from './memory/cost-tracking.service';
 import { ContextService } from './context/context.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
+import { RagService } from './rag/rag.service';
 import { ConfigService } from '@nestjs/config';
 import * as ethers from 'ethers';
 
@@ -162,6 +163,20 @@ describe('AppService - Model Fallback', () => {
           },
         },
         {
+          provide: RagService,
+          useValue: {
+            selectRelevantFiles: jest.fn().mockResolvedValue({
+              selectedFiles: ['file1.md', 'file2.md'],
+              selectionCost: {
+                input_cost: 0.0001,
+                output_cost: 0.00005,
+                total_cost: 0.00015,
+              },
+            }),
+            buildContextWithSelectedFiles: jest.fn().mockResolvedValue('Mock RAG context'),
+          },
+        },
+        {
           provide: ConfigService,
           useValue: {
             get: jest.fn().mockImplementation((key) => {
@@ -172,6 +187,10 @@ describe('AppService - Model Fallback', () => {
                   return '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
                 case 'RUKH_TOKEN_ADDRESS':
                   return '0x1234567890123456789012345678901234567890';
+                case 'RAG_ENABLE_TWO_STEP':
+                  return 'false'; // Disable RAG in tests by default
+                case 'RAG_MAX_FILES':
+                  return '5';
                 default:
                   return undefined;
               }

@@ -15,6 +15,7 @@ import { CostTracker } from './memory/cost-tracking.service';
 import { SiweModule } from './siwe/siwe.module';
 import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
+import { RagModule } from './rag/rag.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { WebReaderModule } from './web/web-reader.module';
     OpenAIModule,
     SiweModule,
     WebReaderModule,
+    RagModule,
   ],
   controllers: [AppController],
   providers: [

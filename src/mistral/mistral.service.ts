@@ -65,6 +65,104 @@ export class MistralService {
     };
   }
 
+  /**
+   * Process a message with a specific Mistral model
+   * Used for RAG file selection with mistral-small
+   */
+  async processMessageWithModel(
+    message: string,
+    modelName: string = 'mistral-large-2411',
+    sessionId?: string,
+    systemPrompt?: string,
+  ): Promise<{
+    content: string;
+    sessionId: string;
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+    };
+    cost: CostInfo;
+  }> {
+    const requestId = this.generateRequestId();
+    const usedSessionId = sessionId || randomUUID();
+
+    this.logger.log(
+      `Processing message [${requestId}] with model ${modelName}`,
+    );
+
+    try {
+      // Create a model instance with the specified model name
+      const model = new ChatMistralAI({
+        apiKey: this.apiKey,
+        modelName: modelName,
+        temperature: 0.3,
+        maxTokens: 1000,
+      });
+
+      const langChainMessages = [];
+
+      // Add system message first if provided
+      if (systemPrompt) {
+        this.logger.debug(
+          `Using system prompt (${systemPrompt.length} characters)`,
+        );
+        langChainMessages.push(
+          new HumanMessage(`System: ${systemPrompt}\n\nUser: ${message}`),
+        );
+      } else {
+        langChainMessages.push(new HumanMessage(message));
+      }
+
+      // Use LangChain's ChatMistralAI
+      const response = await model.invoke(langChainMessages);
+      const responseContent = response.content.toString();
+
+      // Estimate token usage
+      const allText = langChainMessages.reduce((total, msg) => {
+        if (typeof msg.content === 'string') {
+          return total + msg.content.length;
+        }
+        return total;
+      }, 0);
+
+      const usage = {
+        input_tokens: Math.ceil(allText / 4),
+        output_tokens: Math.ceil(responseContent.length / 4),
+      };
+
+      // Calculate cost
+      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+
+      this.logger.debug({
+        message: `Mistral API response [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          model: modelName,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          total_cost: cost.total_cost,
+        },
+      });
+
+      return {
+        content: responseContent,
+        sessionId: usedSessionId,
+        usage,
+        cost,
+      };
+    } catch (error) {
+      this.logger.error({
+        message: `Error processing message with Mistral ${modelName} [${requestId}]`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      throw new HttpException(
+        `Failed to process message with Mistral AI (${modelName})`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   async processMessage(
     message: string,
     sessionId: string = randomUUID(),
