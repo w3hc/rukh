@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { RagMetadataDto } from './rag-metadata.dto';
 
 export class UsageDto {
   @ApiProperty({
@@ -87,4 +88,11 @@ export class AskResponseDto {
     required: false,
   })
   cost?: CostDto;
+
+  @ApiProperty({
+    description: 'RAG metadata (when using contexts with two-step RAG)',
+    type: RagMetadataDto,
+    required: false,
+  })
+  rag?: RagMetadataDto;
 }
