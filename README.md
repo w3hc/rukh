@@ -1,6 +1,6 @@
 # Rukh
 
-Modular AI framework allowing personalized contexts and support for multiple LLMs.
+Modular AI framework with context-window-based RAG system supporting multiple LLMs and personalized contexts.
 
 Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
 
