@@ -836,7 +836,14 @@ export class AppService {
       }
 
       // Handle file upload if present
-      if (file && file.originalname.toLowerCase().endsWith('.md')) {
+      const allowedExtensions = ['.md', '.csv'];
+      const hasAllowedExtension =
+        file &&
+        allowedExtensions.some((ext) =>
+          file.originalname.toLowerCase().endsWith(ext),
+        );
+
+      if (hasAllowedExtension) {
         const fileContent = file.buffer.toString('utf-8');
         this.logger.log(
           `Processing uploaded file: ${file.originalname} (${file.size} bytes)`,
@@ -848,7 +855,7 @@ export class AppService {
         }
         systemPrompt += `Uploaded file (${file.originalname}):\n${fileContent}`;
       } else if (file) {
-        this.logger.warn(`Ignoring non-markdown file: ${file.originalname}`);
+        this.logger.warn(`Ignoring unsupported file: ${file.originalname}`);
       }
 
       // Store full input for cost tracking (combining system prompt and user message)

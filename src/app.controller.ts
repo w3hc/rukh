@@ -20,7 +20,7 @@ import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
-import { MarkdownFileValidator } from './validators/markdown-file.validator';
+import { FileValidator } from './validators/file.validator';
 
 @ApiTags('Ask')
 @Controller()
@@ -91,7 +91,7 @@ export class AppController {
           format: 'binary',
           nullable: true,
           description:
-            'Optional markdown file (.md) to include with the message',
+            'Optional markdown (.md) or CSV (.csv) file to include with the message',
         },
       },
       required: ['message'],
@@ -156,7 +156,8 @@ export class AppController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request or invalid file (only .md files are allowed)',
+    description:
+      'Bad request or invalid file (only .md and .csv files are allowed)',
   })
   @ApiResponse({
     status: 429,
@@ -175,7 +176,7 @@ export class AppController {
   @UseInterceptors(FileInterceptor('file'))
   async ask(
     @Body() askDto: AskDto,
-    @UploadedFile(new MarkdownFileValidator({ optional: true }))
+    @UploadedFile(new FileValidator({ optional: true }))
     file?: Express.Multer.File,
   ): Promise<AskResponseDto> {
     return this.appService.ask(
