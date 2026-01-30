@@ -5,15 +5,17 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 
-interface MarkdownFileValidatorOptions {
+interface FileValidatorOptions {
   optional?: boolean;
 }
 
+const ALLOWED_EXTENSIONS = ['.md', '.csv'];
+
 @Injectable()
-export class MarkdownFileValidator implements PipeTransform {
+export class FileValidator implements PipeTransform {
   private optional: boolean;
 
-  constructor(options: MarkdownFileValidatorOptions = {}) {
+  constructor(options: FileValidatorOptions = {}) {
     this.optional = options.optional || false;
   }
 
@@ -22,9 +24,14 @@ export class MarkdownFileValidator implements PipeTransform {
       return this.optional ? undefined : value;
     }
 
-    if (!value.originalname.toLowerCase().endsWith('.md')) {
+    const filename = value.originalname.toLowerCase();
+    const hasValidExtension = ALLOWED_EXTENSIONS.some((ext) =>
+      filename.endsWith(ext),
+    );
+
+    if (!hasValidExtension) {
       throw new BadRequestException(
-        'Only markdown (.md) files are allowed for processing',
+        'Only markdown (.md) and CSV (.csv) files are allowed for processing',
       );
     }
 
