@@ -32,7 +32,7 @@ interface CostInfo {
 export class AnthropicService {
   private readonly apiKey: string;
   private readonly logger = new Logger(AnthropicService.name);
-  private readonly model: string = 'claude-3-7-sonnet-20250219';
+  private readonly model: string = 'claude-sonnet-4-20250514';
   private readonly apiUrl: string = 'https://api.anthropic.com/v1/messages';
   private readonly apiVersion: string = '2023-06-01';
 
