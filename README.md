@@ -1,6 +1,6 @@
 # Rukh
 
-Modular AI framework with context-window-based RAG system supporting multiple LLMs and personalized contexts.
+Modular AI framework with RAG system supporting multiple LLMs and personalized contexts.
 
 Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
 
@@ -10,15 +10,14 @@ Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
 pnpm i
 ```
 
-## Run
+## Test
 
 ```bash
-pnpm start
+# format, lint, build, test, and test:e2e
+pnpm dance
 ```
 
-The Swagger UI should be available at http://localhost:3000/api
-
-## Test
+Or separately: 
 
 ```bash
 # unit tests
@@ -29,10 +28,15 @@ pnpm test:e2e
 
 # test coverage
 pnpm test:cov
-
-# format, lint, build, test, and test:e2e
-pnpm dance
 ```
+
+## Run
+
+```bash
+pnpm start
+```
+
+The Swagger UI should be available at http://localhost:3000/api
 
 ## Example
 
@@ -83,6 +87,10 @@ Response body:
   }
 }
 ```
+
+## License
+
+LGPL-3.0
 
 ## Contact
 
