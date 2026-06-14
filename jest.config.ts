@@ -13,6 +13,7 @@ const config: Config.InitialOptions = {
   transformIgnorePatterns: ['node_modules/(?!(.*uuid|@mistralai))'],
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/$1',
+    '^@mistralai/mistralai$': '<rootDir>/__mocks__/@mistralai/mistralai.ts',
   },
   silent: true,
 };
