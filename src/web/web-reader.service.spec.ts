@@ -83,10 +83,10 @@ describe('WebReaderService', () => {
         text: 'Test content',
         links: [{ text: 'Link 1', url: 'https://example.com/link1' }],
         title: 'Test Page',
-        url: url,
+        url: 'https://example.com/', // URL class adds trailing slash
       });
 
-      expect(mockPage.goto).toHaveBeenCalledWith(url, {
+      expect(mockPage.goto).toHaveBeenCalledWith('https://example.com/', {
         waitUntil: 'networkidle2',
         timeout: timeout * 1000,
       });
@@ -119,7 +119,7 @@ describe('WebReaderService', () => {
       const timeoutError = new Error('Navigation timeout');
       timeoutError.name = 'TimeoutError';
 
-      mockPage.goto.mockRejectedValueOnce(timeoutError);
+      mockPage.goto.mockRejectedValue(timeoutError);
 
       await expect(service.extractForLLM(url, 3)).rejects.toThrow(
         HttpException,

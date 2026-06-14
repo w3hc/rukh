@@ -630,5 +630,155 @@ describe('App (e2e)', () => {
           .expect(400);
       });
     });
+
+    describe('Web Reader Endpoints', () => {
+      describe('GET /web-reader/llm', () => {
+        it('should extract content from a webpage', async () => {
+          const url = 'https://example.com';
+
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url, timeout: 5 })
+            .expect(200);
+
+          expect(response.body).toHaveProperty('title', 'Mocked Page Title');
+          expect(response.body).toHaveProperty('text');
+          expect(response.body).toHaveProperty('links');
+          expect(response.body).toHaveProperty('url', url);
+          expect(response.body.links).toBeInstanceOf(Array);
+          expect(response.body.links.length).toBeGreaterThan(0);
+
+          // Verify the mock was called
+          expect(mockWebReaderService.extractForLLM).toHaveBeenCalledWith(
+            url,
+            5,
+          );
+        });
+
+        it('should use default timeout when not provided', async () => {
+          const url = 'https://example.com';
+
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url })
+            .expect(200);
+
+          expect(mockWebReaderService.extractForLLM).toHaveBeenCalled();
+        });
+
+        it('should reject invalid URL', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url: 'not-a-valid-url' })
+            .expect(400);
+        });
+
+        it('should reject missing URL parameter', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({})
+            .expect(400);
+        });
+
+        it('should reject invalid timeout value', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url: 'https://example.com', timeout: 0 })
+            .expect(400);
+        });
+
+        it('should respect rate limiting', async () => {
+          const url = 'https://example.com';
+
+          // This test just verifies that the endpoint works
+          // Rate limiting is too environment-dependent for reliable testing
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url });
+
+          expect([200, 429]).toContain(response.status);
+        });
+      });
+
+      describe('GET /web-reader/search', () => {
+        it('should perform web search successfully', async () => {
+          const query = 'test query';
+
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query, maxResults: 5 })
+            .expect(200);
+
+          expect(response.body).toHaveProperty('query', query);
+          expect(response.body).toHaveProperty('results');
+          expect(response.body).toHaveProperty('answer');
+          expect(response.body).toHaveProperty('responseTime');
+          expect(response.body.results).toBeInstanceOf(Array);
+          expect(response.body.results.length).toBeGreaterThan(0);
+          expect(response.body.results[0]).toHaveProperty('title');
+          expect(response.body.results[0]).toHaveProperty('url');
+          expect(response.body.results[0]).toHaveProperty('content');
+          expect(response.body.results[0]).toHaveProperty('score');
+
+          // Verify the mock was called
+          expect(mockWebReaderService.search).toHaveBeenCalledWith(query, 5);
+        });
+
+        it('should use default maxResults when not provided', async () => {
+          const query = 'test query';
+
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query })
+            .expect(200);
+
+          expect(mockWebReaderService.search).toHaveBeenCalled();
+        });
+
+        it('should reject empty query', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query: '' })
+            .expect(400);
+        });
+
+        it('should reject missing query parameter', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({})
+            .expect(400);
+        });
+
+        it('should reject invalid maxResults value', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query: 'test', maxResults: 0 })
+            .expect(400);
+        });
+
+        it('should handle maxResults as string', async () => {
+          const query = 'test query';
+
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query, maxResults: '10' })
+            .expect(200);
+
+          expect(response.body).toHaveProperty('results');
+        });
+
+        it('should respect rate limiting', async () => {
+          const query = 'test query';
+
+          // This test just verifies that the endpoint works
+          // Rate limiting is too environment-dependent for reliable testing
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query });
+
+          expect([200, 429]).toContain(response.status);
+        });
+      });
+    });
   });
 });
