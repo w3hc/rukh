@@ -1,18 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SiweService } from '../siwe/siwe.service'; // Changed from SiweController
 import { ConfigService } from '@nestjs/config';
-import { ethers } from 'ethers';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class SubsService {
   private readonly logger = new Logger(SubsService.name);
   private githubToken: string;
 
-  constructor(
-    private readonly siweService: SiweService, // Changed from siweController
-    private readonly configService: ConfigService,
-  ) {
+  constructor(private readonly configService: ConfigService) {
     this.githubToken = this.configService.get<string>('GITHUB_API_TOKEN') || '';
 
     // Log configuration status
@@ -25,18 +19,18 @@ export class SubsService {
 
   /**
    * Check if a user is subscribed
-   * @param walletAddress The user's wallet address
-   * @param data Additional data including GitHub username and signature
+   * @param githubUserName GitHub username
+   * @param data Additional data including GitHub username
    * @returns true if the user is subscribed, false otherwise
    */
-  async isSubscribed(walletAddress?: string, data?: any): Promise<boolean> {
+  async isSubscribed(githubUserName?: string, data?: any): Promise<boolean> {
     this.logger.debug(
-      `Checking subscription for wallet: ${walletAddress || 'anonymous'}`,
+      `Checking subscription for user: ${githubUserName || 'anonymous'}`,
     );
 
-    // Skip verification if no wallet address or data
-    if (!walletAddress || !data) {
-      this.logger.debug('No wallet address or data provided - denying access');
+    // Skip verification if no data
+    if (!data) {
+      this.logger.debug('No data provided - denying access');
       return false;
     }
 
@@ -52,126 +46,28 @@ export class SubsService {
         }
       }
 
-      // Check if necessary data is provided
-      const signature = parsedData?.signature;
-      const nonce = parsedData?.nonce;
-      const githubUserName = parsedData?.githubUserName;
+      // Check if GitHub username is provided
+      const username = githubUserName || parsedData?.githubUserName;
 
-      if (!signature || !nonce || !githubUserName) {
-        this.logger.error(
-          'Missing required verification data (signature, nonce, or githubUserName)',
-        );
+      if (!username) {
+        this.logger.error('Missing GitHub username');
         return false;
       }
 
-      // Step 1: SIWE Verification
-      try {
-        this.logger.debug(`Attempting SIWE verification with nonce: ${nonce}`);
-
-        // Call siweService directly instead of the controller
-        const isVerified = this.siweService.verifySignature(
-          walletAddress,
-          signature,
-          nonce,
-        );
-
-        if (isVerified) {
-          this.logger.log(
-            `✅ SIWE signature verification SUCCEEDED for wallet: ${walletAddress}`,
-          );
-        } else {
-          this.logger.warn(
-            `❌ SIWE signature verification FAILED for wallet: ${walletAddress}`,
-          );
-          return false;
-        }
-      } catch (verifyError) {
-        this.logger.error(`SIWE verification error: ${verifyError.message}`);
-        return false;
-      }
-
-      // Step 2: Verify if wallet address is derived from GitHub username
-      const isDerivedFromGithub = await this.verifyWalletDerivedFromGithub(
-        walletAddress,
-        githubUserName,
-      );
-
-      if (!isDerivedFromGithub) {
-        this.logger.warn(
-          `Wallet address ${walletAddress} is not derived from GitHub username: ${githubUserName}`,
-        );
-        return false;
-      }
-
-      // Step 3: Check if the GitHub user is sponsoring w3hc
-      const isSponsoring =
-        await this.isGithubUserSponsoringW3hc(githubUserName);
+      // Check if the GitHub user is sponsoring w3hc
+      const isSponsoring = await this.isGithubUserSponsoringW3hc(username);
       if (!isSponsoring) {
-        this.logger.warn(
-          `GitHub user ${githubUserName} is not sponsoring w3hc`,
-        );
+        this.logger.warn(`GitHub user ${username} is not sponsoring w3hc`);
         return false;
       }
 
-      // All verification steps passed
+      // Verification passed
       this.logger.log(
-        `✅ All verification steps PASSED for ${walletAddress} (${githubUserName}) - granting access`,
+        `✅ Verification PASSED for GitHub user ${username} - granting access`,
       );
       return true;
     } catch (error) {
       this.logger.error(`Subscription check error: ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * Verifies if a wallet address is derived from a GitHub username
-   * using the same derivation method as in Zhankai
-   */
-  private async verifyWalletDerivedFromGithub(
-    walletAddress: string,
-    githubUsername: string,
-  ): Promise<boolean> {
-    try {
-      // Create a deterministic seed based on the GitHub username
-      // Same method as in Zhankai's wallet.ts
-      const salt = 'zhankai-wallet-v1';
-      const seed = crypto
-        .createHash('sha256')
-        .update(`${githubUsername}-${salt}`)
-        .digest('hex');
-
-      // Generate deterministic wallet from the seed
-      const wallet = ethers.Wallet.fromPhrase(
-        ethers.Mnemonic.fromEntropy(`0x${seed}`).phrase,
-      );
-
-      // Get the wallet's address
-      const derivedAddress = wallet.address;
-
-      this.logger.debug(
-        `Wallet derivation check: ${githubUsername} -> ${derivedAddress} (actual: ${walletAddress})`,
-      );
-
-      // Compare addresses (case-insensitive)
-      const isMatching =
-        derivedAddress.toLowerCase() === walletAddress.toLowerCase();
-
-      if (isMatching) {
-        this.logger.log(
-          `✅ Wallet address ${walletAddress} VERIFIED as derived from GitHub username: ${githubUsername}`,
-        );
-      } else {
-        this.logger.warn(
-          `❌ Wallet address ${walletAddress} is NOT derived from GitHub username: ${githubUsername}`,
-        );
-      }
-
-      return isMatching;
-    } catch (error) {
-      this.logger.error(
-        `Error verifying wallet derived from GitHub: ${error.message}`,
-      );
       return false;
     }
   }

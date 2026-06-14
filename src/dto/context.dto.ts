@@ -141,8 +141,8 @@ export class ContextQueryDto {
   timestamp: string;
 
   @ApiProperty({
-    description: 'Origin of the query (usually a wallet address)',
-    example: '0x...',
+    description: 'Origin of the query',
+    example: 'anon',
   })
   @IsString()
   origin: string;

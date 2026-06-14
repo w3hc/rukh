@@ -66,22 +66,10 @@ export class AppController {
           nullable: true,
           example: '',
         },
-        walletAddress: {
-          type: 'string',
-          nullable: true,
-          example: '',
-        },
         context: {
           type: 'string',
           nullable: true,
           example: 'rukh',
-        },
-        data: {
-          type: 'object',
-          nullable: true,
-          example: {},
-          description:
-            'Additional data to be passed with the request (used in certain contexts)',
         },
         file: {
           type: 'string',
@@ -104,18 +92,12 @@ export class AppController {
       Complete: {
         summary: 'Complete',
         description:
-          'Includes additional parameters like model, context, sessionId, and walletAddress.',
+          'Includes additional parameters like model, context, and sessionId.',
         value: {
           message: 'Describe the app in three sentences max.',
           model: 'anthropic',
           context: '',
           sessionId: '',
-          walletAddress: '',
-          data: {
-            githubUserName: 'julienbrg',
-            nonce: '88888',
-            signature: 'zzzzz',
-          },
         },
       },
       WithFile: {
@@ -124,24 +106,6 @@ export class AppController {
         value: {
           message: 'Analyze this document for me',
           model: 'anthropic',
-        },
-      },
-      WithData: {
-        summary: 'With Data',
-        description: 'Includes additional data object',
-        value: {
-          message: 'Process this data for me',
-          model: 'anthropic',
-          data: {
-            type: 'object',
-            nullable: true,
-            example: {
-              githubUserName: 'julienbrg',
-              nonce: '88888',
-              signature: 'zzzzz',
-            },
-            description: 'Additional data to be passed with the request',
-          },
         },
       },
     },
@@ -180,10 +144,8 @@ export class AppController {
       askDto.message,
       askDto.model,
       askDto.sessionId,
-      askDto.walletAddress,
       askDto.context,
       file,
-      askDto.data,
     );
   }
 }

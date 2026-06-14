@@ -1,6 +1,5 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ethers } from 'ethers';
 import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
@@ -15,21 +14,11 @@ import { ContextService } from './context/context.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 
-const RUKH_TOKEN_ABI = [
-  'function mint(address to, uint256 amount) external',
-  'function decimals() external view returns (uint8)',
-  'function owner() external view returns (address)',
-];
-
-const DEFAULT_RECIPIENT = '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977';
-
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
-  private provider: ethers.JsonRpcProvider;
-  private signer: ethers.Wallet;
-  private tokenContract: ethers.Contract;
   private contexts: Map<string, string> = new Map();
+  private writeQueue: Map<string, Promise<void>> = new Map();
 
   constructor(
     private readonly mistralService: MistralService,
@@ -42,7 +31,6 @@ export class AppService {
     private readonly webReaderService: WebReaderService,
     private readonly ragService: RagService,
   ) {
-    this.initializeWeb3();
     this.loadContexts();
   }
 
@@ -142,7 +130,6 @@ export class AppService {
 
   async processContextData(
     contextName: string,
-    walletAddress?: string,
     message?: string,
   ): Promise<string> {
     try {
@@ -226,12 +213,7 @@ export class AppService {
 
       if (usedFiles.length > 0) {
         try {
-          await this.recordContextQuery(
-            contextName,
-            walletAddress,
-            usedFiles,
-            message,
-          );
+          await this.recordContextQuery(contextName, usedFiles, message);
         } catch (error) {
           // Non-critical operation, just log the error
           this.logger.warn(`Failed to record context query: ${error.message}`);
@@ -250,7 +232,6 @@ export class AppService {
 
   private async recordContextQuery(
     contextName: string,
-    walletAddress: string,
     filesUsed: string[],
     message: string,
   ): Promise<void> {
@@ -266,162 +247,48 @@ export class AppService {
       throw new Error(`Context index file not found for ${contextName}`);
     }
 
-    try {
-      // Read the current index
-      const indexData = await readFile(indexPath, 'utf-8');
-      const index = JSON.parse(indexData);
-
-      // Add the query
-      if (!index.queries) {
-        index.queries = [];
-      }
-
-      // Use "anon" as default value when walletAddress is empty
-      const origin =
-        walletAddress && walletAddress.trim() !== '' ? walletAddress : 'anon';
-
-      index.queries.push({
-        timestamp: new Date().toISOString(),
-        origin: origin,
-        message: message,
-        contextFilesUsed: filesUsed,
-      });
-
-      // Write back the updated index
-      await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-    } catch (error) {
-      throw new Error(`Failed to record context query: ${error.message}`);
-    }
-  }
-
-  private initializeWeb3() {
-    const rpcUrl = this.configService.get<string>('ARBITRUM_RPC_URL');
-    const privateKey = this.configService.get<string>('PRIVATE_KEY');
-    const tokenAddress = this.configService.get<string>('RUKH_TOKEN_ADDRESS');
-
-    if (rpcUrl && privateKey && tokenAddress) {
+    // Queue writes to prevent concurrent modification of the same file
+    const writeOperation = async () => {
       try {
-        // Use a more reliable public RPC endpoint as fallback
-        const fallbackRpcUrls = [
-          rpcUrl,
-          'https://arb-sepolia.g.alchemy.com/v2/demo', // Alchemy public endpoint
-          'https://arbitrum-sepolia.blockpi.network/v1/rpc/public', // BlockPI public endpoint
-          'https://sepolia-rollup.arbitrum.io/rpc', // Arbitrum official endpoint
-        ];
+        // Read the current index
+        const indexData = await readFile(indexPath, 'utf-8');
+        const index = JSON.parse(indexData);
 
-        // Try to create provider with first RPC URL
-        this.provider = new ethers.JsonRpcProvider(fallbackRpcUrls[0]);
+        // Add the query
+        if (!index.queries) {
+          index.queries = [];
+        }
 
-        // Test provider connection
-        this.provider.getBlockNumber().catch(async (error) => {
-          this.logger.warn(`Primary RPC connection failed: ${error.message}`);
-
-          // Try fallback RPC URLs if primary fails
-          for (let i = 1; i < fallbackRpcUrls.length; i++) {
-            try {
-              this.logger.log(`Trying fallback RPC URL #${i}...`);
-              const fallbackProvider = new ethers.JsonRpcProvider(
-                fallbackRpcUrls[i],
-              );
-              await fallbackProvider.getBlockNumber(); // Test connection
-
-              this.provider = fallbackProvider;
-              this.signer = new ethers.Wallet(privateKey, this.provider);
-              this.tokenContract = new ethers.Contract(
-                tokenAddress,
-                RUKH_TOKEN_ABI,
-                this.signer,
-              );
-
-              this.logger.log(`Connected to fallback RPC #${i} successfully`);
-              break;
-            } catch (fallbackError) {
-              this.logger.warn(
-                `Fallback RPC #${i} connection failed: ${fallbackError.message}`,
-              );
-            }
-          }
+        index.queries.push({
+          timestamp: new Date().toISOString(),
+          origin: 'anon',
+          message: message,
+          contextFilesUsed: filesUsed,
         });
 
-        this.signer = new ethers.Wallet(privateKey, this.provider);
-        this.tokenContract = new ethers.Contract(
-          tokenAddress,
-          RUKH_TOKEN_ABI,
-          this.signer,
-        );
-
-        this.logger.log('Web3 provider and token contract initialized');
+        // Write back the updated index
+        await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
       } catch (error) {
-        this.logger.error('Failed to initialize Web3:', error);
+        throw new Error(`Failed to record context query: ${error.message}`);
       }
-    } else {
-      this.logger.warn(
-        'Missing Web3 configuration. Token minting will be disabled.',
-      );
-    }
-  }
+    };
 
-  private async mintToken(to: string): Promise<string> {
-    try {
-      if (!this.tokenContract || !this.signer) {
-        this.logger.warn(
-          'Token contract not initialized, returning dummy tx hash',
-        );
-        return '0x0000000000000000000000000000000000000000000000000000000000000000';
+    // Wait for any pending write to this file, then perform this write
+    const existingWrite = this.writeQueue.get(indexPath);
+    const newWrite = existingWrite
+      ? existingWrite.then(writeOperation).catch(() => writeOperation())
+      : writeOperation();
+
+    this.writeQueue.set(indexPath, newWrite);
+
+    // Clean up the queue after completion
+    newWrite.finally(() => {
+      if (this.writeQueue.get(indexPath) === newWrite) {
+        this.writeQueue.delete(indexPath);
       }
+    });
 
-      // Validate that the provider is connected
-      try {
-        const blockNumber = await this.provider.getBlockNumber();
-        this.logger.debug(`Current block number: ${blockNumber}`);
-      } catch (error) {
-        this.logger.error(
-          'Provider connection failed, returning dummy tx hash:',
-          error,
-        );
-        return '0x0000000000000000000000000000000000000000000000000000000000000000';
-      }
-
-      const amount = ethers.parseUnits('1');
-
-      try {
-        // Ensure we're the owner
-        const owner = await this.tokenContract.owner();
-        if (owner.toLowerCase() !== this.signer.address.toLowerCase()) {
-          this.logger.warn(
-            `Signer address (${this.signer.address}) is not the contract owner (${owner})`,
-          );
-        }
-      } catch (error) {
-        this.logger.warn('Could not verify contract ownership:', error);
-      }
-
-      // Get current fee data for EIP-1559 transaction
-      const feeData = await this.provider.getFeeData().catch(() => ({
-        maxFeePerGas: ethers.parseUnits('0.1', 'gwei'),
-        maxPriorityFeePerGas: ethers.parseUnits('0.01', 'gwei'),
-      }));
-
-      // Send with explicit EIP-1559 gas settings
-      const tx = await this.tokenContract.mint(to, amount, {
-        gasLimit: 500000,
-        maxFeePerGas: feeData.maxFeePerGas,
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
-      });
-
-      this.logger.debug(`Transaction hash: ${tx.hash}`);
-
-      return tx.hash;
-    } catch (error) {
-      this.logger.error('Error minting token:', error);
-
-      // RPC errors should be handled gracefully
-      if (error.code === 'NETWORK_ERROR' || error.code === 'UNKNOWN_ERROR') {
-        this.logger.warn('Network error encountered, returning dummy tx hash');
-      }
-
-      return '0x0000000000000000000000000000000000000000000000000000000000000000';
-    }
+    await newWrite;
   }
 
   /**
@@ -477,13 +344,11 @@ export class AppService {
   /**
    * Loads context information to be used as system prompt
    * @param contextName The name of the context to load
-   * @param origin The origin (usually wallet address) for tracking context usage
    * @param userMessage The original user message for tracking
    * @returns Formatted context information for use in system prompt
    */
   private async loadContextInformation(
     contextName: string,
-    origin: string,
     userMessage: string = '',
   ): Promise<string> {
     try {
@@ -594,7 +459,6 @@ export class AppService {
         try {
           await this.recordContextQuery(
             contextName,
-            origin,
             usedFiles,
             userMessage, // Use the actual user message instead of static text
           );
@@ -643,10 +507,8 @@ export class AppService {
     message: string,
     model?: string,
     sessionId?: string,
-    walletAddress?: string,
     contextName: string = 'rukh',
     file?: Express.Multer.File,
-    data?: Record<string, any>,
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = sessionId || randomUUID();
@@ -684,90 +546,6 @@ export class AppService {
     );
 
     try {
-      // Check Zhankai subscription status if applicable
-      if (contextName && contextName.toLowerCase() === 'zhankai') {
-        this.logger.debug(
-          `Zhankai context detected - checking usage for ${walletAddress || 'anonymous'}`,
-        );
-
-        // Skip subscription check if wallet address is undefined
-        if (!walletAddress) {
-          this.logger.debug(
-            `Anonymous user - proceeding without subscription check`,
-          );
-        } else {
-          const zhankaiPath = join(
-            process.cwd(),
-            'data',
-            'contexts',
-            'zhankai',
-          );
-          const indexPath = join(zhankaiPath, 'index.json');
-
-          // Check if zhankai context exists
-          if (existsSync(indexPath)) {
-            try {
-              const indexData = await readFile(indexPath, 'utf-8');
-              const contextIndex = JSON.parse(indexData);
-
-              // Count queries from this wallet address
-              const walletQueries =
-                contextIndex.queries?.filter(
-                  (query) =>
-                    query.origin?.toLowerCase() === walletAddress.toLowerCase(),
-                ) || [];
-
-              const queryCount = walletQueries.length;
-
-              this.logger.debug(
-                `User ${walletAddress} has used ${queryCount} queries for Zhankai context`,
-              );
-
-              // If user has used 3 or more queries, verify subscription
-              if (queryCount >= 3) {
-                this.logger.debug(
-                  `Free query limit reached - checking subscription status`,
-                );
-
-                const isSubscribed = await this.subsService.isSubscribed(
-                  walletAddress,
-                  data,
-                );
-
-                if (!isSubscribed) {
-                  this.logger.warn(
-                    `Access denied for wallet: ${walletAddress} - No subscription for Zhankai context after free queries`,
-                  );
-                  throw new HttpException(
-                    'Free query limit reached. Subscription required to continue using the Zhankai context.',
-                    HttpStatus.PAYMENT_REQUIRED,
-                  );
-                }
-
-                this.logger.debug(
-                  `Subscription verified for Zhankai context access`,
-                );
-              } else {
-                this.logger.debug(
-                  `User has ${3 - queryCount} free queries remaining`,
-                );
-              }
-            } catch (error) {
-              this.logger.error(
-                `Error checking Zhankai context queries: ${error.message}`,
-              );
-              // Continue with processing despite error
-            }
-          } else {
-            this.logger.debug(`Zhankai context index not found`);
-          }
-        }
-      } else {
-        this.logger.debug(
-          `Skipping subscription check - not using Zhankai context`,
-        );
-      }
-
       // Initialize a system prompt to contain context information
       let systemPrompt = '';
       let ragMetadata: any = undefined;
@@ -834,7 +612,6 @@ export class AppService {
               ];
               await this.recordContextQuery(
                 contextName,
-                walletAddress || 'anonymous',
                 usedResources,
                 message,
               );
@@ -873,7 +650,6 @@ export class AppService {
             // Fallback to old method
             systemPrompt = await this.loadContextInformation(
               contextName,
-              walletAddress || 'anonymous',
               message,
             );
           }
@@ -884,7 +660,6 @@ export class AppService {
           );
           systemPrompt = await this.loadContextInformation(
             contextName,
-            walletAddress || 'anonymous',
             message,
           );
         }
@@ -1068,15 +843,10 @@ export class AppService {
         );
       }
 
-      // STEP 1: Track usage for all successful responses regardless of wallet
+      // Track usage for all successful responses
       if (output) {
-        const trackingWallet =
-          walletAddress && walletAddress.trim() !== ''
-            ? walletAddress
-            : DEFAULT_RECIPIENT;
-
         this.logger.debug(
-          `Tracking usage for ${trackingWallet} with model ${usedModel}`,
+          `Tracking usage for anonymous with model ${usedModel}`,
         );
         this.logger.debug(
           `Token usage: input=${usage.input_tokens}, output=${usage.output_tokens}`,
@@ -1084,7 +854,7 @@ export class AppService {
 
         try {
           await this.costTracker.trackUsageWithTokens(
-            trackingWallet,
+            'anonymous',
             message,
             usedSessionId,
             usedModel,
@@ -1101,22 +871,9 @@ export class AppService {
         this.logger.warn('Skipping usage tracking - no output was generated');
       }
 
-      // STEP 2: Only after tracking is complete, mint tokens
-      const recipient =
-        walletAddress && walletAddress.trim() !== ''
-          ? walletAddress
-          : DEFAULT_RECIPIENT;
-
-      this.logger.debug(`Minting token reward to ${recipient}`);
-      const txHash = await this.mintToken(recipient);
-      this.logger.debug(`Token minting completed with tx hash: ${txHash}`);
-
       const response: AskResponseDto = {
         output,
         model: usedModel,
-        network: 'arbitrum-sepolia',
-        txHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${txHash}`,
         sessionId: usedSessionId,
         usage: usage,
       };
@@ -1161,19 +918,9 @@ export class AppService {
       this.logger.error(`Error in overall request processing:`, error);
 
       // Still return a response with available information
-      const recipient =
-        walletAddress && walletAddress.trim() !== ''
-          ? walletAddress
-          : DEFAULT_RECIPIENT;
-
-      const txHash = await this.mintToken(recipient);
-
       return {
         output,
         model: usedModel,
-        network: 'arbitrum-sepolia',
-        txHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${txHash}`,
         sessionId: usedSessionId,
         usage: usage,
       };
