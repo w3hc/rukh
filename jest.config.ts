@@ -10,7 +10,7 @@ const config: Config.InitialOptions = {
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
-  transformIgnorePatterns: ['node_modules/(?!.*uuid|@mistralai)'],
+  transformIgnorePatterns: ['node_modules/(?!(.*uuid|@mistralai))'],
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/$1',
   },
