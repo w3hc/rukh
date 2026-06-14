@@ -29,6 +29,9 @@ pnpm test:e2e
 
 # test coverage
 pnpm test:cov
+
+# format, lint, build, test, and test:e2e
+pnpm dance
 ```
 
 ## Example
