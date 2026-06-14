@@ -104,7 +104,7 @@ export class CostTracker implements OnModuleInit {
 
         this.data = parsedData;
         this.logger.log('Cost tracking database loaded successfully');
-      } catch (error) {
+      } catch {
         // If file doesn't exist or is invalid, create with default data
         await this.saveData();
         this.logger.log('Created new cost tracking database');
@@ -353,7 +353,7 @@ export class CostTracker implements OnModuleInit {
       // Try to log the data structure for debugging
       try {
         this.logger.debug('Current data structure:', JSON.stringify(this.data));
-      } catch (e) {
+      } catch {
         this.logger.error('Could not stringify data for debug logging');
       }
     }

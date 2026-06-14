@@ -36,7 +36,8 @@ export class OpenAIService {
   private readonly apiKey: string;
   private readonly logger = new Logger(OpenAIService.name);
   private readonly model: string = 'gpt-4o';
-  private readonly apiUrl: string = 'https://api.openai.com/v1/chat/completions';
+  private readonly apiUrl: string =
+    'https://api.openai.com/v1/chat/completions';
 
   // Cost per 1K tokens in USD - GPT-4o rates
   // Note: Verify current pricing at https://openai.com/api/pricing/
@@ -196,7 +197,7 @@ export class OpenAIService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
@@ -217,7 +218,8 @@ export class OpenAIService {
         const responseData: OpenAIResponse = await response.json();
 
         const responseContent =
-          responseData.choices[0]?.message?.content || 'No text content in response';
+          responseData.choices[0]?.message?.content ||
+          'No text content in response';
 
         // Save only the user message and response to the conversation history
         // We don't want to save the system prompt in the conversation history

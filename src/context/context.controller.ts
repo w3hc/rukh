@@ -31,7 +31,6 @@ import { UploadContextFileDto, DeleteFileDto } from '../dto/upload-file.dto';
 import {
   CreateContextDto,
   ContextFileDto,
-  ContextFile,
   ContextLink,
   ContextLinkDto,
 } from '../dto/context.dto';

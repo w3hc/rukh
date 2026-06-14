@@ -47,7 +47,7 @@ describe('ContextService', () => {
     });
 
     // Mock stat function for file size calculation
-    (stat as jest.Mock) = jest.fn().mockResolvedValue({ size: 1024 });
+    (stat as jest.Mock).mockResolvedValue({ size: 1024 });
 
     jest.clearAllMocks();
   });
@@ -161,7 +161,6 @@ describe('ContextService', () => {
       const fileName = 'new-file.md';
       const content = 'Test content';
       const description = 'Test file description';
-      const filePath = join(testContextsPath, contextName, fileName);
 
       // We need to specifically handle the existsSync check inside uploadFile
       const existsSyncSpy = existsSync as jest.Mock;
@@ -213,18 +212,17 @@ describe('ContextService', () => {
 
     // Add another test that just calls the service method directly
     it('should use direct override for testing', async () => {
+      const testContextName = 'test-context';
+      const testFileName = 'test.md';
+
       // Create a direct mock implementation of the method
       const originalMethod = service.uploadFile;
-      service.uploadFile = jest
-        .fn()
-        .mockImplementation(
-          (contextName, fileName, content, password, description) => {
-            return Promise.resolve({
-              path: join(testContextsPath, contextName, fileName),
-              wasOverwritten: false, // Explicitly set for testing
-            });
-          },
-        );
+      service.uploadFile = jest.fn().mockImplementation(() => {
+        return Promise.resolve({
+          path: join(testContextsPath, testContextName, testFileName),
+          wasOverwritten: false, // Explicitly set for testing
+        });
+      });
 
       const result = await service.uploadFile(
         'test-context',

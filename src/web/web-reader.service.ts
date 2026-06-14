@@ -1,12 +1,37 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import * as cheerio from 'cheerio';
+import { ConfigService } from '@nestjs/config';
 import * as puppeteer from 'puppeteer-core';
 import { execSync } from 'child_process';
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  content: string;
+  score?: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+  answer?: string;
+  responseTime?: number;
+}
 
 @Injectable()
 export class WebReaderService {
   private readonly logger = new Logger(WebReaderService.name);
   private browserExecutablePath: string | null = null;
+  private readonly tavilyApiKey: string;
+  private readonly tavilyApiUrl = 'https://api.tavily.com/search';
+
+  constructor(private configService: ConfigService) {
+    this.tavilyApiKey = this.configService.get<string>('TAVILY_API_KEY');
+    if (!this.tavilyApiKey) {
+      this.logger.warn('TAVILY_API_KEY not set - web search will be disabled');
+    } else {
+      this.logger.log('WebReaderService initialized with Tavily API');
+    }
+  }
 
   /**
    * Find Chrome/Chromium executable on the system
@@ -39,24 +64,31 @@ export class WebReaderService {
   }
 
   /**
-   * Fetches the content of a webpage from a given URL
+   * Extracts text and links from a webpage for LLM processing
    * @param url The URL to fetch content from
    * @param timeout Optional timeout in seconds (default: 5)
-   * @returns The raw HTML content of the webpage
+   * @returns Clean text with preserved links for LLM processing
    */
-  async readWebPage(
+  async extractForLLM(
     url: string,
-    timeout: number = 3,
-  ): Promise<{ content: string; url: string }> {
+    timeout: number = 5,
+  ): Promise<{
+    text: string;
+    links: { text: string; url: string }[];
+    title: string;
+    url: string;
+  }> {
     let browser = null;
     try {
-      this.logger.log(`Fetching content from: ${url} with ${timeout}s timeout`);
+      this.logger.log(
+        `Extracting text and links for LLM processing from: ${url}`,
+      );
 
       // Validate URL
       let targetUrl: URL;
       try {
         targetUrl = new URL(url);
-      } catch (error) {
+      } catch {
         throw new HttpException('Invalid URL format', HttpStatus.BAD_REQUEST);
       }
 
@@ -83,17 +115,98 @@ export class WebReaderService {
         timeout: timeout * 1000,
       });
 
-      // Get the rendered HTML content
-      const content = await page.content();
+      // Extract title, links, and text content using browser context
+      const extracted = await page.evaluate((baseUrl) => {
+        // Remove scripts, styles, and other non-content elements
+        const elementsToRemove = document.querySelectorAll(
+          'script, style, noscript, svg, iframe, meta, [aria-hidden="true"], [style*="display:none"], [style*="visibility:hidden"]',
+        );
+        elementsToRemove.forEach((el) => el.remove());
 
-      this.logger.log(
-        `Successfully fetched ${content.length} characters from ${url}`,
-      );
+        // Get page title
+        const title = document.title.trim();
+
+        // Extract all links (with text and URLs)
+        const links: { text: string; url: string }[] = [];
+        document.querySelectorAll('a[href]').forEach((el) => {
+          const linkText = el.textContent?.trim() || '';
+          let href = el.getAttribute('href');
+
+          // Skip empty or fragment-only links
+          if (!linkText || !href || href.startsWith('#')) {
+            return;
+          }
+
+          // Convert relative URLs to absolute
+          try {
+            if (!href.startsWith('http')) {
+              href = new URL(href, baseUrl).toString();
+            }
+            links.push({ text: linkText, url: href });
+          } catch {
+            // Skip invalid URLs
+          }
+        });
+
+        // Extract main text content (clean and simplified)
+        const head = document.querySelector('head');
+        if (head) head.remove();
+
+        let textContent = '';
+
+        // Process block-level elements to preserve structure
+        const elements = document.querySelectorAll(
+          'body h1, body h2, body h3, body h4, body h5, body h6, body p, body div, body li, body td, body blockquote',
+        );
+
+        elements.forEach((el) => {
+          const text = el.textContent?.trim() || '';
+
+          if (text) {
+            const tagName = el.tagName.toLowerCase();
+            // For headings, add importance indicator
+            if (/^h[1-6]$/.test(tagName)) {
+              const level = parseInt(tagName.substring(1));
+              textContent += '\n' + '#'.repeat(level) + ' ' + text + '\n\n';
+            } else if (tagName === 'li') {
+              textContent += '• ' + text + '\n';
+            } else if (tagName === 'blockquote') {
+              textContent += '\n> ' + text + '\n\n';
+            } else if (tagName === 'p') {
+              textContent += text + '\n\n';
+            } else if (el.children.length > 0 && el.querySelector('a')) {
+              textContent += text + '\n\n';
+            } else if (
+              el.parentElement &&
+              el.parentElement.tagName === 'DIV' &&
+              el.parentElement.children.length > 1
+            ) {
+              textContent += text + '\n\n';
+            } else {
+              textContent += text + ' ';
+            }
+          }
+        });
+
+        // Clean up the text
+        textContent = textContent
+          .replace(/\n{3,}/g, '\n\n')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+
+        return { title, links, textContent };
+      }, url);
 
       await browser.close();
 
+      this.logger.log(
+        `Successfully extracted content from ${url}: ${extracted.textContent.length} chars, ${extracted.links.length} links`,
+      );
+
       return {
-        content,
+        text: extracted.textContent,
+        links: extracted.links,
+        title: extracted.title,
         url: targetUrl.toString(),
       };
     } catch (error) {
@@ -101,7 +214,7 @@ export class WebReaderService {
         await browser.close();
       }
 
-      this.logger.error(`Error fetching URL content: ${error.message}`);
+      this.logger.error(`Error extracting content: ${error.message}`);
 
       if (error instanceof HttpException) {
         throw error;
@@ -116,156 +229,110 @@ export class WebReaderService {
       }
 
       throw new HttpException(
-        `Failed to read webpage: ${error.message}`,
+        `Failed to extract content: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
   /**
-   * Extracts text and links from a webpage for LLM processing
-   * @param url The URL to fetch content from
-   * @param timeout Optional timeout in seconds (default: 5)
-   * @returns Clean text with preserved links for LLM processing
+   * Performs a web search using Tavily API
+   * @param query The search query
+   * @param maxResults Maximum number of results to return (default: 5)
+   * @returns Search results with content optimized for LLMs
    */
-  async extractForLLM(
-    url: string,
-    timeout: number = 5,
-  ): Promise<{
-    text: string;
-    links: { text: string; url: string }[];
-    title: string;
-    url: string;
-  }> {
-    const { content, url: resolvedUrl } = await this.readWebPage(url, timeout);
+  async search(query: string, maxResults: number = 5): Promise<SearchResponse> {
+    if (!this.tavilyApiKey) {
+      throw new HttpException(
+        'Web search is not configured. Please set TAVILY_API_KEY environment variable.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    if (!query || query.trim().length === 0) {
+      throw new HttpException(
+        'Search query cannot be empty',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const startTime = Date.now();
 
     try {
-      this.logger.log(
-        `Extracting text and links for LLM processing from: ${url}`,
-      );
+      this.logger.log(`Searching for: "${query}" (max results: ${maxResults})`);
 
-      // Parse HTML with cheerio
-      const $ = cheerio.load(content);
-
-      // Remove scripts, styles, and other non-content elements
-      $(
-        'script, style, noscript, svg, iframe, meta, [aria-hidden="true"], [style*="display:none"], [style*="visibility:hidden"]',
-      ).remove();
-
-      // Get page title
-      const title = $('title').text().trim();
-
-      // Extract all links (with text and URLs)
-      const links: { text: string; url: string }[] = [];
-      $('a[href]').each((i, el) => {
-        const $el = $(el);
-        const linkText = $el.text().trim();
-        let href = $el.attr('href');
-
-        // Skip empty or fragment-only links
-        if (!linkText || !href || href.startsWith('#')) {
-          return;
-        }
-
-        // Convert relative URLs to absolute
-        try {
-          if (!href.startsWith('http')) {
-            href = new URL(href, url).toString();
-          }
-          links.push({ text: linkText, url: href });
-        } catch (e) {
-          // Skip invalid URLs
-          this.logger.debug(`Skipping invalid URL: ${href}`);
-        }
+      const response = await fetch(this.tavilyApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          api_key: this.tavilyApiKey,
+          query: query,
+          max_results: Math.min(maxResults, 10),
+          search_depth: 'basic',
+          include_answer: true,
+          include_images: false,
+          include_raw_content: false,
+        }),
       });
 
-      // Extract main text content (clean and simplified)
-      // Keep only the visible text content
-      $('head').remove(); // Remove head completely
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        this.logger.error(
+          `Tavily API error: ${response.status} - ${JSON.stringify(errorData)}`,
+        );
 
-      // Get text content from body with preserved spacing
-      let textContent = '';
+        if (response.status === 401) {
+          throw new HttpException(
+            'Invalid API key for web search',
+            HttpStatus.UNAUTHORIZED,
+          );
+        }
 
-      // First try to identify distinct sections to add better spacing
-      const sections = [];
-      $(
-        'body > section, body > main, body > article, body > div:has(h1, h2, h3), body > div:has(section)',
-      ).each((i, section) => {
-        sections.push($(section));
-      });
+        if (response.status === 429) {
+          throw new HttpException(
+            'Search rate limit exceeded',
+            HttpStatus.TOO_MANY_REQUESTS,
+          );
+        }
 
-      // If we found logical sections, process them separately
-      if (sections.length > 0) {
-        sections.forEach((section, index) => {
-          // Try to get a section title
-          const sectionTitle = section.find('h1, h2, h3').first().text().trim();
-          if (sectionTitle) {
-            textContent += '\n\n## ' + sectionTitle + '\n\n';
-          } else if (index > 0) {
-            // Add separation between sections
-            textContent += '\n\n---\n\n';
-          }
-        });
+        throw new HttpException(
+          `Web search failed: ${errorData.error || 'Unknown error'}`,
+          HttpStatus.BAD_GATEWAY,
+        );
       }
 
-      // Process block-level elements to preserve structure
-      $('body')
-        .find('h1, h2, h3, h4, h5, h6, p, div, li, td, blockquote')
-        .each((i, el) => {
-          const $el = $(el);
-          const text = $el.text().trim();
+      const data = await response.json();
+      const responseTime = Date.now() - startTime;
 
-          if (text) {
-            // For headings, add importance indicator
-            if (/^h[1-6]$/.test(el.tagName.toLowerCase())) {
-              const level = parseInt(el.tagName.toLowerCase().substring(1));
-              // Add extra spacing and formatting for headings based on their level
-              textContent += '\n' + '#'.repeat(level) + ' ' + text + '\n\n';
-            } else if (el.tagName.toLowerCase() === 'li') {
-              textContent += '• ' + text + '\n';
-            } else if (el.tagName.toLowerCase() === 'blockquote') {
-              textContent += '\n> ' + text + '\n\n';
-            } else if (el.tagName.toLowerCase() === 'p') {
-              // Add paragraph breaks for better readability
-              textContent += text + '\n\n';
-            } else if (
-              $el.children().length > 0 &&
-              $el.children('a').length > 0
-            ) {
-              // Special handling for elements containing links
-              textContent += text + '\n\n';
-            } else if (
-              $el.parent().is('div') &&
-              $el.parent().children().length > 1
-            ) {
-              // Add spacing between sibling elements
-              textContent += text + '\n\n';
-            } else {
-              textContent += text + ' ';
-            }
-          }
-        });
-
-      // Clean up the text
-      textContent = textContent
-        .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
-        .replace(/\s{2,}/g, ' ') // Normalize spaces (without affecting newlines)
-        .trim();
+      const results: SearchResult[] = (data.results || []).map(
+        (result: any) => ({
+          title: result.title,
+          url: result.url,
+          content: result.content,
+          score: result.score,
+        }),
+      );
 
       this.logger.log(
-        `Successfully extracted content from ${url}: ${textContent.length} chars, ${links.length} links`,
+        `Search completed: ${results.length} results in ${responseTime}ms`,
       );
 
       return {
-        text: textContent,
-        links,
-        title,
-        url: resolvedUrl,
+        query: query,
+        results: results,
+        answer: data.answer,
+        responseTime,
       };
     } catch (error) {
-      this.logger.error(`Error extracting content: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error(`Error performing web search: ${error.message}`);
       throw new HttpException(
-        `Failed to extract content: ${error.message}`,
+        `Failed to perform web search: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

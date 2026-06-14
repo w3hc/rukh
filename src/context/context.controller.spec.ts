@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ContextService } from './context.service';
 import { join } from 'path';
-import { mkdir, rm, readFile, writeFile, stat } from 'fs/promises';
+import { mkdir, rm, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { Logger, UnauthorizedException } from '@nestjs/common';
 
@@ -46,9 +46,6 @@ describe('ContextService', () => {
       }
       return Promise.resolve('');
     });
-
-    // Mock stat function for file size calculation
-    (stat as jest.Mock) = jest.fn().mockResolvedValue({ size: 1024 });
 
     jest.clearAllMocks();
   });

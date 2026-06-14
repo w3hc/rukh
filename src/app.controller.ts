@@ -14,7 +14,6 @@ import {
   ApiResponse,
   ApiBody,
   ApiConsumes,
-  ApiProperty,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
@@ -80,9 +79,7 @@ export class AppController {
         data: {
           type: 'object',
           nullable: true,
-          example: {
-            
-          },
+          example: {},
           description:
             'Additional data to be passed with the request (used in certain contexts)',
         },

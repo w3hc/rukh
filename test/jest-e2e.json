@@ -6,5 +6,9 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "transformIgnorePatterns": ["node_modules/(?!.*uuid)"]
+  "transformIgnorePatterns": ["node_modules/(?!.*uuid)"],
+  "moduleNameMapper": {
+    "^@langchain/mistralai$": "<rootDir>/../src/__mocks__/@langchain/mistralai.ts"
+  },
+  "silent": true
 }

@@ -1,13 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SiweController } from './siwe.controller';
 import { SiweService } from './siwe.service';
-import { HttpException } from '@nestjs/common';
+import { HttpException, Logger } from '@nestjs/common';
 
 describe('SiweController', () => {
   let controller: SiweController;
   let service: SiweService;
+  let loggerErrorSpy: jest.SpyInstance;
 
   beforeEach(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SiweController],
       providers: [
@@ -24,6 +29,10 @@ describe('SiweController', () => {
     controller = module.get<SiweController>(SiweController);
     service = module.get<SiweService>(SiweService);
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   it('should be defined', () => {

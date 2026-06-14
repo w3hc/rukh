@@ -118,7 +118,7 @@ export class CostTracker implements OnModuleInit {
 
         this.data = JSON.parse(content);
         this.logger.debug('Successfully loaded costs data from file');
-      } catch (error) {
+      } catch {
         this.logger.warn('Creating new costs data file');
         // Use default data structure
         this.data = {
@@ -155,7 +155,7 @@ export class CostTracker implements OnModuleInit {
       // Try to log the data structure for debugging
       try {
         this.logger.debug('Current data structure:', JSON.stringify(this.data));
-      } catch (e) {
+      } catch {
         this.logger.error('Could not stringify data for debug logging');
       }
     }
@@ -167,7 +167,7 @@ export class CostTracker implements OnModuleInit {
   }
 
   async trackUsageWithTokens(
-    walletAddress: string, // Unused
+    _walletAddress: string,
     message: string,
     sessionId: string,
     modelName: string,
@@ -267,7 +267,7 @@ export class CostTracker implements OnModuleInit {
           'Data state before error:',
           JSON.stringify(this.data),
         );
-      } catch (e) {
+      } catch {
         this.logger.error('Could not stringify data for error logging');
       }
     }

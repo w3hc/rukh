@@ -2,12 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { mkdir, rm, writeFile, readFile, stat, readdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import {
-  ContextFile,
-  ContextIndex,
-  ContextQuery,
-  ContextLink,
-} from '../dto/context.dto';
+import { ContextFile, ContextIndex, ContextLink } from '../dto/context.dto';
 
 @Injectable()
 export class ContextService {
@@ -368,7 +363,6 @@ export class ContextService {
    */
   private async getDirectories(path: string): Promise<string[]> {
     try {
-      const { readdir } = require('fs/promises');
       const entries = await readdir(path, { withFileTypes: true });
       return entries
         .filter((entry) => entry.isDirectory())

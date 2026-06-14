@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, Logger } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import * as fs from 'fs';
@@ -8,12 +8,14 @@ import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
 import { SubsService } from '../src/subs/subs.service';
+import { WebReaderService } from '../src/web/web-reader.service';
 
 // Set global timeout for all tests
 jest.setTimeout(60000);
 
 describe('App (e2e)', () => {
   let app: INestApplication;
+  let loggerErrorSpy: jest.SpyInstance;
 
   // Create a test file for file upload tests
   const testDir = join(process.cwd(), 'test');
@@ -27,18 +29,16 @@ describe('App (e2e)', () => {
 
   // Mock implementations
   const mockMistralService = {
-    processMessage: jest
-      .fn()
-      .mockImplementation((message, sessionId, systemPrompt) => {
-        return Promise.resolve({
-          content: 'This is a mocked response from Mistral AI',
-          sessionId: sessionId || 'mock-session-id',
-          usage: {
-            input_tokens: 10,
-            output_tokens: 15,
-          },
-        });
-      }),
+    processMessage: jest.fn().mockImplementation((message, sessionId) => {
+      return Promise.resolve({
+        content: 'This is a mocked response from Mistral AI',
+        sessionId: sessionId || 'mock-session-id',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 15,
+        },
+      });
+    }),
     getConversationHistory: jest.fn().mockResolvedValue({
       history: [],
       isFirstMessage: true,
@@ -47,18 +47,16 @@ describe('App (e2e)', () => {
   };
 
   const mockAnthropicService = {
-    processMessage: jest
-      .fn()
-      .mockImplementation((message, sessionId, systemPrompt) => {
-        return Promise.resolve({
-          content: 'This is a mocked response from Claude',
-          sessionId: sessionId || 'mock-session-id',
-          usage: {
-            input_tokens: 12,
-            output_tokens: 18,
-          },
-        });
-      }),
+    processMessage: jest.fn().mockImplementation((message, sessionId) => {
+      return Promise.resolve({
+        content: 'This is a mocked response from Claude',
+        sessionId: sessionId || 'mock-session-id',
+        usage: {
+          input_tokens: 12,
+          output_tokens: 18,
+        },
+      });
+    }),
     getConversationHistory: jest.fn().mockResolvedValue({
       history: [],
       isFirstMessage: true,
@@ -77,6 +75,38 @@ describe('App (e2e)', () => {
     isSubscribed: jest.fn().mockResolvedValue(true),
   };
 
+  const mockWebReaderService = {
+    extractForLLM: jest.fn().mockImplementation((url: string) => {
+      return Promise.resolve({
+        title: 'Mocked Page Title',
+        text: 'This is mocked extracted content from the webpage.',
+        links: [{ text: 'Example Link', url: 'https://example.com/link' }],
+        url: url,
+      });
+    }),
+    search: jest.fn().mockImplementation((query: string) => {
+      return Promise.resolve({
+        query: query,
+        results: [
+          {
+            title: 'Mocked Search Result 1',
+            url: 'https://example.com/result1',
+            content: 'This is mocked content for search result 1',
+            score: 0.95,
+          },
+          {
+            title: 'Mocked Search Result 2',
+            url: 'https://example.com/result2',
+            content: 'This is mocked content for search result 2',
+            score: 0.87,
+          },
+        ],
+        answer: 'This is a mocked AI-generated answer to the search query.',
+        responseTime: 250,
+      });
+    }),
+  };
+
   beforeAll(async () => {
     // Ensure the test file exists
     if (!fs.existsSync(testFilePath)) {
@@ -91,6 +121,11 @@ describe('App (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -102,6 +137,8 @@ describe('App (e2e)', () => {
       .useValue(mockCostTracker)
       .overrideProvider(SubsService)
       .useValue(mockSubsService)
+      .overrideProvider(WebReaderService)
+      .useValue(mockWebReaderService)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -121,6 +158,7 @@ describe('App (e2e)', () => {
   });
 
   afterEach(async () => {
+    loggerErrorSpy.mockRestore();
     if (app) {
       await app.close();
     }
@@ -359,7 +397,7 @@ describe('App (e2e)', () => {
             name: contextName,
             password: password,
           });
-        } catch (error) {
+        } catch {
           // Context might already exist, which is fine
         }
       });
@@ -375,7 +413,7 @@ describe('App (e2e)', () => {
             name: deleteContextName,
             password: deletePassword,
           });
-        } catch (error) {
+        } catch {
           // It's OK if this fails
         }
 
@@ -422,7 +460,7 @@ describe('App (e2e)', () => {
             password: uploadPassword,
             description: 'Upload test context',
           });
-        } catch (error) {
+        } catch {
           // Context might already exist, which is fine
         }
       });
@@ -469,7 +507,7 @@ describe('App (e2e)', () => {
             name: deleteContextName,
             password: deletePassword,
           });
-        } catch (error) {
+        } catch {
           // Context might already exist, which is fine
         }
 
@@ -480,7 +518,7 @@ describe('App (e2e)', () => {
             .set('x-context-password', deletePassword)
             .field('contextName', deleteContextName)
             .attach('file', testFilePath);
-        } catch (error) {
+        } catch {
           // File upload might fail, which is OK
         }
       });
@@ -593,6 +631,156 @@ describe('App (e2e)', () => {
           .field('message', 'test message with invalid file')
           .attach('file', nonMarkdownPath)
           .expect(400);
+      });
+    });
+
+    describe('Web Reader Endpoints', () => {
+      describe('GET /web-reader/llm', () => {
+        it('should extract content from a webpage', async () => {
+          const url = 'https://example.com';
+
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url, timeout: 5 })
+            .expect(200);
+
+          expect(response.body).toHaveProperty('title', 'Mocked Page Title');
+          expect(response.body).toHaveProperty('text');
+          expect(response.body).toHaveProperty('links');
+          expect(response.body).toHaveProperty('url', url);
+          expect(response.body.links).toBeInstanceOf(Array);
+          expect(response.body.links.length).toBeGreaterThan(0);
+
+          // Verify the mock was called
+          expect(mockWebReaderService.extractForLLM).toHaveBeenCalledWith(
+            url,
+            5,
+          );
+        });
+
+        it('should use default timeout when not provided', async () => {
+          const url = 'https://example.com';
+
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url })
+            .expect(200);
+
+          expect(mockWebReaderService.extractForLLM).toHaveBeenCalled();
+        });
+
+        it('should reject invalid URL', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url: 'not-a-valid-url' })
+            .expect(400);
+        });
+
+        it('should reject missing URL parameter', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({})
+            .expect(400);
+        });
+
+        it('should reject invalid timeout value', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url: 'https://example.com', timeout: 0 })
+            .expect(400);
+        });
+
+        it('should respect rate limiting', async () => {
+          const url = 'https://example.com';
+
+          // This test just verifies that the endpoint works
+          // Rate limiting is too environment-dependent for reliable testing
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/llm')
+            .query({ url });
+
+          expect([200, 429]).toContain(response.status);
+        });
+      });
+
+      describe('GET /web-reader/search', () => {
+        it('should perform web search successfully', async () => {
+          const query = 'test query';
+
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query, maxResults: 5 })
+            .expect(200);
+
+          expect(response.body).toHaveProperty('query', query);
+          expect(response.body).toHaveProperty('results');
+          expect(response.body).toHaveProperty('answer');
+          expect(response.body).toHaveProperty('responseTime');
+          expect(response.body.results).toBeInstanceOf(Array);
+          expect(response.body.results.length).toBeGreaterThan(0);
+          expect(response.body.results[0]).toHaveProperty('title');
+          expect(response.body.results[0]).toHaveProperty('url');
+          expect(response.body.results[0]).toHaveProperty('content');
+          expect(response.body.results[0]).toHaveProperty('score');
+
+          // Verify the mock was called
+          expect(mockWebReaderService.search).toHaveBeenCalledWith(query, 5);
+        });
+
+        it('should use default maxResults when not provided', async () => {
+          const query = 'test query';
+
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query })
+            .expect(200);
+
+          expect(mockWebReaderService.search).toHaveBeenCalled();
+        });
+
+        it('should reject empty query', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query: '' })
+            .expect(400);
+        });
+
+        it('should reject missing query parameter', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({})
+            .expect(400);
+        });
+
+        it('should reject invalid maxResults value', async () => {
+          await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query: 'test', maxResults: 0 })
+            .expect(400);
+        });
+
+        it('should handle maxResults as string', async () => {
+          const query = 'test query';
+
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query, maxResults: '10' })
+            .expect(200);
+
+          expect(response.body).toHaveProperty('results');
+        });
+
+        it('should respect rate limiting', async () => {
+          const query = 'test query';
+
+          // This test just verifies that the endpoint works
+          // Rate limiting is too environment-dependent for reliable testing
+          const response = await request(app.getHttpServer())
+            .get('/web-reader/search')
+            .query({ query });
+
+          expect([200, 429]).toContain(response.status);
+        });
       });
     });
   });

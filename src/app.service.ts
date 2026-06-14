@@ -110,7 +110,14 @@ export class AppService {
             `Successfully loaded context: ${dir} with ${mdFiles.length} files`,
           );
         } catch (error) {
-          this.logger.error(`Error processing context ${dir}:`, error);
+          // Only log as error if it's not a file-not-found error
+          if (error.code === 'ENOENT') {
+            this.logger.warn(
+              `Context ${dir} directory exists but file not found, skipping`,
+            );
+          } else {
+            this.logger.error(`Error processing context ${dir}:`, error);
+          }
         }
       }
 
@@ -128,7 +135,7 @@ export class AppService {
     try {
       const stats = await stat(path);
       return stats.isDirectory();
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -418,6 +425,56 @@ export class AppService {
   }
 
   /**
+   * Checks if a URL is relevant to the user's message based on its title/description
+   * @param userMessage The user's message
+   * @param link The link object with url, title, and optional description
+   * @returns True if the URL seems relevant to the message
+   */
+  private async checkUrlRelevance(
+    userMessage: string,
+    link: { url: string; title: string; description?: string },
+  ): Promise<boolean> {
+    try {
+      // Simple keyword matching for now - can be enhanced with LLM if needed
+      const messageLower = userMessage.toLowerCase();
+      const titleLower = link.title?.toLowerCase() || '';
+      const descriptionLower = link.description?.toLowerCase() || '';
+
+      // Check if message contains words from title or description
+      const titleWords = titleLower.split(/\s+/).filter((w) => w.length > 3);
+      const descWords = descriptionLower
+        .split(/\s+/)
+        .filter((w) => w.length > 3);
+
+      for (const word of titleWords) {
+        if (messageLower.includes(word)) {
+          this.logger.log(
+            `URL "${link.title}" is relevant - matched keyword: ${word}`,
+          );
+          return true;
+        }
+      }
+
+      for (const word of descWords) {
+        if (messageLower.includes(word)) {
+          this.logger.log(
+            `URL "${link.title}" is relevant - matched keyword from description: ${word}`,
+          );
+          return true;
+        }
+      }
+
+      this.logger.debug(
+        `URL "${link.title}" does not seem relevant to message`,
+      );
+      return false;
+    } catch (error) {
+      this.logger.error(`Error checking URL relevance: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Loads context information to be used as system prompt
    * @param contextName The name of the context to load
    * @param origin The origin (usually wallet address) for tracking context usage
@@ -427,7 +484,7 @@ export class AppService {
   private async loadContextInformation(
     contextName: string,
     origin: string,
-    userMessage: string = '', // Add user message parameter with default empty value
+    userMessage: string = '',
   ): Promise<string> {
     try {
       // Skip if no context is specified
@@ -528,38 +585,9 @@ export class AppService {
         }
       }
 
-      // Process links if they exist in the context index
-      if (contextIndex && contextIndex.links && contextIndex.links.length > 0) {
-        const links = contextIndex.links;
-        this.logger.log(
-          `Processing ${links.length} links for context '${contextName}'`,
-        );
-        contextContent += `## Context Links\n\n`;
-
-        for (const link of links) {
-          try {
-            this.logger.debug(`- Fetching content from link: ${link.url}`);
-
-            // Use WebReaderService to extract content from the link
-            const extractedContent = await this.webReaderService.extractForLLM(
-              link.url,
-            );
-
-            // Add the extracted content to the context
-            contextContent += `### Link: ${link.title} (${link.url})\n${extractedContent.text}\n\n`;
-
-            // Track the link usage
-            usedFiles.push(`link:${link.url}`);
-          } catch (error) {
-            this.logger.error(
-              `Error processing link ${link.url}: ${error.message}`,
-            );
-            // Add a fallback note about the link
-            contextContent += `### Link: ${link.title} (${link.url})\nCould not fetch content from this link.\n\n`;
-            usedFiles.push(`link:${link.url}`);
-          }
-        }
-      }
+      // Note: URL processing is now handled by RAG service in the two-step workflow
+      // This legacy loadContextInformation method only handles markdown files
+      // URLs are selected and fetched in ragService.selectRelevantFiles() and buildContextWithSelectedFiles()
 
       // Record the context query for analytics purposes
       if (usedFiles.length > 0) {
@@ -747,63 +775,90 @@ export class AppService {
       // Load context information if context is specified
       if (contextName && contextName !== '') {
         // Check if two-step RAG is enabled
-        const ragEnabled = this.configService.get<string>('RAG_ENABLE_TWO_STEP') === 'true';
-        const maxFiles = parseInt(this.configService.get<string>('RAG_MAX_FILES') || '5', 10);
+        const ragEnabled =
+          this.configService.get<string>('RAG_ENABLE_TWO_STEP') === 'true';
+        const maxFiles = parseInt(
+          this.configService.get<string>('RAG_MAX_FILES') || '5',
+          10,
+        );
 
         if (ragEnabled) {
           this.logger.log(`Using two-step RAG for context: ${contextName}`);
 
           try {
-            // STEP 1: Select relevant files
-            this.logger.log(`Step 1: Selecting relevant files (max: ${maxFiles})`);
-            const { selectedFiles, selectionCost } = await this.ragService.selectRelevantFiles(
-              contextName,
-              message,
-              maxFiles,
+            // STEP 1: Select relevant files and URLs
+            this.logger.log(
+              `Step 1: Selecting relevant resources (max: ${maxFiles})`,
+            );
+            const { selectedFiles, selectedUrls, selectionCost } =
+              await this.ragService.selectRelevantFiles(
+                contextName,
+                message,
+                maxFiles,
+              );
+
+            this.logger.log(
+              `Selected ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
             );
 
-            this.logger.log(`Selected ${selectedFiles.length} files: ${selectedFiles.join(', ')}`);
-
-            // Get total files count
-            const contextPath = join(process.cwd(), 'data', 'contexts', contextName);
+            // Get total files and URLs count
+            const contextPath = join(
+              process.cwd(),
+              'data',
+              'contexts',
+              contextName,
+            );
             const indexPath = join(contextPath, 'index.json');
             let totalFiles = 0;
+            let totalUrls = 0;
             if (existsSync(indexPath)) {
               const indexData = await readFile(indexPath, 'utf-8');
               const contextIndex = JSON.parse(indexData);
               totalFiles = contextIndex.files?.length || 0;
+              totalUrls = contextIndex.links?.length || 0;
             }
 
-            // STEP 2: Build context with only selected files
-            this.logger.log(`Step 2: Building context with selected files`);
+            // STEP 2: Build context with only selected files and URLs
+            this.logger.log(`Step 2: Building context with selected resources`);
             systemPrompt = await this.ragService.buildContextWithSelectedFiles(
               contextName,
               selectedFiles,
+              selectedUrls,
             );
 
-            // Record the query with selected files
+            // Record the query with selected files and URLs
             try {
+              const usedResources = [
+                ...selectedFiles,
+                ...(selectedUrls || []).map((url) => `link:${url}`),
+              ];
               await this.recordContextQuery(
                 contextName,
                 walletAddress || 'anonymous',
-                selectedFiles,
+                usedResources,
                 message,
               );
-              this.logger.debug(`Recorded context query with ${selectedFiles.length} selected files`);
+              this.logger.debug(
+                `Recorded context query with ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
+              );
             } catch (error) {
-              this.logger.warn(`Failed to record context query: ${error.message}`);
+              this.logger.warn(
+                `Failed to record context query: ${error.message}`,
+              );
             }
 
             // Store RAG metadata for response (including selection cost)
             ragMetadata = {
               selectedFiles,
+              selectedUrls,
               totalFilesAvailable: totalFiles,
+              totalUrlsAvailable: totalUrls,
               selectionMethod: 'rag-two-step',
               selectionCost,
             };
 
             this.logger.log(
-              `Two-step RAG completed: ${selectedFiles.length}/${totalFiles} files selected (${systemPrompt.length} characters)`,
+              `Two-step RAG completed: ${selectedFiles.length}/${totalFiles} files and ${selectedUrls?.length || 0}/${totalUrls} URLs selected (${systemPrompt.length} characters)`,
             );
 
             if (selectionCost) {
@@ -812,7 +867,9 @@ export class AppService {
               );
             }
           } catch (error) {
-            this.logger.error(`Two-step RAG failed: ${error.message}, falling back to old method`);
+            this.logger.error(
+              `Two-step RAG failed: ${error.message}, falling back to old method`,
+            );
             // Fallback to old method
             systemPrompt = await this.loadContextInformation(
               contextName,
@@ -822,7 +879,9 @@ export class AppService {
           }
         } else {
           // Use old method if RAG is disabled
-          this.logger.log(`Loading context information (legacy method): ${contextName}`);
+          this.logger.log(
+            `Loading context information (legacy method): ${contextName}`,
+          );
           systemPrompt = await this.loadContextInformation(
             contextName,
             walletAddress || 'anonymous',
@@ -1066,9 +1125,17 @@ export class AppService {
       if (cost && ragMetadata?.selectionCost) {
         // Add the selection cost to the response generation cost
         const combinedCost = {
-          input_cost: Number((cost.input_cost + ragMetadata.selectionCost.input_cost).toFixed(6)),
-          output_cost: Number((cost.output_cost + ragMetadata.selectionCost.output_cost).toFixed(6)),
-          total_cost: Number((cost.total_cost + ragMetadata.selectionCost.total_cost).toFixed(6)),
+          input_cost: Number(
+            (cost.input_cost + ragMetadata.selectionCost.input_cost).toFixed(6),
+          ),
+          output_cost: Number(
+            (cost.output_cost + ragMetadata.selectionCost.output_cost).toFixed(
+              6,
+            ),
+          ),
+          total_cost: Number(
+            (cost.total_cost + ragMetadata.selectionCost.total_cost).toFixed(6),
+          ),
         };
         response.cost = combinedCost;
         this.logger.log(
