@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SiweService } from '../siwe/siwe.service'; // Changed from SiweController
 import { ConfigService } from '@nestjs/config';
-import { Wallet, ethers } from 'ethers';
+import { ethers } from 'ethers';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class SubsService {
@@ -132,9 +133,6 @@ export class SubsService {
     githubUsername: string,
   ): Promise<boolean> {
     try {
-      // Import crypto (Node.js doesn't automatically make this global)
-      const crypto = require('crypto');
-
       // Create a deterministic seed based on the GitHub username
       // Same method as in Zhankai's wallet.ts
       const salt = 'zhankai-wallet-v1';

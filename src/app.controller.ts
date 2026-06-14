@@ -14,7 +14,6 @@ import {
   ApiResponse,
   ApiBody,
   ApiConsumes,
-  ApiProperty,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';

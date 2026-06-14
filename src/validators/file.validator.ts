@@ -1,9 +1,4 @@
-import {
-  PipeTransform,
-  Injectable,
-  ArgumentMetadata,
-  BadRequestException,
-} from '@nestjs/common';
+import { PipeTransform, Injectable, BadRequestException } from '@nestjs/common';
 
 interface FileValidatorOptions {
   optional?: boolean;
@@ -19,7 +14,7 @@ export class FileValidator implements PipeTransform {
     this.optional = options.optional || false;
   }
 
-  transform(value: Express.Multer.File, metadata: ArgumentMetadata) {
+  transform(value: Express.Multer.File) {
     if (!value) {
       return this.optional ? undefined : value;
     }

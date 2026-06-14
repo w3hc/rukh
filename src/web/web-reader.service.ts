@@ -88,7 +88,7 @@ export class WebReaderService {
       let targetUrl: URL;
       try {
         targetUrl = new URL(url);
-      } catch (error) {
+      } catch {
         throw new HttpException('Invalid URL format', HttpStatus.BAD_REQUEST);
       }
 
@@ -143,7 +143,7 @@ export class WebReaderService {
               href = new URL(href, baseUrl).toString();
             }
             links.push({ text: linkText, url: href });
-          } catch (e) {
+          } catch {
             // Skip invalid URLs
           }
         });

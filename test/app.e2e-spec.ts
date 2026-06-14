@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, Logger } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import * as fs from 'fs';
@@ -15,6 +15,7 @@ jest.setTimeout(60000);
 
 describe('App (e2e)', () => {
   let app: INestApplication;
+  let loggerErrorSpy: jest.SpyInstance;
 
   // Create a test file for file upload tests
   const testDir = join(process.cwd(), 'test');
@@ -28,18 +29,16 @@ describe('App (e2e)', () => {
 
   // Mock implementations
   const mockMistralService = {
-    processMessage: jest
-      .fn()
-      .mockImplementation((message, sessionId, systemPrompt) => {
-        return Promise.resolve({
-          content: 'This is a mocked response from Mistral AI',
-          sessionId: sessionId || 'mock-session-id',
-          usage: {
-            input_tokens: 10,
-            output_tokens: 15,
-          },
-        });
-      }),
+    processMessage: jest.fn().mockImplementation((message, sessionId) => {
+      return Promise.resolve({
+        content: 'This is a mocked response from Mistral AI',
+        sessionId: sessionId || 'mock-session-id',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 15,
+        },
+      });
+    }),
     getConversationHistory: jest.fn().mockResolvedValue({
       history: [],
       isFirstMessage: true,
@@ -48,18 +47,16 @@ describe('App (e2e)', () => {
   };
 
   const mockAnthropicService = {
-    processMessage: jest
-      .fn()
-      .mockImplementation((message, sessionId, systemPrompt) => {
-        return Promise.resolve({
-          content: 'This is a mocked response from Claude',
-          sessionId: sessionId || 'mock-session-id',
-          usage: {
-            input_tokens: 12,
-            output_tokens: 18,
-          },
-        });
-      }),
+    processMessage: jest.fn().mockImplementation((message, sessionId) => {
+      return Promise.resolve({
+        content: 'This is a mocked response from Claude',
+        sessionId: sessionId || 'mock-session-id',
+        usage: {
+          input_tokens: 12,
+          output_tokens: 18,
+        },
+      });
+    }),
     getConversationHistory: jest.fn().mockResolvedValue({
       history: [],
       isFirstMessage: true,
@@ -87,7 +84,7 @@ describe('App (e2e)', () => {
         url: url,
       });
     }),
-    search: jest.fn().mockImplementation((query: string, maxResults = 5) => {
+    search: jest.fn().mockImplementation((query: string) => {
       return Promise.resolve({
         query: query,
         results: [
@@ -124,6 +121,11 @@ describe('App (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -156,6 +158,7 @@ describe('App (e2e)', () => {
   });
 
   afterEach(async () => {
+    loggerErrorSpy.mockRestore();
     if (app) {
       await app.close();
     }
@@ -394,7 +397,7 @@ describe('App (e2e)', () => {
             name: contextName,
             password: password,
           });
-        } catch (error) {
+        } catch {
           // Context might already exist, which is fine
         }
       });
@@ -410,7 +413,7 @@ describe('App (e2e)', () => {
             name: deleteContextName,
             password: deletePassword,
           });
-        } catch (error) {
+        } catch {
           // It's OK if this fails
         }
 
@@ -457,7 +460,7 @@ describe('App (e2e)', () => {
             password: uploadPassword,
             description: 'Upload test context',
           });
-        } catch (error) {
+        } catch {
           // Context might already exist, which is fine
         }
       });
@@ -504,7 +507,7 @@ describe('App (e2e)', () => {
             name: deleteContextName,
             password: deletePassword,
           });
-        } catch (error) {
+        } catch {
           // Context might already exist, which is fine
         }
 
@@ -515,7 +518,7 @@ describe('App (e2e)', () => {
             .set('x-context-password', deletePassword)
             .field('contextName', deleteContextName)
             .attach('file', testFilePath);
-        } catch (error) {
+        } catch {
           // File upload might fail, which is OK
         }
       });

@@ -74,7 +74,8 @@
       "undici": ">=5.29.0",
       "js-yaml": ">=4.1.0",
       "brace-expansion": ">=2.0.2",
-      "tmp": ">=0.2.3"
+      "tmp": ">=0.2.3",
+      "minimatch": ">=9.0.0"
     }
   },
   "packageManager": "pnpm@10.23.0+sha1.b4a44ab0dc2adf2e36371d11d8eb0dc78ffc976c"

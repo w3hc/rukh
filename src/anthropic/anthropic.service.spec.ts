@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnthropicService } from './anthropic.service';
 import { ConfigService } from '@nestjs/config';
-import { HttpException } from '@nestjs/common';
+import { HttpException, Logger } from '@nestjs/common';
 
 global.fetch = jest.fn(() =>
   Promise.resolve({
@@ -18,8 +18,13 @@ global.fetch = jest.fn(() =>
 
 describe('AnthropicService', () => {
   let service: AnthropicService;
+  let loggerErrorSpy: jest.SpyInstance;
 
   beforeEach(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnthropicService,
@@ -37,6 +42,10 @@ describe('AnthropicService', () => {
 
     service = module.get<AnthropicService>(AnthropicService);
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   it('should be defined', () => {

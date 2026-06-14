@@ -21,7 +21,6 @@ export class RagMetadataDto {
 
   @ApiProperty({
     description: 'Cost of the file selection phase',
-    type: () => require('./ask-response.dto').CostDto,
     required: false,
   })
   selectionCost?: any;

@@ -9,6 +9,7 @@ import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import * as ethers from 'ethers';
 
 describe('AppService - Model Fallback', () => {
@@ -16,8 +17,13 @@ describe('AppService - Model Fallback', () => {
   let mistralService: MistralService;
   let anthropicService: AnthropicService;
   let costTracker: CostTracker;
+  let loggerErrorSpy: jest.SpyInstance;
 
   beforeEach(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
     // Create a more complete mock for JsonRpcProvider
     const mockProvider = {
       getBalance: jest.fn().mockResolvedValue(ethers.parseEther('1.0')),
@@ -221,6 +227,7 @@ describe('AppService - Model Fallback', () => {
   });
 
   afterEach(() => {
+    loggerErrorSpy.mockRestore();
     jest.clearAllMocks();
     jest.restoreAllMocks();
 

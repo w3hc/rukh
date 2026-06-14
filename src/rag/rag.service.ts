@@ -219,7 +219,6 @@ Your response:`;
   async buildContextWithSelectedFiles(
     contextName: string,
     selectedFiles: string[],
-    password?: string,
   ): Promise<string> {
     try {
       if (selectedFiles.length === 0) {

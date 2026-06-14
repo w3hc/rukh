@@ -3,12 +3,10 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { ConfigService } from '@nestjs/config';
-import { BadRequestException } from '@nestjs/common';
 
 describe('AppController', () => {
   let appController: AppController;
   let appService: AppService;
-  let mistralService: MistralService;
 
   const mockTxHash =
     '0x1234567890123456789012345678901234567890123456789012345678901234';
@@ -43,23 +41,14 @@ describe('AppController', () => {
             },
             ask: jest
               .fn()
-              .mockImplementation(
-                async (
-                  message,
-                  model,
-                  sessionId,
-                  walletAddress,
-                  context = 'rukh',
-                  file,
-                ) => ({
-                  output: model === 'mistral' ? 'AI response' : undefined,
-                  model: model === 'mistral' ? 'mistral-large-2411' : 'none',
-                  network: 'arbitrum-sepolia',
-                  txHash: mockTxHash,
-                  explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
-                  sessionId: sessionId || 'generated-session-id',
-                }),
-              ),
+              .mockImplementation(async (message, model, sessionId) => ({
+                output: model === 'mistral' ? 'AI response' : undefined,
+                model: model === 'mistral' ? 'mistral-large-2411' : 'none',
+                network: 'arbitrum-sepolia',
+                txHash: mockTxHash,
+                explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
+                sessionId: sessionId || 'generated-session-id',
+              })),
           },
         },
         {
@@ -86,7 +75,6 @@ describe('AppController', () => {
 
     appController = app.get<AppController>(AppController);
     appService = app.get<AppService>(AppService);
-    mistralService = app.get<MistralService>(MistralService);
   });
 
   describe('root', () => {

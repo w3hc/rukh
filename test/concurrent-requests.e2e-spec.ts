@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, Logger } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { MistralService } from '../src/mistral/mistral.service';
@@ -13,6 +13,7 @@ jest.setTimeout(30000);
 
 describe('Concurrent Requests (e2e)', () => {
   let app: INestApplication;
+  let loggerErrorSpy: jest.SpyInstance;
 
   // Mock implementations for services
   const mockMistralService = {
@@ -69,6 +70,11 @@ describe('Concurrent Requests (e2e)', () => {
   };
 
   beforeAll(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -90,6 +96,7 @@ describe('Concurrent Requests (e2e)', () => {
   });
 
   afterAll(async () => {
+    loggerErrorSpy.mockRestore();
     await app.close();
   });
 

@@ -14,6 +14,7 @@ const config: Config.InitialOptions = {
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/$1',
   },
+  silent: true,
 };
 
 export default config;

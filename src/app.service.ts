@@ -110,7 +110,14 @@ export class AppService {
             `Successfully loaded context: ${dir} with ${mdFiles.length} files`,
           );
         } catch (error) {
-          this.logger.error(`Error processing context ${dir}:`, error);
+          // Only log as error if it's not a file-not-found error
+          if (error.code === 'ENOENT') {
+            this.logger.warn(
+              `Context ${dir} directory exists but file not found, skipping`,
+            );
+          } else {
+            this.logger.error(`Error processing context ${dir}:`, error);
+          }
         }
       }
 
@@ -128,7 +135,7 @@ export class AppService {
     try {
       const stats = await stat(path);
       return stats.isDirectory();
-    } catch (error) {
+    } catch {
       return false;
     }
   }

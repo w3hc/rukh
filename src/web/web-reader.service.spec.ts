@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WebReaderService } from './web-reader.service';
 import { ConfigService } from '@nestjs/config';
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, Logger } from '@nestjs/common';
 
 // Mock puppeteer
 jest.mock('puppeteer-core', () => ({
@@ -15,13 +15,17 @@ jest.mock('child_process', () => ({
 
 describe('WebReaderService', () => {
   let service: WebReaderService;
-  let configService: ConfigService;
   let mockBrowser: any;
   let mockPage: any;
+  let loggerErrorSpy: jest.SpyInstance;
 
   const mockTavilyApiKey = 'test-tavily-key';
 
   beforeEach(async () => {
+    // Mock Logger to suppress error logs during tests
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
     // Reset all mocks
     jest.clearAllMocks();
 
@@ -46,10 +50,12 @@ describe('WebReaderService', () => {
     };
 
     // Mock puppeteer.launch
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const puppeteer = require('puppeteer-core');
     puppeteer.launch.mockResolvedValue(mockBrowser);
 
     // Mock execSync for Chrome detection
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { execSync } = require('child_process');
     execSync.mockReturnValue('');
 
@@ -69,7 +75,10 @@ describe('WebReaderService', () => {
     }).compile();
 
     service = module.get<WebReaderService>(WebReaderService);
-    configService = module.get<ConfigService>(ConfigService);
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   describe('extractForLLM', () => {
