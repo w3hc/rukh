@@ -80,9 +80,7 @@ export class AppController {
         data: {
           type: 'object',
           nullable: true,
-          example: {
-            
-          },
+          example: {},
           description:
             'Additional data to be passed with the request (used in certain contexts)',
         },

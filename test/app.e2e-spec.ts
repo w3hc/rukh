@@ -8,6 +8,7 @@ import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
 import { SubsService } from '../src/subs/subs.service';
+import { WebReaderService } from '../src/web/web-reader.service';
 
 // Set global timeout for all tests
 jest.setTimeout(60000);
@@ -77,6 +78,38 @@ describe('App (e2e)', () => {
     isSubscribed: jest.fn().mockResolvedValue(true),
   };
 
+  const mockWebReaderService = {
+    extractForLLM: jest.fn().mockImplementation((url: string) => {
+      return Promise.resolve({
+        title: 'Mocked Page Title',
+        text: 'This is mocked extracted content from the webpage.',
+        links: [{ text: 'Example Link', url: 'https://example.com/link' }],
+        url: url,
+      });
+    }),
+    search: jest.fn().mockImplementation((query: string, maxResults = 5) => {
+      return Promise.resolve({
+        query: query,
+        results: [
+          {
+            title: 'Mocked Search Result 1',
+            url: 'https://example.com/result1',
+            content: 'This is mocked content for search result 1',
+            score: 0.95,
+          },
+          {
+            title: 'Mocked Search Result 2',
+            url: 'https://example.com/result2',
+            content: 'This is mocked content for search result 2',
+            score: 0.87,
+          },
+        ],
+        answer: 'This is a mocked AI-generated answer to the search query.',
+        responseTime: 250,
+      });
+    }),
+  };
+
   beforeAll(async () => {
     // Ensure the test file exists
     if (!fs.existsSync(testFilePath)) {
@@ -102,6 +135,8 @@ describe('App (e2e)', () => {
       .useValue(mockCostTracker)
       .overrideProvider(SubsService)
       .useValue(mockSubsService)
+      .overrideProvider(WebReaderService)
+      .useValue(mockWebReaderService)
       .compile();
 
     app = moduleFixture.createNestApplication();

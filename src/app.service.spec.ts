@@ -173,7 +173,9 @@ describe('AppService - Model Fallback', () => {
                 total_cost: 0.00015,
               },
             }),
-            buildContextWithSelectedFiles: jest.fn().mockResolvedValue('Mock RAG context'),
+            buildContextWithSelectedFiles: jest
+              .fn()
+              .mockResolvedValue('Mock RAG context'),
           },
         },
         {

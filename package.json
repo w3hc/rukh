@@ -28,7 +28,6 @@
     "@nestjs/platform-express": "^11.1.12",
     "@nestjs/swagger": "^11.2.5",
     "@nestjs/throttler": "^6.5.0",
-    "cheerio": "^1.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "ethers": "^6.16.0",
@@ -77,5 +76,6 @@
       "brace-expansion": ">=2.0.2",
       "tmp": ">=0.2.3"
     }
-  }
+  },
+  "packageManager": "pnpm@10.23.0+sha1.b4a44ab0dc2adf2e36371d11d8eb0dc78ffc976c"
 }

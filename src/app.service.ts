@@ -747,25 +747,39 @@ export class AppService {
       // Load context information if context is specified
       if (contextName && contextName !== '') {
         // Check if two-step RAG is enabled
-        const ragEnabled = this.configService.get<string>('RAG_ENABLE_TWO_STEP') === 'true';
-        const maxFiles = parseInt(this.configService.get<string>('RAG_MAX_FILES') || '5', 10);
+        const ragEnabled =
+          this.configService.get<string>('RAG_ENABLE_TWO_STEP') === 'true';
+        const maxFiles = parseInt(
+          this.configService.get<string>('RAG_MAX_FILES') || '5',
+          10,
+        );
 
         if (ragEnabled) {
           this.logger.log(`Using two-step RAG for context: ${contextName}`);
 
           try {
             // STEP 1: Select relevant files
-            this.logger.log(`Step 1: Selecting relevant files (max: ${maxFiles})`);
-            const { selectedFiles, selectionCost } = await this.ragService.selectRelevantFiles(
-              contextName,
-              message,
-              maxFiles,
+            this.logger.log(
+              `Step 1: Selecting relevant files (max: ${maxFiles})`,
+            );
+            const { selectedFiles, selectionCost } =
+              await this.ragService.selectRelevantFiles(
+                contextName,
+                message,
+                maxFiles,
+              );
+
+            this.logger.log(
+              `Selected ${selectedFiles.length} files: ${selectedFiles.join(', ')}`,
             );
 
-            this.logger.log(`Selected ${selectedFiles.length} files: ${selectedFiles.join(', ')}`);
-
             // Get total files count
-            const contextPath = join(process.cwd(), 'data', 'contexts', contextName);
+            const contextPath = join(
+              process.cwd(),
+              'data',
+              'contexts',
+              contextName,
+            );
             const indexPath = join(contextPath, 'index.json');
             let totalFiles = 0;
             if (existsSync(indexPath)) {
@@ -789,9 +803,13 @@ export class AppService {
                 selectedFiles,
                 message,
               );
-              this.logger.debug(`Recorded context query with ${selectedFiles.length} selected files`);
+              this.logger.debug(
+                `Recorded context query with ${selectedFiles.length} selected files`,
+              );
             } catch (error) {
-              this.logger.warn(`Failed to record context query: ${error.message}`);
+              this.logger.warn(
+                `Failed to record context query: ${error.message}`,
+              );
             }
 
             // Store RAG metadata for response (including selection cost)
@@ -812,7 +830,9 @@ export class AppService {
               );
             }
           } catch (error) {
-            this.logger.error(`Two-step RAG failed: ${error.message}, falling back to old method`);
+            this.logger.error(
+              `Two-step RAG failed: ${error.message}, falling back to old method`,
+            );
             // Fallback to old method
             systemPrompt = await this.loadContextInformation(
               contextName,
@@ -822,7 +842,9 @@ export class AppService {
           }
         } else {
           // Use old method if RAG is disabled
-          this.logger.log(`Loading context information (legacy method): ${contextName}`);
+          this.logger.log(
+            `Loading context information (legacy method): ${contextName}`,
+          );
           systemPrompt = await this.loadContextInformation(
             contextName,
             walletAddress || 'anonymous',
@@ -1066,9 +1088,17 @@ export class AppService {
       if (cost && ragMetadata?.selectionCost) {
         // Add the selection cost to the response generation cost
         const combinedCost = {
-          input_cost: Number((cost.input_cost + ragMetadata.selectionCost.input_cost).toFixed(6)),
-          output_cost: Number((cost.output_cost + ragMetadata.selectionCost.output_cost).toFixed(6)),
-          total_cost: Number((cost.total_cost + ragMetadata.selectionCost.total_cost).toFixed(6)),
+          input_cost: Number(
+            (cost.input_cost + ragMetadata.selectionCost.input_cost).toFixed(6),
+          ),
+          output_cost: Number(
+            (cost.output_cost + ragMetadata.selectionCost.output_cost).toFixed(
+              6,
+            ),
+          ),
+          total_cost: Number(
+            (cost.total_cost + ragMetadata.selectionCost.total_cost).toFixed(6),
+          ),
         };
         response.cost = combinedCost;
         this.logger.log(

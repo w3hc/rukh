@@ -90,11 +90,12 @@ export class RagService {
       );
 
       // Get list of required files from config
-      const requiredFilesConfig = this.configService.get<string>('RAG_REQUIRED_FILES') || '';
+      const requiredFilesConfig =
+        this.configService.get<string>('RAG_REQUIRED_FILES') || '';
       const requiredFiles = requiredFilesConfig
         .split(',')
-        .map(f => f.trim())
-        .filter(f => f.length > 0);
+        .map((f) => f.trim())
+        .filter((f) => f.length > 0);
 
       // Always include required files if they exist in the context
       for (const requiredFile of requiredFiles) {
@@ -237,11 +238,12 @@ Your response:`;
       contextContent += `## Selected Context Files\n\n`;
 
       // Get list of required files from config to ensure they come first
-      const requiredFilesConfig = this.configService.get<string>('RAG_REQUIRED_FILES') || '';
+      const requiredFilesConfig =
+        this.configService.get<string>('RAG_REQUIRED_FILES') || '';
       const requiredFiles = requiredFilesConfig
         .split(',')
-        .map(f => f.trim())
-        .filter(f => f.length > 0);
+        .map((f) => f.trim())
+        .filter((f) => f.length > 0);
 
       // Sort files: required files first (in order), then other files
       const sortedFiles = [...selectedFiles].sort((a, b) => {
@@ -270,9 +272,7 @@ Your response:`;
           contextContent += `### File: ${fileName}\n${fileContent}\n\n`;
           this.logger.debug(`Added file to context: ${fileName}`);
         } catch (error) {
-          this.logger.error(
-            `Error reading file ${fileName}: ${error.message}`,
-          );
+          this.logger.error(`Error reading file ${fileName}: ${error.message}`);
         }
       }
 
