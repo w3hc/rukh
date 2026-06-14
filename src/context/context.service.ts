@@ -8,6 +8,7 @@ import { ContextFile, ContextIndex, ContextLink } from '../dto/context.dto';
 export class ContextService {
   private readonly logger = new Logger(ContextService.name);
   private readonly contextsPath: string;
+  private writeQueue: Map<string, Promise<void>> = new Map();
 
   constructor() {
     this.contextsPath = join(process.cwd(), 'data', 'contexts');
@@ -50,12 +51,32 @@ export class ContextService {
   ): Promise<void> {
     const indexPath = this.getContextIndexPath(contextName);
 
-    try {
-      await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-    } catch (error) {
-      this.logger.error(`Failed to write context index: ${error.message}`);
-      throw new Error(`Failed to write context index: ${error.message}`);
-    }
+    // Queue writes to prevent concurrent modification of the same file
+    const writeOperation = async () => {
+      try {
+        await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      } catch (error) {
+        this.logger.error(`Failed to write context index: ${error.message}`);
+        throw new Error(`Failed to write context index: ${error.message}`);
+      }
+    };
+
+    // Wait for any pending write to this file, then perform this write
+    const existingWrite = this.writeQueue.get(indexPath);
+    const newWrite = existingWrite
+      ? existingWrite.then(writeOperation).catch(() => writeOperation())
+      : writeOperation();
+
+    this.writeQueue.set(indexPath, newWrite);
+
+    // Clean up the queue after completion
+    newWrite.finally(() => {
+      if (this.writeQueue.get(indexPath) === newWrite) {
+        this.writeQueue.delete(indexPath);
+      }
+    });
+
+    await newWrite;
   }
 
   /**

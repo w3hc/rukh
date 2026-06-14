@@ -214,9 +214,6 @@ describe('App (e2e)', () => {
             .expect(201)
             .expect((res) => {
               expect(res.body).toHaveProperty('model');
-              expect(res.body).toHaveProperty('network');
-              expect(res.body).toHaveProperty('txHash');
-              expect(res.body).toHaveProperty('explorerLink');
               expect(res.body).toHaveProperty('sessionId');
             });
         });
@@ -275,7 +272,6 @@ describe('App (e2e)', () => {
               message: 'test message',
               model: 'mistral',
               sessionId: 'test-session',
-              walletAddress: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
               context: 'rukh',
             })
             .expect(201)
@@ -307,16 +303,6 @@ describe('App (e2e)', () => {
             .send({
               message: 'test message',
               model: 'invalid-model',
-            })
-            .expect(400);
-        });
-
-        it('should reject invalid wallet address', () => {
-          return request(app.getHttpServer())
-            .post('/ask')
-            .send({
-              message: 'test message',
-              walletAddress: 'not-an-address',
             })
             .expect(400);
         });
@@ -591,7 +577,6 @@ describe('App (e2e)', () => {
           .field('message', 'test message with file')
           .field('model', 'mistral')
           .field('sessionId', 'test-session')
-          .field('walletAddress', '0x71C7656EC7ab88b098defB751B7401B5f6d8976F')
           .field('context', 'rukh')
           .attach('file', testFilePath);
 

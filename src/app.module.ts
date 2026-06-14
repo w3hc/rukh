@@ -12,7 +12,6 @@ import { ContextModule } from './context/context.module';
 import { AnthropicModule } from './anthropic/anthropic.module';
 import { OpenAIModule } from './openai/openai.module';
 import { CostTracker } from './memory/cost-tracking.service';
-import { SiweModule } from './siwe/siwe.module';
 import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
@@ -37,7 +36,6 @@ import { RagModule } from './rag/rag.module';
     ContextModule,
     AnthropicModule,
     OpenAIModule,
-    SiweModule,
     WebReaderModule,
     RagModule,
   ],

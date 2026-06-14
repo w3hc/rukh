@@ -1,89 +1,87 @@
-# Business Source License 1.1
+# Rukh — LGPL v3 License
 
-License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
-"Business Source License" is a trademark of MariaDB Corporation Ab.
+Copyright (C) 2026 Julien Béranger and the W3HC
 
----
+This file is part of Rukh.
 
-## Parameters
+Rukh is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-**Licensor:** Strat
+Rukh is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
 
-**Licensed Work:** Rukh API  
-The Licensed Work is (c) 2026 Strat
+You should have received a copy of the GNU Lesser General Public License
+along with Rukh.  If not, see <https://www.gnu.org/licenses/>.
 
-**Additional Use Grant:** Any uses listed and defined at https://rukh.w3hc.org, including but not limited to:
-- Use by non-profit organizations
-- Use by cooperatives
-- Use by educational institutions (including ed-tech companies, schools, and universities, whether for-profit or non-profit)
+====================================================================
+GNU LESSER GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+====================================================================
 
-**Change Date:** The earlier of 2029-01-15 or a date specified at rukh.w3hc.org
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed.
 
-**Change License:** GNU General Public License v3.0 or later
-
----
-
-## Terms
-
-The Licensor hereby grants you the right to copy, modify, create derivative works, redistribute, and make non-production use of the Licensed Work. The Licensor may make an Additional Use Grant, above, permitting limited production use.
-
-Effective on the Change Date, or the fourth anniversary of the first publicly available distribution of a specific version of the Licensed Work under this License, whichever comes first, the Licensor hereby grants you rights under the terms of the Change License, and the rights granted in the paragraph above terminate.
-
-If your use of the Licensed Work does not comply with the requirements currently in effect as described in this License, you must purchase a commercial license from the Licensor, its affiliated entities, or authorized resellers, or you must refrain from using the Licensed Work.
-
-All copies of the original and modified Licensed Work, and derivative works of the Licensed Work, are subject to this License. This License applies separately for each version of the Licensed Work and the Change Date may vary for each version of the Licensed Work released by Licensor.
-
-You must conspicuously display this License on each original or modified copy of the Licensed Work. If you receive the Licensed Work in original or modified form from a third party, the terms and conditions set forth in this License apply to your use of that work.
-
-Any use of the Licensed Work in violation of this License will automatically terminate your rights under this License for the current and all other versions of the Licensed Work.
-
-This License does not grant you any right in any trademark or logo of Licensor or its affiliates (provided that you may use a trademark or logo of Licensor as expressly required by this License).
-
-TO THE EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSED WORK IS PROVIDED ON AN "AS IS" BASIS. LICENSOR HEREBY DISCLAIMS ALL WARRANTIES AND CONDITIONS, EXPRESS OR IMPLIED, INCLUDING (WITHOUT LIMITATION) WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND TITLE.
-
-MariaDB hereby grants you permission to use this License's text to license your works, and to refer to it using the trademark "Business Source License", as long as you comply with the Covenants of Licensor below.
+This version of the GNU Lesser General Public License incorporates the terms and conditions of version 3 of the GNU General Public License, supplemented by the additional permissions listed below.
 
 ---
 
-## Covenants of Licensor
+### 0. Additional Definitions
 
-In consideration of the right to use this License's text and the "Business Source License" name and trademark, Licensor covenants to MariaDB, and to all other recipients of the licensed work to be provided by Licensor:
+As used herein, “this License” refers to version 3 of the GNU Lesser General Public License, and the “GNU GPL” refers to version 3 of the GNU General Public License.
 
-1. To specify as the Change License the GPL Version 3.0 or any later version, or a license that is compatible with GPL Version 3.0 or a later version, where "compatible" means that software provided under the Change License can be included in a program with software provided under GPL Version 3.0 or a later version. Licensor may specify additional Change Licenses without limitation.
+“The Library” refers to a covered work governed by this License, other than an Application or a Combined Work as defined below.
 
-2. To either: (a) specify an additional grant of rights to use that does not impose any additional restriction on the right granted in this License, as the Additional Use Grant; or (b) insert the text "None".
+An “Application” is any work that makes use of an interface provided by the Library, but which is not otherwise based on the Library. Defining a subclass of a class defined by the Library is deemed a mode of using an interface provided by the Library.
 
-3. To specify a Change Date.
+A “Combined Work” is a work produced by combining or linking an Application with the Library. The particular version of the Library with which the Combined Work was made is also called the “Linked Version”.
 
-4. Not to modify this License in any other way.
+The “Minimal Corresponding Source” for a Combined Work means the Corresponding Source for the Combined Work, excluding any source code for portions of the Combined Work that, considered in isolation, are based on the Application, and not on the Linked Version.
 
----
-
-## Notice
-
-The Business Source License (this document, or the "License") is not an Open Source license. However, the Licensed Work will eventually be made available under an Open Source License, as stated in this License.
+The “Corresponding Application Code” for a Combined Work means the object code and/or source code for the Application, including any data and utility programs needed for reproducing the Combined Work from the Application, but excluding the System Libraries of the Combined Work.
 
 ---
 
-## Additional Use Grant Details
+### 1. Exception to Section 3 of the GNU GPL
 
-The following entities are granted additional rights to use the Licensed Work in production environments, including commercial exploitation:
-
-### Non-Profit Organizations
-Organizations that are recognized as non-profit entities under applicable law, including but not limited to 501(c)(3) organizations in the United States or equivalent organizations in other jurisdictions.
-
-### Cooperatives
-Worker cooperatives, consumer cooperatives, and other cooperative organizations operating under cooperative principles as defined by the International Cooperative Alliance.
-
-### Educational Institutions
-- Educational technology (ed-tech) companies, whether for-profit or non-profit
-- Primary and secondary schools (K-12)
-- Colleges and universities
-- Vocational and technical training institutions
-- Online learning platforms primarily focused on education
-
-These entities may use, modify, and commercially exploit the Licensed Work without purchasing a commercial license from the Licensor, subject to all other terms and conditions of this License.
+You may convey a covered work under sections 3 and 4 of this License without being bound by section 3 of the GNU GPL.
 
 ---
 
-*For questions about this license or to request additional use grants, please visit https://rukh.w3hc.orge*
+### 2. Conveying Modified Versions
+
+If you modify a copy of the Library, and, in your modifications, a facility refers to a function or data to be supplied by an Application that uses the facility (other than as an argument passed when the facility is invoked), then you may convey a copy of the modified version under the terms of the GNU GPL and this License document.
+
+---
+
+### 3. Object Code Incorporating Material from Library Header Files
+
+The object code form of an Application may incorporate material from a header file that is part of the Library. You may convey such object code under terms of your choice, provided that, if the incorporated material is not limited to numerical parameters, data structure layouts, or accessors, your terms do not forbid modification for the customer's own use and reverse engineering for debugging such modifications.
+
+---
+
+### 4. Combined Works
+
+You may convey a Combined Work under terms of your choice that permit modification of the Combined Work for the customer's own use and reverse engineering for debugging such modifications, if you accompany it with:
+- A copy of the GNU GPL and this license document.
+- Prominent notice with each copy of the Combined Work that the Library is used and covered by this License.
+- The Minimal Corresponding Source and Corresponding Application Code in a form that allows the user to rebuild the Combined Work.
+
+---
+
+### 5. Combined Libraries
+
+You may place library facilities that are a work based on the Library side by side in a single library together with other library facilities not covered by this License, and distribute such a combined library, provided that you do both of the following:
+- Accompany the combined library with a copy of the same work based on the Library, uncombined.
+- Give prominent notice with the combined library that part of it is released under this License and telling the user where to find the uncombined form of the same work.
+
+---
+
+### 6. Revised Versions of the GNU Lesser General Public License
+
+The Free Software Foundation may publish revised and/or new versions of the GNU Lesser General Public License from time to time. Such new versions will be similar in spirit to the present version, but may differ in detail to address new problems or concerns.
+
+Each version is given a distinguishing version number. If the Library specifies that a certain numbered version of this License “or any later version” applies to it, you have the option of following the terms and conditions either of that published version or of any later version published by the Free Software Foundation. If the Library does not specify a version number of this License, you may choose any version ever published by the Free Software Foundation.

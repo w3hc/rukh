@@ -275,7 +275,7 @@ export class CostTracker implements OnModuleInit {
 
   // Keep the old method for backward compatibility
   async trackUsage(
-    walletAddress: string,
+    _origin: string,
     message: string,
     sessionId: string,
     modelName: string,
@@ -288,7 +288,7 @@ export class CostTracker implements OnModuleInit {
 
     // Call the newer method with estimated tokens
     await this.trackUsageWithTokens(
-      walletAddress,
+      _origin,
       message,
       sessionId,
       modelName,

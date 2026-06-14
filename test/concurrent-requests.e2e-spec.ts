@@ -115,14 +115,12 @@ describe('Concurrent Requests (e2e)', () => {
           'What is the capital of France? Please provide a detailed answer.',
         model: 'mistral',
         sessionId: 'session-1',
-        walletAddress: '0x1234567890123456789012345678901234567890',
       };
 
       const request2 = {
         message: 'Explain quantum computing in simple terms with examples.',
         model: 'anthropic',
         sessionId: 'session-2',
-        walletAddress: '0x0987654321098765432109876543210987654321',
       };
 
       // Execute both requests concurrently using Promise.all

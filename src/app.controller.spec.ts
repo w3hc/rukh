@@ -8,8 +8,6 @@ describe('AppController', () => {
   let appController: AppController;
   let appService: AppService;
 
-  const mockTxHash =
-    '0x1234567890123456789012345678901234567890123456789012345678901234';
   const mockFile = {
     fieldname: 'file',
     originalname: 'test.txt',
@@ -44,9 +42,6 @@ describe('AppController', () => {
               .mockImplementation(async (message, model, sessionId) => ({
                 output: model === 'mistral' ? 'AI response' : undefined,
                 model: model === 'mistral' ? 'mistral-large-2411' : 'none',
-                network: 'arbitrum-sepolia',
-                txHash: mockTxHash,
-                explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
                 sessionId: sessionId || 'generated-session-id',
               })),
           },
@@ -87,8 +82,6 @@ describe('AppController', () => {
   });
 
   describe('ask', () => {
-    const testWalletAddress = '0x446200cB329592134989B615d4C02f9f3c9E970F';
-
     it('should return response with no model specified', async () => {
       const result = await appController.ask({
         message: 'test message',
@@ -97,27 +90,20 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: undefined,
         model: 'none',
-        network: 'arbitrum-sepolia',
-        txHash: mockTxHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: expect.any(String),
       });
     });
 
-    it('should return response with Mistral model and wallet address', async () => {
+    it('should return response with Mistral model', async () => {
       const result = await appController.ask({
         message: 'test message',
         model: 'mistral',
         sessionId: 'test-session-id',
-        walletAddress: testWalletAddress,
       });
 
       expect(result).toEqual({
         output: 'AI response',
         model: 'mistral-large-2411',
-        network: 'arbitrum-sepolia',
-        txHash: mockTxHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: 'test-session-id',
       });
     });
@@ -131,9 +117,6 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'mistral-large-2411',
-        network: 'arbitrum-sepolia',
-        txHash: mockTxHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: expect.any(String),
       });
     });
@@ -156,22 +139,16 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'mistral-large-2411',
-        network: 'arbitrum-sepolia',
-        txHash: mockTxHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: 'test-session-id',
       });
     });
 
     it('should handle a request with all parameters including file', async () => {
-      const testWalletAddress = '0x446200cB329592134989B615d4C02f9f3c9E970F';
-
       const result = await appController.ask(
         {
           message: 'test message with file',
           model: 'mistral',
           sessionId: 'test-session-id',
-          walletAddress: testWalletAddress,
           context: 'custom-context',
         },
         mockFile,
@@ -183,14 +160,10 @@ describe('AppController', () => {
       expect(call[0]).toBe('test message with file');
       expect(call[1]).toBe('mistral');
       expect(call[2]).toBe('test-session-id');
-      expect(call[3]).toBe(testWalletAddress);
 
       expect(result).toEqual({
         output: 'AI response',
         model: 'mistral-large-2411',
-        network: 'arbitrum-sepolia',
-        txHash: mockTxHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: 'test-session-id',
       });
     });
@@ -210,9 +183,6 @@ describe('AppController', () => {
       expect(result).toEqual({
         output: 'AI response',
         model: 'mistral-large-2411',
-        network: 'arbitrum-sepolia',
-        txHash: mockTxHash,
-        explorerLink: `https://sepolia.arbiscan.io/tx/${mockTxHash}`,
         sessionId: 'generated-session-id',
       });
     });

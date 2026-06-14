@@ -10,7 +10,6 @@ import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import * as ethers from 'ethers';
 
 describe('AppService - Model Fallback', () => {
   let service: AppService;
@@ -24,85 +23,7 @@ describe('AppService - Model Fallback', () => {
     loggerErrorSpy = jest
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => {});
-    // Create a more complete mock for JsonRpcProvider
-    const mockProvider = {
-      getBalance: jest.fn().mockResolvedValue(ethers.parseEther('1.0')),
-      waitForTransaction: jest.fn().mockResolvedValue({ status: 1 }),
-      getNetwork: jest
-        .fn()
-        .mockResolvedValue({ chainId: 421614, name: 'arbitrum-sepolia' }),
-      getTransactionReceipt: jest.fn().mockResolvedValue({ status: 1 }),
-      estimateGas: jest.fn().mockResolvedValue(BigInt(21000)),
-      getFeeData: jest.fn().mockResolvedValue({
-        gasPrice: ethers.parseUnits('1', 'gwei'),
-        maxFeePerGas: ethers.parseUnits('2', 'gwei'),
-        maxPriorityFeePerGas: ethers.parseUnits('1', 'gwei'),
-      }),
-      sendTransaction: jest.fn().mockResolvedValue({
-        hash: '0x123456789abcdef123456789abcdef123456789abcdef123456789abcdef1234',
-        wait: jest.fn().mockResolvedValue({ status: 1 }),
-      }),
-      // Add basic implementations for required methods
-      send: jest.fn().mockResolvedValue({}),
-      call: jest.fn().mockResolvedValue('0x'),
-      destroy: jest.fn(),
-    };
 
-    // Use a partial mock approach which is more flexible with TypeScript
-    jest
-      .spyOn(ethers, 'JsonRpcProvider')
-      .mockImplementation(
-        () => mockProvider as unknown as ethers.JsonRpcProvider,
-      );
-
-    // Create a more complete mock for Wallet
-    const mockWallet = {
-      connect: jest.fn().mockReturnThis(),
-      getAddress: jest
-        .fn()
-        .mockResolvedValue('0x1234567890123456789012345678901234567890'),
-      provider: {
-        getBalance: jest.fn().mockResolvedValue(ethers.parseEther('1.0')),
-      },
-      sendTransaction: jest.fn().mockResolvedValue({
-        hash: '0x123456789abcdef123456789abcdef123456789abcdef123456789abcdef1234',
-        wait: jest.fn().mockResolvedValue({ status: 1 }),
-      }),
-      signTransaction: jest.fn().mockResolvedValue('0xsignedtx'),
-      signMessage: jest.fn().mockResolvedValue('0xsignedmsg'),
-      address: '0x1234567890123456789012345678901234567890',
-    };
-
-    jest
-      .spyOn(ethers, 'Wallet')
-      .mockImplementation(() => mockWallet as unknown as ethers.Wallet);
-
-    // Create a more complete mock for Contract
-    const mockContract = {
-      mint: jest.fn().mockResolvedValue({
-        hash: '0x123456789abcdef123456789abcdef123456789abcdef123456789abcdef1234',
-        wait: jest.fn().mockResolvedValue({ status: 1 }),
-      }),
-      owner: jest
-        .fn()
-        .mockResolvedValue('0x1234567890123456789012345678901234567890'),
-      decimals: jest.fn().mockResolvedValue(18),
-      // Add interface and functions properties required by Contract
-      interface: {
-        fragments: [],
-        getFunction: jest.fn(),
-        getEvent: jest.fn(),
-      },
-      runner: {
-        provider: mockProvider,
-      },
-      connect: jest.fn().mockReturnThis(),
-      // Cast this as a Contract to satisfy TypeScript
-    };
-
-    jest
-      .spyOn(ethers, 'Contract')
-      .mockImplementation(() => mockContract as unknown as ethers.Contract);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AppService,
@@ -189,12 +110,6 @@ describe('AppService - Model Fallback', () => {
           useValue: {
             get: jest.fn().mockImplementation((key) => {
               switch (key) {
-                case 'ARBITRUM_RPC_URL':
-                  return 'https://mock-rpc-url.com';
-                case 'PRIVATE_KEY':
-                  return '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-                case 'RUKH_TOKEN_ADDRESS':
-                  return '0x1234567890123456789012345678901234567890';
                 case 'RAG_ENABLE_TWO_STEP':
                   return 'false'; // Disable RAG in tests by default
                 case 'RAG_MAX_FILES':
@@ -212,13 +127,6 @@ describe('AppService - Model Fallback', () => {
     mistralService = module.get<MistralService>(MistralService);
     anthropicService = module.get<AnthropicService>(AnthropicService);
     costTracker = module.get<CostTracker>(CostTracker);
-
-    // Replace mintToken implementation instead of spying on it
-    service['mintToken'] = jest
-      .fn()
-      .mockResolvedValue(
-        '0x123456789abcdef123456789abcdef123456789abcdef123456789abcdef1234',
-      );
 
     // Mock loadContextInformation for simplicity
     jest
@@ -329,10 +237,9 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
 
-    // Even with failures, we should get a response with transaction info
+    // Even with failures, we should get a response
     expect(result.output).toBeUndefined();
-    expect(result.txHash).toBeDefined();
-    expect(result.explorerLink).toBeDefined();
+    expect(result.sessionId).toBeDefined();
   });
 
   it('should pass context and session information to models', async () => {
@@ -347,14 +254,12 @@ describe('AppService - Model Fallback', () => {
       'Test message with context',
       'anthropic',
       'custom-session-id',
-      '0x1234567890123456789012345678901234567890',
       'test-context',
     );
 
     // Verify context was loaded and system prompt was passed
     expect(service['loadContextInformation']).toHaveBeenCalledWith(
       'test-context',
-      '0x1234567890123456789012345678901234567890',
       'Test message with context',
     );
 
@@ -394,17 +299,11 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const walletAddress = '0x1234567890123456789012345678901234567890';
-    await service.ask(
-      'Test message',
-      'anthropic',
-      'test-session-id',
-      walletAddress,
-    );
+    await service.ask('Test message', 'anthropic', 'test-session-id');
 
     // Verify usage tracking was called with correct parameters
     expect(costTracker.trackUsageWithTokens).toHaveBeenCalledWith(
-      walletAddress,
+      'anonymous',
       'Test message',
       'test-session-id',
       'claude-3-7-sonnet-20250219',

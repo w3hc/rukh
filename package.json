@@ -12,12 +12,13 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest --config jest.config.ts && jest --config ./test/jest-e2e.json",
+    "test": "jest --config jest.config.ts",
     "test:watch": "jest --watch --config jest.config.ts",
     "test:cov": "jest --config ./test/jest-e2e.json && jest --coverage --config jest.config.ts",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --config jest.config.ts",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:concurrent": "jest test/concurrent-requests.e2e-spec.ts --config ./test/jest-e2e.json"
+    "test:concurrent": "jest test/concurrent-requests.e2e-spec.ts --config ./test/jest-e2e.json",
+    "dance": "pnpm format && pnpm lint && pnpm build && pnpm test && pnpm test:e2e"
   },
   "dependencies": {
     "@langchain/core": "^1.1.17",
@@ -30,7 +31,6 @@
     "@nestjs/throttler": "^6.5.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
-    "ethers": "^6.16.0",
     "multer": "2.0.2",
     "puppeteer-core": "^24.36.1",
     "reflect-metadata": "^0.2.2",

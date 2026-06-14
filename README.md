@@ -1,23 +1,8 @@
 # Rukh
 
-Modular AI framework with context-window-based RAG system supporting multiple LLMs and personalized contexts.
+Modular AI framework with RAG system supporting multiple LLMs and personalized contexts.
 
 Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
-
-## Features 
-
-- Quick setup and minimal configuration
-- Built-in session management and persistent storage
-- Seamless Web3 integration
-- Modular architecture for easy LLM integration (Mistral, Anthropic, OpenAI, etc.)
-- Auto-generated OpenAPI documentation
-- Production-ready with rate limiting and error handling
-- Password-protected contexts for secure data management
-
-## Solidity contracts
-
-- [Rukh governance token](https://sepolia.arbiscan.io/address/0x281d3F386A48D31DC65E366081f5E3E3fA49B663#code)
-- [Rukh DAO](https://sepolia.arbiscan.io/address/0xf79c712228Bf3b8E71760291822c88A41C510244#code)
 
 ## Install
 
@@ -25,15 +10,14 @@ Live at: **[rukh.w3hc.org](http://rukh.w3hc.org)**
 pnpm i
 ```
 
-## Run
+## Test
 
 ```bash
-pnpm start
+# format, lint, build, test, and test:e2e
+pnpm dance
 ```
 
-The Swagger UI should be available at http://localhost:3000/api
-
-## Test
+Or separately: 
 
 ```bash
 # unit tests
@@ -46,41 +30,67 @@ pnpm test:e2e
 pnpm test:cov
 ```
 
+## Run
+
+```bash
+pnpm start
+```
+
+The Swagger UI should be available at http://localhost:3000/api
+
 ## Example
 
 Simple request: 
 
 ```bash
-curl -X 'POST' \
-  'https://rukh.w3hc.org/ask' \
-  -H 'accept: application/json' \
+curl 'https://rukh.w3hc.org/ask' \
   -H 'Content-Type: multipart/form-data' \
   -F 'message=What'\''s Rukh?' \
-  -F 'model=mistral' \
   -F 'context=rukh'
 ```
 
-Response body: 
+Response body:
 
 ```json
 {
-  "output": "Rukh is a term that can have different meanings depending on the context. Here are a few possible interpretations:\n\n1. **Literary Character**: In the novel \"The Jungle Book\" by Rudyard Kipling, Rukh is a reference to the forest or jungle where the story takes place. It is a wild and untamed place where the characters, including Mowgli, live and have their adventures.\n\n2. **Mythological Creature**: In Persian mythology, the Rukh (or Roc) is a legendary bird of enormous size, often depicted as carrying off elephants. It is a popular figure in folklore and fantasy literature.\n\n3. **Place Name**: Rukh could also refer to a geographical location, although this is less common.\n\n4. **Other Contexts**: Depending on the context, Rukh could have other meanings, such as a name, a term in a specific field, or a concept in a particular culture or language.\n\nIf you provide more context, I can give a more precise explanation.",
-  "model": "mistral-large-2411",
-  "network": "arbitrum-sepolia",
-  "txHash": "0x812ecae72643da884555d2614c4c6f45c8e4d77239131bb8f4eb801d37d221bf",
-  "explorerLink": "https://sepolia.arbiscan.io/tx/0x812ecae72643da884555d2614c4c6f45c8e4d77239131bb8f4eb801d37d221bf",
-  "sessionId": "b31d326a-ed6d-464a-9900-b084f124e549",
+  "output": "Based on the context provided, **Rukh** (also spelled roc, ruḵḵ, or rokh) is an enormous legendary bird of prey from Middle Eastern mythology and folklore.\n\n## Key characteristics:\n\n**Physical Description:**\n- Gigantic eagle-like bird of enormous size\n- So large it could carry off elephants in its talons\n- Described as having quills \"twelve paces long\"\n- Casts shadows as big as clouds when flying\n\n**Cultural Origins:**\n- Appears in Arabic and Persian mythology\n- Featured prominently in \"One Thousand and One Nights\" (Arabian Nights)\n- Mentioned in tales of Sinbad the Sailor\n- Has roots possibly tracing back to the Indian mythological bird Garuda\n\n**Historical Accounts:**\n- Marco Polo described it in the 13th century as living near Madagascar\n- Various travelers and explorers reported sightings or evidence\n- Often associated with tropical islands in the Indian Ocean\n\n**Possible Real-World Connections:**\n- May have been inspired by the extinct Aepyornis (elephant bird) of Madagascar\n- Could be based on exaggerated accounts of large eagles\n- Some \"roc feathers\" were likely palm fronds\n\n**Religious/Literary Significance:**\n- Appears in Ethiopian religious texts (Kebra Negast)\n- Featured in various medieval European accounts\n- Continues to appear in modern fantasy literature and games\n\nThe rukh represents one of the most enduring giant bird myths in world folklore, blending elements of natural observation with fantastical storytelling.",
+  "model": "claude-3-7-sonnet-20250219",
+  "sessionId": "15a7e248-17f2-4b9e-a42b-000f97a075e7",
   "usage": {
-    "input_tokens": 16,
-    "output_tokens": 231
+    "input_tokens": 1930,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 352,
+    "service_tier": "standard",
+    "inference_geo": "not_available"
   },
   "cost": {
-    "input_cost": 0.000001,
-    "output_cost": 0.000009,
-    "total_cost": 0.00001
+    "input_cost": 0.005796,
+    "output_cost": 0.00528,
+    "total_cost": 0.011076
+  },
+  "rag": {
+    "selectedFiles": ["rukh-definition.md"],
+    "selectedUrls": [],
+    "totalFilesAvailable": 1,
+    "totalUrlsAvailable": 0,
+    "selectionMethod": "rag-two-step",
+    "selectionCost": {
+      "input_cost": 0.000006,
+      "output_cost": 0,
+      "total_cost": 0.000006
+    }
   }
 }
 ```
+
+## License
+
+LGPL-3.0
 
 ## Contact
 
