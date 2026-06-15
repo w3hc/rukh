@@ -41,7 +41,9 @@ export class SubsService {
         try {
           parsedData = JSON.parse(data);
         } catch (error) {
-          this.logger.error(`Invalid JSON data: ${error.message}`);
+          this.logger.error(
+            `Invalid JSON data: ${error instanceof Error ? error.message : String(error)}`,
+          );
           return false;
         }
       }
@@ -67,7 +69,9 @@ export class SubsService {
       );
       return true;
     } catch (error) {
-      this.logger.error(`Subscription check error: ${error.message}`);
+      this.logger.error(
+        `Subscription check error: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -208,7 +212,9 @@ export class SubsService {
 
       return isValidSponsorship;
     } catch (error) {
-      this.logger.error(`Error checking GitHub sponsorship: ${error.message}`);
+      this.logger.error(
+        `Error checking GitHub sponsorship: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }

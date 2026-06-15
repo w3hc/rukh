@@ -156,7 +156,7 @@ export class RagService {
       };
     } catch (error) {
       this.logger.error(
-        `Error in file selection for context ${contextName}: ${error.message}`,
+        `Error in file selection for context ${contextName}: ${error instanceof Error ? error.message : String(error)}`,
       );
       // Fallback: return all files if selection fails
       try {
@@ -175,7 +175,7 @@ export class RagService {
         };
       } catch (fallbackError) {
         this.logger.error(
-          `Fallback also failed: ${fallbackError.message}, returning empty array`,
+          `Fallback also failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}, returning empty array`,
         );
         return { selectedFiles: [], selectionCost: null };
       }
@@ -254,7 +254,9 @@ Your response:`;
 
       return selectedResources;
     } catch (error) {
-      this.logger.error(`Error parsing selection response: ${error.message}`);
+      this.logger.error(
+        `Error parsing selection response: ${error instanceof Error ? error.message : String(error)}`,
+      );
       // Fallback: return all resources
       return resourceMetadata.map((r) =>
         r.type === 'url' ? `url:${r.url}` : r.name,
@@ -326,7 +328,9 @@ Your response:`;
           contextContent += `### File: ${fileName}\n${fileContent}\n\n`;
           this.logger.debug(`Added file to context: ${fileName}`);
         } catch (error) {
-          this.logger.error(`Error reading file ${fileName}: ${error.message}`);
+          this.logger.error(
+            `Error reading file ${fileName}: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 
@@ -342,7 +346,9 @@ Your response:`;
             const contextIndex = JSON.parse(indexData);
             linkMetadata = contextIndex.links || [];
           } catch (error) {
-            this.logger.error(`Error reading context index: ${error.message}`);
+            this.logger.error(
+              `Error reading context index: ${error instanceof Error ? error.message : String(error)}`,
+            );
           }
         }
 
@@ -362,7 +368,9 @@ Your response:`;
             contextContent += `### Link: ${linkTitle}\n${extractedContent.text}\n\n`;
             this.logger.debug(`Added URL content to context: ${linkTitle}`);
           } catch (error) {
-            this.logger.error(`Error fetching URL ${url}: ${error.message}`);
+            this.logger.error(
+              `Error fetching URL ${url}: ${error instanceof Error ? error.message : String(error)}`,
+            );
             // Add a fallback note
             contextContent += `### Link: ${url}\nCould not fetch content from this URL.\n\n`;
           }
@@ -375,7 +383,9 @@ Your response:`;
 
       return contextContent.trim();
     } catch (error) {
-      this.logger.error(`Error building context: ${error.message}`);
+      this.logger.error(
+        `Error building context: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return '';
     }
   }

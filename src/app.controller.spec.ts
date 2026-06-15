@@ -15,7 +15,7 @@ describe('AppController', () => {
     mimetype: 'text/plain',
     buffer: Buffer.from('This is test file content'),
     size: 26,
-  } as Express.Multer.File;
+  } as Express.Multer['File'];
 
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
@@ -37,13 +37,11 @@ describe('AppController', () => {
 </body>
 </html>`;
             },
-            ask: jest
-              .fn()
-              .mockImplementation(async (message, model, sessionId) => ({
-                output: model === 'mistral' ? 'AI response' : undefined,
-                model: model === 'mistral' ? 'mistral-large-2411' : 'none',
-                sessionId: sessionId || 'generated-session-id',
-              })),
+            ask: jest.fn().mockImplementation(async (askDto) => ({
+              output: askDto.model === 'mistral' ? 'AI response' : undefined,
+              model: askDto.model === 'mistral' ? 'mistral-large-2411' : 'none',
+              sessionId: askDto.sessionId || 'generated-session-id',
+            })),
           },
         },
         {
@@ -157,9 +155,13 @@ describe('AppController', () => {
       const askFunction = appService.ask as jest.Mock;
       const call = askFunction.mock.calls[0];
 
-      expect(call[0]).toBe('test message with file');
-      expect(call[1]).toBe('mistral');
-      expect(call[2]).toBe('test-session-id');
+      expect(call[0]).toEqual({
+        message: 'test message with file',
+        model: 'mistral',
+        sessionId: 'test-session-id',
+        context: 'custom-context',
+      });
+      expect(call[1]).toBe(mockFile);
 
       expect(result).toEqual({
         output: 'AI response',

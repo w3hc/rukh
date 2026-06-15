@@ -20,6 +20,7 @@ import { AppService } from './app.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { FileValidator } from './validators/file.validator';
+import { RATE_LIMITS } from './config/rate-limit.config';
 
 @ApiTags('Ask')
 @Controller()
@@ -43,7 +44,7 @@ export class AppController {
   }
 
   @Post('ask')
-  @Throttle({ ask: { limit: 50, ttl: 3600000 } })
+  @Throttle({ ask: RATE_LIMITS.ASK_ENDPOINT })
   @ApiOperation({
     summary: 'Send a message for processing with optional markdown file upload',
   })
@@ -138,14 +139,8 @@ export class AppController {
   async ask(
     @Body() askDto: AskDto,
     @UploadedFile(new FileValidator({ optional: true }))
-    file?: Express.Multer.File,
+    file?: Express.Multer['File'],
   ): Promise<AskResponseDto> {
-    return this.appService.ask(
-      askDto.message,
-      askDto.model,
-      askDto.sessionId,
-      askDto.context,
-      file,
-    );
+    return this.appService.ask(askDto, file);
   }
 }

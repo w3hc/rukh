@@ -37,7 +37,9 @@ export class ContextService {
       const data = await readFile(indexPath, 'utf-8');
       return JSON.parse(data);
     } catch (error) {
-      this.logger.error(`Failed to read context index: ${error.message}`);
+      this.logger.error(
+        `Failed to read context index: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -56,8 +58,12 @@ export class ContextService {
       try {
         await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
       } catch (error) {
-        this.logger.error(`Failed to write context index: ${error.message}`);
-        throw new Error(`Failed to write context index: ${error.message}`);
+        this.logger.error(
+          `Failed to write context index: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        throw new Error(
+          `Failed to write context index: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     };
 
@@ -131,7 +137,9 @@ export class ContextService {
       return contextPath;
     } catch (error) {
       this.logger.error(`Failed to create context: ${name}`, error);
-      throw new Error(`Failed to create context: ${error.message}`);
+      throw new Error(
+        `Failed to create context: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -154,7 +162,9 @@ export class ContextService {
       this.logger.log(`Deleted context: ${name}`);
     } catch (error) {
       this.logger.error(`Failed to delete context: ${name}`, error);
-      throw new Error(`Failed to delete context: ${error.message}`);
+      throw new Error(
+        `Failed to delete context: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -244,7 +254,9 @@ export class ContextService {
         `Failed to upload file to context: ${contextName}`,
         error,
       );
-      throw new Error(`Failed to upload file: ${error.message}`);
+      throw new Error(
+        `Failed to upload file: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -303,7 +315,9 @@ export class ContextService {
         `Failed to delete file from context: ${contextName}`,
         error,
       );
-      throw new Error(`Failed to delete file: ${error.message}`);
+      throw new Error(
+        `Failed to delete file: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -338,7 +352,9 @@ export class ContextService {
         `Recorded query from ${origin} in context: ${contextName}`,
       );
     } catch (error) {
-      this.logger.error(`Failed to record query: ${error.message}`);
+      this.logger.error(
+        `Failed to record query: ${error instanceof Error ? error.message : String(error)}`,
+      );
       // Don't throw error as this is a non-critical operation
     }
   }
@@ -389,7 +405,9 @@ export class ContextService {
         .filter((entry) => entry.isDirectory())
         .map((dir) => dir.name);
     } catch (error) {
-      this.logger.error(`Failed to get directories: ${error.message}`);
+      this.logger.error(
+        `Failed to get directories: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
@@ -441,8 +459,12 @@ export class ContextService {
     try {
       return await readFile(filePath, 'utf-8');
     } catch (error) {
-      this.logger.error(`Failed to read file content: ${error.message}`);
-      throw new Error(`Failed to read file content: ${error.message}`);
+      this.logger.error(
+        `Failed to read file content: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new Error(
+        `Failed to read file content: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -501,8 +523,12 @@ export class ContextService {
         link: newLink,
       };
     } catch (error) {
-      this.logger.error(`Failed to add link to context: ${error.message}`);
-      throw new Error(`Failed to add link: ${error.message}`);
+      this.logger.error(
+        `Failed to add link to context: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new Error(
+        `Failed to add link: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -575,8 +601,12 @@ export class ContextService {
       );
       return true;
     } catch (error) {
-      this.logger.error(`Failed to delete link from context: ${error.message}`);
-      throw new Error(`Failed to delete link: ${error.message}`);
+      this.logger.error(
+        `Failed to delete link from context: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new Error(
+        `Failed to delete link: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

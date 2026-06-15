@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './filters/http-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -21,6 +22,8 @@ async function bootstrap() {
     }),
   );
 
+  app.useGlobalFilters(new HttpExceptionFilter());
+
   const config = new DocumentBuilder()
     .setTitle('Rukh')
     .setDescription(
@@ -35,7 +38,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port);
 
-  logger.log(`Rukh API version: 0.1.0-alpha`);
+  logger.log(`Rukh API version: 0.2.0`);
   logger.log(`Environment: ${process.env.NODE_ENV || 'unset'}`);
   logger.log(`Server running on port: ${port}`);
   logger.log(`Swagger docs available at: http://localhost:${port}/api`);

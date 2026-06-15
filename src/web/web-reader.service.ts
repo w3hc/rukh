@@ -214,14 +214,16 @@ export class WebReaderService {
         await browser.close();
       }
 
-      this.logger.error(`Error extracting content: ${error.message}`);
+      this.logger.error(
+        `Error extracting content: ${error instanceof Error ? error.message : String(error)}`,
+      );
 
       if (error instanceof HttpException) {
         throw error;
       }
 
       // Handle timeout errors
-      if (error.name === 'TimeoutError') {
+      if (error instanceof Error && error.name === 'TimeoutError') {
         throw new HttpException(
           `Request timed out after ${timeout} seconds`,
           HttpStatus.REQUEST_TIMEOUT,
@@ -229,7 +231,7 @@ export class WebReaderService {
       }
 
       throw new HttpException(
-        `Failed to extract content: ${error.message}`,
+        `Failed to extract content: ${error instanceof Error ? error.message : String(error)}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -330,9 +332,11 @@ export class WebReaderService {
         throw error;
       }
 
-      this.logger.error(`Error performing web search: ${error.message}`);
+      this.logger.error(
+        `Error performing web search: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw new HttpException(
-        `Failed to perform web search: ${error.message}`,
+        `Failed to perform web search: ${error instanceof Error ? error.message : String(error)}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

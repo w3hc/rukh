@@ -9,11 +9,13 @@ const config: Config.InitialOptions = {
   },
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
+  coverageProvider: 'v8',
   testEnvironment: 'node',
-  transformIgnorePatterns: ['node_modules/(?!(.*uuid))'],
+  transformIgnorePatterns: ['node_modules/(?!(.*uuid|puppeteer-core))'],
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/$1',
     '^@langchain/mistralai$': '<rootDir>/__mocks__/@langchain/mistralai.ts',
+    '^puppeteer-core$': '<rootDir>/__mocks__/puppeteer-core.ts',
   },
   silent: true,
 };
