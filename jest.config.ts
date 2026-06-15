@@ -9,6 +9,7 @@ const config: Config.InitialOptions = {
   },
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
+  coverageProvider: 'v8',
   testEnvironment: 'node',
   transformIgnorePatterns: ['node_modules/(?!(.*uuid))'],
   moduleNameMapper: {
