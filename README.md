@@ -90,7 +90,7 @@ Response body:
 
 ## License
 
-LGPL-3.0
+[LGPL-3.0](LICENSE)
 
 ## Contact
 
