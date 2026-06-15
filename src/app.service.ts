@@ -100,7 +100,11 @@ export class AppService {
           );
         } catch (error) {
           // Only log as error if it's not a file-not-found error
-          if (error.code === 'ENOENT') {
+          if (
+            error instanceof Error &&
+            'code' in error &&
+            (error as any).code === 'ENOENT'
+          ) {
             this.logger.warn(
               `Context ${dir} directory exists but file not found, skipping`,
             );
@@ -156,7 +160,9 @@ export class AppService {
           const indexData = await readFile(indexPath, 'utf-8');
           contextIndex = JSON.parse(indexData);
         } catch (error) {
-          this.logger.error(`Error reading context index: ${error.message}`);
+          this.logger.error(
+            `Error reading context index: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 
@@ -178,7 +184,9 @@ export class AppService {
           contextContent += `\n\n### Context File: ${file}\n${content}`;
           usedFiles.push(file);
         } catch (error) {
-          this.logger.error(`Error reading file ${file}: ${error.message}`);
+          this.logger.error(
+            `Error reading file ${file}: ${error instanceof Error ? error.message : String(error)}`,
+          );
           // Continue with other files
         }
       }
@@ -205,7 +213,7 @@ export class AppService {
             usedFiles.push(`link:${link.url}`);
           } catch (error) {
             this.logger.error(
-              `Error processing link ${link.url}: ${error.message}`,
+              `Error processing link ${link.url}: ${error instanceof Error ? error.message : String(error)}`,
             );
             // Continue with other links
           }
@@ -217,7 +225,9 @@ export class AppService {
           await this.recordContextQuery(contextName, usedFiles, message);
         } catch (error) {
           // Non-critical operation, just log the error
-          this.logger.warn(`Failed to record context query: ${error.message}`);
+          this.logger.warn(
+            `Failed to record context query: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 
@@ -226,8 +236,10 @@ export class AppService {
       );
       return contextContent.trim();
     } catch (error) {
-      this.logger.error(`Error processing context data: ${error.message}`);
-      return `Error processing context data: ${error.message}`;
+      this.logger.error(
+        `Error processing context data: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return `Error processing context data: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 
@@ -284,7 +296,7 @@ export class AppService {
           await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
           return; // Success
         } catch (error) {
-          lastError = error;
+          lastError = error instanceof Error ? error : new Error(String(error));
           retries--;
           if (retries > 0) {
             // Wait a bit before retrying
@@ -295,7 +307,7 @@ export class AppService {
 
       // Only log warning instead of throwing to avoid breaking the request
       this.logger.warn(
-        `Failed to record context query after retries: ${lastError?.message}`,
+        `Failed to record context query after retries: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
       );
     };
 
@@ -362,7 +374,9 @@ export class AppService {
       );
       return false;
     } catch (error) {
-      this.logger.error(`Error checking URL relevance: ${error.message}`);
+      this.logger.error(
+        `Error checking URL relevance: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -407,7 +421,9 @@ export class AppService {
             this.contexts.set(contextName, contextPassword);
           }
         } catch (error) {
-          this.logger.error(`Error reading context index: ${error.message}`);
+          this.logger.error(
+            `Error reading context index: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 
@@ -431,7 +447,9 @@ export class AppService {
           files = await this.getMarkdownFiles(contextPath);
         }
       } catch (error) {
-        this.logger.error(`Error listing context files: ${error.message}`);
+        this.logger.error(
+          `Error listing context files: ${error instanceof Error ? error.message : String(error)}`,
+        );
         // Fallback to direct file system access
         files = await this.getMarkdownFiles(contextPath);
       }
@@ -470,7 +488,9 @@ export class AppService {
             usedFiles.push(file);
             this.logger.debug(`- Added file: ${file}`);
           } catch (error) {
-            this.logger.error(`Error reading file ${file}: ${error.message}`);
+            this.logger.error(
+              `Error reading file ${file}: ${error instanceof Error ? error.message : String(error)}`,
+            );
             // Continue with other files
           }
         }
@@ -493,7 +513,9 @@ export class AppService {
           );
         } catch (error) {
           // Non-critical operation, just log the error
-          this.logger.warn(`Failed to record context query: ${error.message}`);
+          this.logger.warn(
+            `Failed to record context query: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 
@@ -503,7 +525,7 @@ export class AppService {
       return contextContent.trim();
     } catch (error) {
       this.logger.error(
-        `Error generating system prompt from context: ${error.message}`,
+        `Error generating system prompt from context: ${error instanceof Error ? error.message : String(error)}`,
       );
       return '';
     }
@@ -524,14 +546,16 @@ export class AppService {
           file !== 'index.json',
       );
     } catch (error) {
-      this.logger.error(`Error reading directory: ${error.message}`);
+      this.logger.error(
+        `Error reading directory: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
 
   async ask(
     askDto: AskDto,
-    file?: Express.Multer.File,
+    file?: Express.Multer['File'],
   ): Promise<AskResponseDto> {
     let output: string | undefined;
     let usedSessionId = askDto.sessionId || randomUUID();
@@ -644,7 +668,7 @@ export class AppService {
               );
             } catch (error) {
               this.logger.warn(
-                `Failed to record context query: ${error.message}`,
+                `Failed to record context query: ${error instanceof Error ? error.message : String(error)}`,
               );
             }
 
@@ -669,7 +693,7 @@ export class AppService {
             }
           } catch (error) {
             this.logger.error(
-              `Two-step RAG failed: ${error.message}, falling back to old method`,
+              `Two-step RAG failed: ${error instanceof Error ? error.message : String(error)}, falling back to old method`,
             );
             // Fallback to old method
             systemPrompt = await this.loadContextInformation(
@@ -855,7 +879,7 @@ export class AppService {
           }
         } catch (error) {
           this.logger.error(
-            `Error processing with model ${currentModel}: ${error.message}`,
+            `Error processing with model ${currentModel}: ${error instanceof Error ? error.message : String(error)}`,
           );
           lastError = error as Error;
           this.logger.log(`Falling back to next model in sequence...`);
@@ -865,7 +889,7 @@ export class AppService {
       // If all models failed, log the last error
       if (!modelProcessed && lastError) {
         this.logger.error(
-          `All models in fallback sequence failed. Last error: ${lastError.message}`,
+          `All models in fallback sequence failed. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
         );
       }
 

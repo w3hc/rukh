@@ -140,10 +140,7 @@ describe('CostTracker', () => {
 
       await service.saveData();
 
-      expect(fs.writeFile).toHaveBeenCalledWith(
-        mockDbPath,
-        expect.any(String),
-      );
+      expect(fs.writeFile).toHaveBeenCalledWith(mockDbPath, expect.any(String));
     });
 
     it('should handle save errors', async () => {

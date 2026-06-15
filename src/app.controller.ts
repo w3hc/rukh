@@ -139,7 +139,7 @@ export class AppController {
   async ask(
     @Body() askDto: AskDto,
     @UploadedFile(new FileValidator({ optional: true }))
-    file?: Express.Multer.File,
+    file?: Express.Multer['File'],
   ): Promise<AskResponseDto> {
     return this.appService.ask(askDto, file);
   }

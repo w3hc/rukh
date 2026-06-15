@@ -14,7 +14,7 @@ export class FileValidator implements PipeTransform {
     this.optional = options.optional || false;
   }
 
-  transform(value: Express.Multer.File) {
+  transform(value: Express.Multer['File']) {
     if (!value) {
       return this.optional ? undefined : value;
     }

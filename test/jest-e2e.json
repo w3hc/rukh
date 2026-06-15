@@ -8,7 +8,8 @@
   },
   "transformIgnorePatterns": ["node_modules/(?!.*uuid)"],
   "moduleNameMapper": {
-    "^@langchain/mistralai$": "<rootDir>/../src/__mocks__/@langchain/mistralai.ts"
+    "^@langchain/mistralai$": "<rootDir>/../src/__mocks__/@langchain/mistralai.ts",
+    "^puppeteer-core$": "<rootDir>/../src/__mocks__/puppeteer-core.ts"
   },
   "silent": true
 }

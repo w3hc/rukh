@@ -9,9 +9,6 @@ import { Logger } from '@nestjs/common';
 describe('RagService', () => {
   let service: RagService;
   let mistralService: jest.Mocked<MistralService>;
-  let contextService: jest.Mocked<ContextService>;
-  let configService: jest.Mocked<ConfigService>;
-  let webReaderService: jest.Mocked<WebReaderService>;
 
   beforeEach(async () => {
     const mockMistralService = {
@@ -54,9 +51,6 @@ describe('RagService', () => {
 
     service = module.get<RagService>(RagService);
     mistralService = module.get(MistralService);
-    contextService = module.get(ContextService);
-    configService = module.get(ConfigService);
-    webReaderService = module.get(WebReaderService);
 
     // Suppress logger output in tests
     jest.spyOn(Logger.prototype, 'log').mockImplementation();

@@ -15,7 +15,7 @@ describe('AppController', () => {
     mimetype: 'text/plain',
     buffer: Buffer.from('This is test file content'),
     size: 26,
-  } as Express.Multer.File;
+  } as Express.Multer['File'];
 
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({

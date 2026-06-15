@@ -8,7 +8,6 @@ global.fetch = jest.fn();
 
 describe('SubsService', () => {
   let service: SubsService;
-  let configService: jest.Mocked<ConfigService>;
 
   beforeEach(async () => {
     const mockConfigService = {
@@ -26,7 +25,6 @@ describe('SubsService', () => {
     }).compile();
 
     service = module.get<SubsService>(SubsService);
-    configService = module.get(ConfigService);
 
     // Suppress logger output in tests
     jest.spyOn(Logger.prototype, 'log').mockImplementation();

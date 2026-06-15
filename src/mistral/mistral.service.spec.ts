@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MistralService } from './mistral.service';
-import { HttpException } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 
 // Mock the ChatMistralAI
 jest.mock('@langchain/mistralai', () => {
@@ -38,9 +38,17 @@ describe('MistralService', () => {
 
   it('should throw error if MISTRAL_API_KEY is not set', () => {
     delete process.env.MISTRAL_API_KEY;
+
+    // Suppress the expected error log
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+
     expect(() => new MistralService()).toThrow(
       'MISTRAL_API_KEY environment variable is not set',
     );
+
+    loggerErrorSpy.mockRestore();
   });
 
   describe('processMessage', () => {
