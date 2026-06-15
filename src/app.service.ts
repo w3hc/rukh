@@ -250,28 +250,53 @@ export class AppService {
 
     // Queue writes to prevent concurrent modification of the same file
     const writeOperation = async () => {
-      try {
-        // Read the current index
-        const indexData = await readFile(indexPath, 'utf-8');
-        const index = JSON.parse(indexData);
+      let retries = 3;
+      let lastError: Error | null = null;
 
-        // Add the query
-        if (!index.queries) {
-          index.queries = [];
+      while (retries > 0) {
+        try {
+          // Read the current index
+          const indexData = await readFile(indexPath, 'utf-8');
+
+          // Handle empty or invalid JSON
+          if (!indexData || indexData.trim() === '') {
+            this.logger.warn(
+              `Empty index file for ${contextName}, skipping query record`,
+            );
+            return;
+          }
+
+          const index = JSON.parse(indexData);
+
+          // Add the query
+          if (!index.queries) {
+            index.queries = [];
+          }
+
+          index.queries.push({
+            timestamp: new Date().toISOString(),
+            origin: 'anon',
+            message: message,
+            contextFilesUsed: filesUsed,
+          });
+
+          // Write back the updated index
+          await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+          return; // Success
+        } catch (error) {
+          lastError = error;
+          retries--;
+          if (retries > 0) {
+            // Wait a bit before retrying
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
         }
-
-        index.queries.push({
-          timestamp: new Date().toISOString(),
-          origin: 'anon',
-          message: message,
-          contextFilesUsed: filesUsed,
-        });
-
-        // Write back the updated index
-        await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-      } catch (error) {
-        throw new Error(`Failed to record context query: ${error.message}`);
       }
+
+      // Only log warning instead of throwing to avoid breaking the request
+      this.logger.warn(
+        `Failed to record context query after retries: ${lastError?.message}`,
+      );
     };
 
     // Wait for any pending write to this file, then perform this write
