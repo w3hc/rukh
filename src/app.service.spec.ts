@@ -156,7 +156,7 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const result = await service.ask('Test message');
+    const result = await service.ask({ message: 'Test message' });
 
     // Verify Anthropic was called
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
@@ -173,7 +173,10 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const result = await service.ask('Test message', 'mistral');
+    const result = await service.ask({
+      message: 'Test message',
+      model: 'mistral',
+    });
 
     // Verify Mistral was called
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
@@ -193,7 +196,7 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const result = await service.ask('Test message');
+    const result = await service.ask({ message: 'Test message' });
 
     // Verify both services were called in correct order
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
@@ -213,7 +216,10 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const result = await service.ask('Test message', 'mistral');
+    const result = await service.ask({
+      message: 'Test message',
+      model: 'mistral',
+    });
 
     // Verify both services were called in correct order
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
@@ -231,7 +237,7 @@ describe('AppService - Model Fallback', () => {
       new Error('Anthropic service unavailable'),
     );
 
-    const result = await service.ask('Test message');
+    const result = await service.ask({ message: 'Test message' });
 
     // Verify both services were called
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
@@ -250,12 +256,12 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    await service.ask(
-      'Test message with context',
-      'anthropic',
-      'custom-session-id',
-      'test-context',
-    );
+    await service.ask({
+      message: 'Test message with context',
+      model: 'anthropic',
+      sessionId: 'custom-session-id',
+      context: 'test-context',
+    });
 
     // Verify context was loaded and system prompt was passed
     expect(service['loadContextInformation']).toHaveBeenCalledWith(
@@ -280,7 +286,10 @@ describe('AppService - Model Fallback', () => {
     });
 
     // The system should try Anthropic first for invalid model names
-    const result = await service.ask('Test message', 'invalid-model-name');
+    const result = await service.ask({
+      message: 'Test message',
+      model: 'invalid-model-name',
+    });
 
     // Verify Anthropic was called and was the only model used
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
@@ -299,7 +308,11 @@ describe('AppService - Model Fallback', () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    await service.ask('Test message', 'anthropic', 'test-session-id');
+    await service.ask({
+      message: 'Test message',
+      model: 'anthropic',
+      sessionId: 'test-session-id',
+    });
 
     // Verify usage tracking was called with correct parameters
     expect(costTracker.trackUsageWithTokens).toHaveBeenCalledWith(

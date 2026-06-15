@@ -141,12 +141,6 @@ export class AppController {
     @UploadedFile(new FileValidator({ optional: true }))
     file?: Express.Multer.File,
   ): Promise<AskResponseDto> {
-    return this.appService.ask(
-      askDto.message,
-      askDto.model,
-      askDto.sessionId,
-      askDto.context,
-      file,
-    );
+    return this.appService.ask(askDto, file);
   }
 }

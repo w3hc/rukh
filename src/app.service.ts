@@ -5,6 +5,7 @@ import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { OpenAIService } from './openai/openai.service';
 import { CostTracker } from './memory/cost-tracking.service';
+import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { readFile, readdir, writeFile, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
@@ -504,14 +505,11 @@ export class AppService {
   }
 
   async ask(
-    message: string,
-    model?: string,
-    sessionId?: string,
-    contextName: string = 'rukh',
+    askDto: AskDto,
     file?: Express.Multer.File,
   ): Promise<AskResponseDto> {
     let output: string | undefined;
-    let usedSessionId = sessionId || randomUUID();
+    let usedSessionId = askDto.sessionId || randomUUID();
     let usedModel = 'none';
     let fullInput = '';
     let fullOutput = '';
@@ -525,7 +523,7 @@ export class AppService {
     const availableModels = ['mistral', 'anthropic', 'openai'];
 
     // Initialize with the selected model, or default to anthropic
-    let selectedModel = model || 'anthropic';
+    let selectedModel = askDto.model || 'anthropic';
 
     // Validate the model and prepare fallback sequence
     if (!availableModels.includes(selectedModel)) {
@@ -551,6 +549,7 @@ export class AppService {
       let ragMetadata: any = undefined;
 
       // Load context information if context is specified
+      const contextName = askDto.context || 'rukh';
       if (contextName && contextName !== '') {
         // Check if two-step RAG is enabled
         const ragEnabled =
@@ -571,7 +570,7 @@ export class AppService {
             const { selectedFiles, selectedUrls, selectionCost } =
               await this.ragService.selectRelevantFiles(
                 contextName,
-                message,
+                askDto.message,
                 maxFiles,
               );
 
@@ -613,7 +612,7 @@ export class AppService {
               await this.recordContextQuery(
                 contextName,
                 usedResources,
-                message,
+                askDto.message,
               );
               this.logger.debug(
                 `Recorded context query with ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
@@ -650,7 +649,7 @@ export class AppService {
             // Fallback to old method
             systemPrompt = await this.loadContextInformation(
               contextName,
-              message,
+              askDto.message,
             );
           }
         } else {
@@ -660,7 +659,7 @@ export class AppService {
           );
           systemPrompt = await this.loadContextInformation(
             contextName,
-            message,
+            askDto.message,
           );
         }
 
@@ -693,7 +692,9 @@ export class AppService {
       }
 
       // Store full input for cost tracking (combining system prompt and user message)
-      fullInput = systemPrompt ? systemPrompt + '\n\n' + message : message;
+      fullInput = systemPrompt
+        ? systemPrompt + '\n\n' + askDto.message
+        : askDto.message;
 
       // Try each model in the fallback sequence
       let lastError: Error | null = null;
@@ -724,7 +725,7 @@ export class AppService {
               );
 
               const response = await this.mistralService.processMessage(
-                message, // Send the clean message without context
+                askDto.message, // Send the clean message without context
                 usedSessionId,
                 effectiveSystemPrompt,
               );
@@ -763,7 +764,7 @@ export class AppService {
               );
 
               const response = await this.anthropicService.processMessage(
-                message, // Send the clean message without context
+                askDto.message, // Send the clean message without context
                 usedSessionId,
                 effectiveSystemPrompt,
               );
@@ -800,7 +801,7 @@ export class AppService {
               );
 
               const response = await this.openaiService.processMessage(
-                message, // Send the clean message without context
+                askDto.message, // Send the clean message without context
                 usedSessionId,
                 effectiveSystemPrompt,
               );
@@ -855,7 +856,7 @@ export class AppService {
         try {
           await this.costTracker.trackUsageWithTokens(
             'anonymous',
-            message,
+            askDto.message,
             usedSessionId,
             usedModel,
             fullInput, // Full input includes both system prompt and user message
