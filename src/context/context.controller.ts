@@ -12,8 +12,10 @@ import {
   Headers,
   BadRequestException,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ContextPasswordGuard } from '../guards/context-password.guard';
 import {
   ApiTags,
   ApiOperation,
@@ -91,6 +93,7 @@ export class ContextController {
   }
 
   @Get(':name/files')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'List files in a context' })
   @ApiParam({
     name: 'name',
@@ -119,10 +122,6 @@ export class ContextController {
     @Param('name') name: string,
     @Headers('x-context-password') password: string,
   ): Promise<ContextFileDto[]> {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     const files = await this.contextService.listContextFiles(name, password);
     // Convert ContextFile[] to ContextFileDto[] if needed
     return files.map((file) => ({
@@ -133,6 +132,7 @@ export class ContextController {
   }
 
   @Get(':name/file/:filename')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'Get file content from a context' })
   @ApiParam({
     name: 'name',
@@ -169,14 +169,11 @@ export class ContextController {
     @Param('filename') filename: string,
     @Headers('x-context-password') password: string,
   ): Promise<string> {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     return await this.contextService.getFileContent(name, filename, password);
   }
 
   @Post('upload')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'Upload a markdown file to a context' })
   @ApiConsumes('multipart/form-data')
   @ApiHeader({
@@ -221,10 +218,6 @@ export class ContextController {
     )
     file: Express.MulterFile,
   ) {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     if (!file.originalname.toLowerCase().endsWith('.md')) {
       throw new BadRequestException('Only .md files are allowed');
     }
@@ -247,6 +240,7 @@ export class ContextController {
   }
 
   @Delete(':name')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'Delete a context' })
   @ApiHeader({
     name: 'x-context-password',
@@ -279,10 +273,6 @@ export class ContextController {
     @Param('name') name: string,
     @Headers('x-context-password') password: string,
   ) {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     await this.contextService.deleteContext(name, password);
     return {
       message: 'Context deleted successfully',
@@ -290,6 +280,7 @@ export class ContextController {
   }
 
   @Delete(':name/file')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'Delete a markdown file from a context' })
   @ApiHeader({
     name: 'x-context-password',
@@ -323,10 +314,6 @@ export class ContextController {
     @Headers('x-context-password') password: string,
     @Body() deleteFileDto: DeleteFileDto,
   ) {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     await this.contextService.deleteFile(
       contextName,
       deleteFileDto.filename,
@@ -338,6 +325,7 @@ export class ContextController {
   }
 
   @Post(':name/link')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'Add a link to a context' })
   @ApiParam({
     name: 'name',
@@ -385,14 +373,11 @@ export class ContextController {
     @Headers('x-context-password') password: string,
     @Body() linkDto: ContextLinkDto,
   ): Promise<{ success: boolean; link: ContextLink }> {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     return await this.contextService.addLink(name, linkDto, password);
   }
 
   @Get(':name/links')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'List links in a context' })
   @ApiParam({
     name: 'name',
@@ -432,14 +417,11 @@ export class ContextController {
     @Param('name') name: string,
     @Headers('x-context-password') password: string,
   ): Promise<ContextLink[]> {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     return await this.contextService.listLinks(name, password);
   }
 
   @Delete(':name/link')
+  @UseGuards(ContextPasswordGuard)
   @ApiOperation({ summary: 'Delete a link from a context' })
   @ApiParam({
     name: 'name',
@@ -488,10 +470,6 @@ export class ContextController {
     @Headers('x-context-password') password: string,
     @Body() body: { url: string },
   ): Promise<{ success: boolean; message: string }> {
-    if (!password) {
-      throw new BadRequestException('x-context-password header is required');
-    }
-
     if (!body.url) {
       throw new BadRequestException('URL is required');
     }
