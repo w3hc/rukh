@@ -1,32 +1,8 @@
 import { Controller, Get, Query, Logger, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { IsUrl, IsNotEmpty, IsOptional, IsNumber, Min } from 'class-validator';
 import { WebReaderService } from './web-reader.service';
 import { Throttle } from '@nestjs/throttler';
-import { Type } from 'class-transformer';
-
-class WebReaderDto {
-  @IsUrl({}, { message: 'Please provide a valid URL' })
-  @IsNotEmpty({ message: 'URL is required' })
-  url: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  timeout?: number;
-}
-
-class WebSearchDto {
-  @IsNotEmpty({ message: 'Query is required' })
-  query: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  maxResults?: number;
-}
+import { WebReaderDto, WebSearchDto } from '../dto/web-reader.dto';
 
 @ApiTags('Web Reader')
 @Controller('web-reader')
