@@ -9,11 +9,8 @@ import {
   UploadedFile,
   ParseFilePipe,
   MaxFileSizeValidator,
-  HttpException,
-  HttpStatus,
   Headers,
   BadRequestException,
-  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -62,25 +59,15 @@ export class ContextController {
     description: 'Invalid context name or context already exists',
   })
   async createContext(@Body() createContextDto: CreateContextDto) {
-    try {
-      const result = await this.contextService.createContext(
-        createContextDto.name,
-        createContextDto.password,
-        createContextDto.description || '',
-      );
-      return {
-        message: 'Context created successfully',
-        path: result,
-      };
-    } catch (error) {
-      if (error.message?.includes('already exists')) {
-        throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-      }
-      throw new HttpException(
-        error.message || 'Failed to create context',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    const result = await this.contextService.createContext(
+      createContextDto.name,
+      createContextDto.password,
+      createContextDto.description || '',
+    );
+    return {
+      message: 'Context created successfully',
+      path: result,
+    };
   }
 
   @Get()
@@ -100,14 +87,7 @@ export class ContextController {
     },
   })
   async listContexts() {
-    try {
-      return await this.contextService.listContexts();
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to list contexts',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return await this.contextService.listContexts();
   }
 
   @Get(':name/files')
@@ -139,33 +119,17 @@ export class ContextController {
     @Param('name') name: string,
     @Headers('x-context-password') password: string,
   ): Promise<ContextFileDto[]> {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      const files = await this.contextService.listContextFiles(name, password);
-      // Convert ContextFile[] to ContextFileDto[] if needed
-      return files.map((file) => ({
-        name: file.name,
-        description: file.description,
-        size: file.size,
-      }));
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to list context files',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    const files = await this.contextService.listContextFiles(name, password);
+    // Convert ContextFile[] to ContextFileDto[] if needed
+    return files.map((file) => ({
+      name: file.name,
+      description: file.description,
+      size: file.size,
+    }));
   }
 
   @Get(':name/file/:filename')
@@ -205,27 +169,11 @@ export class ContextController {
     @Param('filename') filename: string,
     @Headers('x-context-password') password: string,
   ): Promise<string> {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      return await this.contextService.getFileContent(name, filename, password);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to get file content',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    return await this.contextService.getFileContent(name, filename, password);
   }
 
   @Post('upload')
@@ -273,45 +221,29 @@ export class ContextController {
     )
     file: Express.MulterFile,
   ) {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      if (!file.originalname.toLowerCase().endsWith('.md')) {
-        throw new BadRequestException('Only .md files are allowed');
-      }
-
-      const result = await this.contextService.uploadFile(
-        contextName,
-        file.originalname,
-        file.buffer.toString('utf-8'),
-        password,
-        fileDescription || '',
-      );
-
-      return {
-        message: result.wasOverwritten
-          ? 'File updated successfully'
-          : 'File uploaded successfully',
-        path: result.path,
-        wasOverwritten: result.wasOverwritten,
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('Context not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to upload file',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    if (!file.originalname.toLowerCase().endsWith('.md')) {
+      throw new BadRequestException('Only .md files are allowed');
+    }
+
+    const result = await this.contextService.uploadFile(
+      contextName,
+      file.originalname,
+      file.buffer.toString('utf-8'),
+      password,
+      fileDescription || '',
+    );
+
+    return {
+      message: result.wasOverwritten
+        ? 'File updated successfully'
+        : 'File uploaded successfully',
+      path: result.path,
+      wasOverwritten: result.wasOverwritten,
+    };
   }
 
   @Delete(':name')
@@ -347,30 +279,14 @@ export class ContextController {
     @Param('name') name: string,
     @Headers('x-context-password') password: string,
   ) {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      await this.contextService.deleteContext(name, password);
-      return {
-        message: 'Context deleted successfully',
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to delete context',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    await this.contextService.deleteContext(name, password);
+    return {
+      message: 'Context deleted successfully',
+    };
   }
 
   @Delete(':name/file')
@@ -407,34 +323,18 @@ export class ContextController {
     @Headers('x-context-password') password: string,
     @Body() deleteFileDto: DeleteFileDto,
   ) {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      await this.contextService.deleteFile(
-        contextName,
-        deleteFileDto.filename,
-        password,
-      );
-      return {
-        message: 'File deleted successfully',
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to delete file',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    await this.contextService.deleteFile(
+      contextName,
+      deleteFileDto.filename,
+      password,
+    );
+    return {
+      message: 'File deleted successfully',
+    };
   }
 
   @Post(':name/link')
@@ -485,27 +385,11 @@ export class ContextController {
     @Headers('x-context-password') password: string,
     @Body() linkDto: ContextLinkDto,
   ): Promise<{ success: boolean; link: ContextLink }> {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      return await this.contextService.addLink(name, linkDto, password);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to add link',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    return await this.contextService.addLink(name, linkDto, password);
   }
 
   @Get(':name/links')
@@ -548,27 +432,11 @@ export class ContextController {
     @Param('name') name: string,
     @Headers('x-context-password') password: string,
   ): Promise<ContextLink[]> {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      return await this.contextService.listLinks(name, password);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to list links',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    return await this.contextService.listLinks(name, password);
   }
 
   @Delete(':name/link')
@@ -620,34 +488,18 @@ export class ContextController {
     @Headers('x-context-password') password: string,
     @Body() body: { url: string },
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      if (!password) {
-        throw new BadRequestException('x-context-password header is required');
-      }
-
-      if (!body.url) {
-        throw new BadRequestException('URL is required');
-      }
-
-      await this.contextService.deleteLink(name, body.url, password);
-      return {
-        success: true,
-        message: 'Link deleted successfully',
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      if (error.message?.includes('not found')) {
-        throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        error.message || 'Failed to delete link',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!password) {
+      throw new BadRequestException('x-context-password header is required');
     }
+
+    if (!body.url) {
+      throw new BadRequestException('URL is required');
+    }
+
+    await this.contextService.deleteLink(name, body.url, password);
+    return {
+      success: true,
+      message: 'Link deleted successfully',
+    };
   }
 }
