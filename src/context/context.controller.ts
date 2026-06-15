@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ContextPasswordGuard } from '../guards/context-password.guard';
+import { FILE_UPLOAD } from '../config/file-upload.config';
 import {
   ApiTags,
   ApiOperation,
@@ -212,14 +213,19 @@ export class ContextController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new MaxFileSizeValidator({ maxSize: FILE_UPLOAD.MAX_FILE_SIZE }),
         ],
       }),
     )
     file: Express.MulterFile,
   ) {
-    if (!file.originalname.toLowerCase().endsWith('.md')) {
-      throw new BadRequestException('Only .md files are allowed');
+    const fileExtension = file.originalname
+      .toLowerCase()
+      .substring(file.originalname.lastIndexOf('.'));
+    if (!FILE_UPLOAD.ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      throw new BadRequestException(
+        `Only ${FILE_UPLOAD.ALLOWED_EXTENSIONS.join(', ')} files are allowed`,
+      );
     }
 
     const result = await this.contextService.uploadFile(

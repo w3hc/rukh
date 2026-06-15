@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { WebReaderService } from './web-reader.service';
 import { Throttle } from '@nestjs/throttler';
 import { WebReaderDto, WebSearchDto } from '../dto/web-reader.dto';
+import { RATE_LIMITS } from '../config/rate-limit.config';
 
 @ApiTags('Web Reader')
 @Controller('web-reader')
@@ -12,7 +13,7 @@ export class WebReaderController {
   constructor(private readonly webReaderService: WebReaderService) {}
 
   @Get('llm')
-  @Throttle({ web: { limit: 20, ttl: 60000 } })
+  @Throttle({ web: RATE_LIMITS.WEB_READER })
   @ApiOperation({
     summary: 'Extract text and links from a webpage for LLM processing',
   })
