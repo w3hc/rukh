@@ -252,7 +252,7 @@ describe('App (e2e)', () => {
 
           expect(response.body).toHaveProperty(
             'model',
-            'claude-3-7-sonnet-20250219',
+            'claude-sonnet-5',
           );
           expect(response.body).toHaveProperty('sessionId', 'test-session');
 

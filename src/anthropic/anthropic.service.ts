@@ -32,11 +32,11 @@ interface CostInfo {
 export class AnthropicService {
   private readonly apiKey: string;
   private readonly logger = new Logger(AnthropicService.name);
-  private readonly model: string = 'claude-sonnet-4-20250514';
+  private readonly model: string = 'claude-sonnet-5';
   private readonly apiUrl: string = 'https://api.anthropic.com/v1/messages';
   private readonly apiVersion: string = '2023-06-01';
 
-  // Cost per 1K tokens in USD - Claude 3.7 Sonnet rates
+  // Cost per 1K tokens in USD - Claude Sonnet 5 rates
   private readonly COST_RATES = {
     inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
     outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
@@ -166,7 +166,6 @@ export class AnthropicService {
         const requestBody: any = {
           model: this.model,
           max_tokens: 64000,
-          temperature: 0.3,
           messages: formattedMessages,
         };
 

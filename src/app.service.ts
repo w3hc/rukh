@@ -821,7 +821,7 @@ export class AppService {
               output = response.content;
               fullOutput = response.content;
               usedSessionId = response.sessionId;
-              usedModel = 'claude-3-7-sonnet-20250219';
+              usedModel = 'claude-sonnet-5';
               cost = response.cost;
 
               // Make sure we have valid usage data

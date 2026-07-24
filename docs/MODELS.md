@@ -7,7 +7,7 @@ Rukh supports multiple LLM providers with automatic fallback capabilities. When 
 | Provider | Parameter Value | Model Name | Input Cost | Output Cost |
 |----------|----------------|------------|------------|-------------|
 | Mistral AI | `mistral` | `mistral-large-2411` | $0.04/M tokens | $0.04/M tokens |
-| Anthropic | `anthropic` | `claude-sonnet-4-20250514` | $3/M tokens | $15/M tokens |
+| Anthropic | `anthropic` | `claude-sonnet-5` | $3/M tokens | $15/M tokens |
 | OpenAI | `openai` | `gpt-4o` | $2.50/M tokens | $10/M tokens |
 
 ## Detailed Information
@@ -40,7 +40,7 @@ Set the `MISTRAL_API_KEY` environment variable in your `.env` file.
 
 ### Anthropic (Claude)
 
-**Model**: `claude-sonnet-4-20250514`
+**Model**: `claude-sonnet-5`
 
 **Parameter value**: `anthropic`
 
@@ -228,7 +228,7 @@ Consider a context with 50 files, where only 5 are relevant:
 ```
 Input tokens:  ~200,000 (all 50 files)
 Output tokens: ~500
-Model: claude-sonnet-4-20250514
+Model: claude-sonnet-5
 Cost: $0.60 + $0.0075 = $0.6075
 ```
 
@@ -243,7 +243,7 @@ Step 1 (Selection):
 Step 2 (Generation):
   Input tokens:  ~20,000 (5 files only)
   Output tokens: ~500
-  Model: claude-sonnet-4-20250514
+  Model: claude-sonnet-5
   Cost: $0.06 + $0.0075 = $0.0676
 
 Total: $0.0677 (89% cost reduction!)
@@ -313,7 +313,7 @@ When RAG is enabled, responses include additional metadata:
 ```json
 {
   "output": "Response text...",
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-sonnet-5",
   "usage": {
     "input_tokens": 20500,
     "output_tokens": 500
@@ -424,7 +424,7 @@ curl -X 'POST' \
   -F 'context=rukh'
 ```
 
-*Note: Omitting the `model` parameter defaults to `anthropic` (Claude 3.7 Sonnet).*
+*Note: Omitting the `model` parameter defaults to `anthropic` (Claude Sonnet 5).*
 
 ---
 

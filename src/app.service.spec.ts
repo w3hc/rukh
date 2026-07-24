@@ -162,7 +162,7 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(mistralService.processMessage).not.toHaveBeenCalled();
     expect(result.output).toBe('Response from Anthropic');
-    expect(result.model).toBe('claude-3-7-sonnet-20250219');
+    expect(result.model).toBe('claude-sonnet-5');
   });
 
   it('should use the specified model when provided', async () => {
@@ -225,7 +225,7 @@ describe('AppService - Model Fallback', () => {
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Fallback response from Anthropic');
-    expect(result.model).toBe('claude-3-7-sonnet-20250219');
+    expect(result.model).toBe('claude-sonnet-5');
   });
 
   it('should still complete processing even if all models fail', async () => {
@@ -294,7 +294,7 @@ describe('AppService - Model Fallback', () => {
     // Verify Anthropic was called and was the only model used
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Response from Anthropic');
-    expect(result.model).toBe('claude-3-7-sonnet-20250219');
+    expect(result.model).toBe('claude-sonnet-5');
 
     // Mistral might be called in some implementations if there's uncertainty about model validity
     // So we don't test that mistralService wasn't called anymore
@@ -319,7 +319,7 @@ describe('AppService - Model Fallback', () => {
       'anonymous',
       'Test message',
       'test-session-id',
-      'claude-3-7-sonnet-20250219',
+      'claude-sonnet-5',
       expect.any(String), // Full input including system prompt
       'Response for tracking',
       100, // input tokens
