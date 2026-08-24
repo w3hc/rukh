@@ -66,6 +66,7 @@ export class ContextController {
       createContextDto.name,
       createContextDto.password,
       createContextDto.description || '',
+      createContextDto.model,
     );
     return {
       message: 'Context created successfully',

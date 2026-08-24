@@ -39,7 +39,8 @@ describe('AppController', () => {
             },
             ask: jest.fn().mockImplementation(async (askDto) => ({
               output: askDto.model === 'mistral' ? 'AI response' : undefined,
-              model: askDto.model === 'mistral' ? 'mistral-large-latest' : 'none',
+              model:
+                askDto.model === 'mistral' ? 'mistral-large-latest' : 'none',
               sessionId: askDto.sessionId || 'generated-session-id',
             })),
           },

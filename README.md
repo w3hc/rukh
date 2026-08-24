@@ -53,7 +53,7 @@ Response body:
 
 ```json
 {
-  "output": "Based on the context provided, **Rukh** (also spelled roc, ruḵḵ, or rokh) is an enormous legendary bird of prey from Middle Eastern mythology and folklore.\n\n## Key characteristics:\n\n**Physical Description:**\n- Gigantic eagle-like bird of enormous size\n- So large it could carry off elephants in its talons\n- Described as having quills \"twelve paces long\"\n- Casts shadows as big as clouds when flying\n\n**Cultural Origins:**\n- Appears in Arabic and Persian mythology\n- Featured prominently in \"One Thousand and One Nights\" (Arabian Nights)\n- Mentioned in tales of Sinbad the Sailor\n- Has roots possibly tracing back to the Indian mythological bird Garuda\n\n**Historical Accounts:**\n- Marco Polo described it in the 13th century as living near Madagascar\n- Various travelers and explorers reported sightings or evidence\n- Often associated with tropical islands in the Indian Ocean\n\n**Possible Real-World Connections:**\n- May have been inspired by the extinct Aepyornis (elephant bird) of Madagascar\n- Could be based on exaggerated accounts of large eagles\n- Some \"roc feathers\" were likely palm fronds\n\n**Religious/Literary Significance:**\n- Appears in Ethiopian religious texts (Kebra Negast)\n- Featured in various medieval European accounts\n- Continues to appear in modern fantasy literature and games\n\nThe rukh represents one of the most enduring giant bird myths in world folklore, blending elements of natural observation with fantastical storytelling.",
+  "output": "**Rukh** (also spelled roc, ruḵḵ, or rokh) is an enormous legendary bird of prey from Middle Eastern mythology and folklore.",
   "model": "claude-sonnet-5",
   "sessionId": "15a7e248-17f2-4b9e-a42b-000f97a075e7",
   "usage": {

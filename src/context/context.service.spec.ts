@@ -110,6 +110,66 @@ describe('ContextService', () => {
       expect(mkdir).not.toHaveBeenCalled();
       expect(loggerErrorSpy).not.toHaveBeenCalled();
     });
+
+    it('should include the model override in the index when provided', async () => {
+      const contextName = 'model-context';
+      const password = 'new-password';
+      const description = 'Test description';
+      const model = 'anthropic-web-search';
+      const contextPath = join(testContextsPath, contextName);
+
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+      (mkdir as jest.Mock).mockResolvedValue(undefined);
+      (writeFile as jest.Mock).mockResolvedValue(undefined);
+
+      const result = await service.createContext(
+        contextName,
+        password,
+        description,
+        model,
+      );
+
+      expect(result).toBe(contextPath);
+
+      const expectedIndex = {
+        name: contextName,
+        password,
+        description,
+        model,
+        numberOfFiles: 0,
+        totalSize: 0,
+        files: [],
+        links: [],
+        queries: [],
+      };
+
+      expect(writeFile).toHaveBeenCalledWith(
+        join(contextPath, 'index.json'),
+        JSON.stringify(expectedIndex, null, 2),
+        'utf-8',
+      );
+      expect(loggerErrorSpy).not.toHaveBeenCalled();
+    });
+
+    it('should omit the model key when no override is given', async () => {
+      const contextName = 'no-model-context';
+      const password = 'new-password';
+      const contextPath = join(testContextsPath, contextName);
+
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+      (mkdir as jest.Mock).mockResolvedValue(undefined);
+      (writeFile as jest.Mock).mockResolvedValue(undefined);
+
+      await service.createContext(contextName, password);
+
+      const writeCallArgs = (writeFile as jest.Mock).mock.calls[0];
+      const writtenIndex = JSON.parse(writeCallArgs[1]);
+      expect(writtenIndex).not.toHaveProperty('model');
+    });
   });
 
   describe('deleteContext', () => {

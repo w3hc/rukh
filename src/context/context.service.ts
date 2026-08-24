@@ -108,6 +108,7 @@ export class ContextService {
     name: string,
     password: string,
     description: string = '',
+    model?: string,
   ): Promise<string> {
     const contextPath = join(this.contextsPath, name);
 
@@ -124,6 +125,7 @@ export class ContextService {
         name,
         password,
         description,
+        ...(model && { model }),
         numberOfFiles: 0,
         totalSize: 0,
         files: [],

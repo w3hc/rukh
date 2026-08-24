@@ -133,6 +133,43 @@ export class AppService {
     }
   }
 
+  /**
+   * Reads a context's index.json for a `model` override, if present.
+   * Lets a context force a specific model (e.g. one that needs live web
+   * fetch to verify external evidence) regardless of what the request asks
+   * for.
+   */
+  private async getContextModelOverride(
+    contextName: string,
+  ): Promise<string | undefined> {
+    if (!contextName) {
+      return undefined;
+    }
+
+    try {
+      const indexPath = join(
+        process.cwd(),
+        'data',
+        'contexts',
+        contextName,
+        'index.json',
+      );
+
+      if (!existsSync(indexPath)) {
+        return undefined;
+      }
+
+      const indexData = await readFile(indexPath, 'utf-8');
+      const contextIndex = JSON.parse(indexData);
+      return contextIndex.model || undefined;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to read model override for context ${contextName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+  }
+
   async processContextData(
     contextName: string,
     message?: string,
@@ -580,8 +617,16 @@ export class AppService {
     // it incurs per-search fees and should only run when explicitly requested
     const fallbackModels = ['mistral', 'anthropic', 'openai'];
 
-    // Initialize with the selected model, or default to anthropic
-    let selectedModel = askDto.model || 'anthropic';
+    const contextName = askDto.context || 'rukh';
+
+    // A context can force a specific model via a `model` key in its
+    // index.json. That takes precedence over the request's own model.
+    const contextModelOverride =
+      await this.getContextModelOverride(contextName);
+
+    // Initialize with the context override, then the request's model, or
+    // default to anthropic
+    let selectedModel = contextModelOverride || askDto.model || 'anthropic';
 
     // Validate the model and prepare fallback sequence
     if (!availableModels.includes(selectedModel)) {
@@ -607,7 +652,6 @@ export class AppService {
       let ragMetadata: any = undefined;
 
       // Load context information if context is specified
-      const contextName = askDto.context || 'rukh';
       if (contextName && contextName !== '') {
         // Look up how many selectable resources this context actually has,
         // so two-step RAG selection only kicks in when there's something to
