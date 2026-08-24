@@ -40,9 +40,7 @@ export class OpenAIService {
     'https://api.openai.com/v1/chat/completions';
 
   // Cost per 1K tokens in USD - GPT-4o rates
-  // Note: Verify current pricing at https://openai.com/api/pricing/
-  // As of early 2025: $2.50/M input, $10/M output
-  // Some sources indicate pricing may have changed to $5/M input, $15/M output
+  // https://developers.openai.com/api/docs/pricing (verified 2026-08-24)
   private readonly COST_RATES = {
     inputCost: 0.0025, // $2.50 per million tokens = $0.0025 per 1K tokens
     outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens

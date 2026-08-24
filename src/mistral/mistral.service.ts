@@ -17,10 +17,21 @@ export class MistralService {
   private readonly logger = new Logger(MistralService.name);
   private readonly modelName: string = 'mistral-large-latest';
 
-  // Cost per 1K tokens in USD - Ministral 3B rates
-  private readonly COST_RATES = {
-    inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
-    outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
+  // Cost per 1K tokens in USD, per model - https://mistral.ai/pricing/api/
+  // (verified 2026-08-24). Rates vary a lot between the two models this
+  // service actually calls, so they can't share a single flat rate.
+  private readonly MODEL_RATES: Record<
+    string,
+    { inputCost: number; outputCost: number }
+  > = {
+    'mistral-large-latest': {
+      inputCost: 0.0005, // $0.50 per million tokens = $0.0005 per 1K tokens
+      outputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
+    },
+    'ministral-3b-latest': {
+      inputCost: 0.0001, // $0.10 per million tokens = $0.0001 per 1K tokens
+      outputCost: 0.0001, // $0.10 per million tokens = $0.0001 per 1K tokens
+    },
   };
 
   constructor() {
@@ -49,12 +60,18 @@ export class MistralService {
     };
   }
 
-  private calculateCost(inputTokens: number, outputTokens: number): CostInfo {
+  private calculateCost(
+    inputTokens: number,
+    outputTokens: number,
+    modelName: string = this.modelName,
+  ): CostInfo {
+    const rates =
+      this.MODEL_RATES[modelName] ?? this.MODEL_RATES[this.modelName];
     const inputCost = Number(
-      ((inputTokens / 1000) * this.COST_RATES.inputCost).toFixed(6),
+      ((inputTokens / 1000) * rates.inputCost).toFixed(6),
     );
     const outputCost = Number(
-      ((outputTokens / 1000) * this.COST_RATES.outputCost).toFixed(6),
+      ((outputTokens / 1000) * rates.outputCost).toFixed(6),
     );
     const totalCost = Number((inputCost + outputCost).toFixed(6));
 
@@ -131,7 +148,11 @@ export class MistralService {
       };
 
       // Calculate cost
-      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+      const cost = this.calculateCost(
+        usage.input_tokens,
+        usage.output_tokens,
+        modelName,
+      );
 
       this.logger.debug({
         message: `Mistral API response [${requestId}]`,
