@@ -15,6 +15,42 @@ jest.mock('@langchain/mistralai', () => {
   };
 });
 
+// Mock CustomJsonMemory so tests don't hit the real filesystem
+jest.mock('../memory/custom-memory', () => {
+  const messages: {
+    role: string;
+    content: string;
+    timestamp: number;
+    sessionId: string;
+  }[] = [];
+
+  return {
+    CustomJsonMemory: jest.fn().mockImplementation((sessionId: string) => ({
+      loadMemoryVariables: jest.fn().mockResolvedValue({
+        history: messages.filter((msg) => msg.sessionId === sessionId),
+      }),
+      saveContext: jest
+        .fn()
+        .mockImplementation(
+          async (input: { input: string }, output: { response: string }) => {
+            messages.push({
+              role: 'user',
+              content: input.input,
+              timestamp: Date.now(),
+              sessionId,
+            });
+            messages.push({
+              role: 'assistant',
+              content: output.response,
+              timestamp: Date.now(),
+              sessionId,
+            });
+          },
+        ),
+    })),
+  };
+});
+
 describe('MistralService', () => {
   let service: MistralService;
 
