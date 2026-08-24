@@ -8,7 +8,6 @@ import { ContextService } from './context/context.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
-import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 
 describe('AppService - Model Fallback', () => {
@@ -41,6 +40,7 @@ describe('AppService - Model Fallback', () => {
           provide: AnthropicService,
           useValue: {
             processMessage: jest.fn(),
+            processMessageWithWebSearch: jest.fn(),
             getConversationHistory: jest.fn().mockResolvedValue({
               history: [],
               isFirstMessage: true,
@@ -105,21 +105,6 @@ describe('AppService - Model Fallback', () => {
               .mockResolvedValue('Mock RAG context'),
           },
         },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn().mockImplementation((key) => {
-              switch (key) {
-                case 'RAG_ENABLE_TWO_STEP':
-                  return 'false'; // Disable RAG in tests by default
-                case 'RAG_MAX_FILES':
-                  return '5';
-                default:
-                  return undefined;
-              }
-            }),
-          },
-        },
       ],
     }).compile();
 
@@ -162,7 +147,7 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(mistralService.processMessage).not.toHaveBeenCalled();
     expect(result.output).toBe('Response from Anthropic');
-    expect(result.model).toBe('claude-3-7-sonnet-20250219');
+    expect(result.model).toBe('claude-sonnet-5');
   });
 
   it('should use the specified model when provided', async () => {
@@ -182,7 +167,7 @@ describe('AppService - Model Fallback', () => {
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(anthropicService.processMessage).not.toHaveBeenCalled();
     expect(result.output).toBe('Response from Mistral');
-    expect(result.model).toBe('mistral-large-2411');
+    expect(result.model).toBe('mistral-large-latest');
   });
 
   it('should fall back to Mistral if Anthropic fails', async () => {
@@ -202,7 +187,7 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Fallback response from Mistral');
-    expect(result.model).toBe('mistral-large-2411');
+    expect(result.model).toBe('mistral-large-latest');
   });
 
   it('should fall back to Anthropic if Mistral fails', async () => {
@@ -225,7 +210,7 @@ describe('AppService - Model Fallback', () => {
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Fallback response from Anthropic');
-    expect(result.model).toBe('claude-3-7-sonnet-20250219');
+    expect(result.model).toBe('claude-sonnet-5');
   });
 
   it('should still complete processing even if all models fail', async () => {
@@ -294,7 +279,7 @@ describe('AppService - Model Fallback', () => {
     // Verify Anthropic was called and was the only model used
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Response from Anthropic');
-    expect(result.model).toBe('claude-3-7-sonnet-20250219');
+    expect(result.model).toBe('claude-sonnet-5');
 
     // Mistral might be called in some implementations if there's uncertainty about model validity
     // So we don't test that mistralService wasn't called anymore
@@ -319,11 +304,106 @@ describe('AppService - Model Fallback', () => {
       'anonymous',
       'Test message',
       'test-session-id',
-      'claude-3-7-sonnet-20250219',
+      'claude-sonnet-5',
       expect.any(String), // Full input including system prompt
       'Response for tracking',
       100, // input tokens
       50, // output tokens
     );
+  });
+
+  describe('context model override', () => {
+    it('should use the context override even when the request specifies a different model', async () => {
+      jest
+        .spyOn(service as any, 'getContextModelOverride')
+        .mockResolvedValue('mistral');
+
+      (mistralService.processMessage as jest.Mock).mockResolvedValue({
+        content: 'Response from Mistral',
+        sessionId: 'test-session-id',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      });
+
+      const result = await service.ask({
+        message: 'Test message',
+        model: 'anthropic',
+        context: 'walkaway',
+      });
+
+      expect(service['getContextModelOverride']).toHaveBeenCalledWith(
+        'walkaway',
+      );
+      expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
+      expect(anthropicService.processMessage).not.toHaveBeenCalled();
+      expect(result.model).toBe('mistral-large-latest');
+    });
+
+    it('should route to Anthropic web search when the context forces it', async () => {
+      jest
+        .spyOn(service as any, 'getContextModelOverride')
+        .mockResolvedValue('anthropic-web-search');
+
+      (
+        anthropicService.processMessageWithWebSearch as jest.Mock
+      ).mockResolvedValue({
+        content: 'Response with live evidence',
+        sessionId: 'test-session-id',
+        usage: { input_tokens: 100, output_tokens: 50 },
+        cost: { input_cost: 0, output_cost: 0, total_cost: 0 },
+      });
+
+      const result = await service.ask({
+        message: 'https://github.com/w3hc/w3pk',
+        model: 'mistral',
+        context: 'walkaway',
+      });
+
+      expect(
+        anthropicService.processMessageWithWebSearch,
+      ).toHaveBeenCalledTimes(1);
+      expect(mistralService.processMessage).not.toHaveBeenCalled();
+      expect(result.output).toBe('Response with live evidence');
+    });
+
+    it('should fall back to the request model when the context has no override', async () => {
+      jest
+        .spyOn(service as any, 'getContextModelOverride')
+        .mockResolvedValue(undefined);
+
+      (mistralService.processMessage as jest.Mock).mockResolvedValue({
+        content: 'Response from Mistral',
+        sessionId: 'test-session-id',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      });
+
+      const result = await service.ask({
+        message: 'Test message',
+        model: 'mistral',
+        context: 'some-context',
+      });
+
+      expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
+      expect(result.model).toBe('mistral-large-latest');
+    });
+
+    it('should default to mistral when the context override names an unknown model', async () => {
+      jest
+        .spyOn(service as any, 'getContextModelOverride')
+        .mockResolvedValue('not-a-real-model');
+
+      (mistralService.processMessage as jest.Mock).mockResolvedValue({
+        content: 'Response from Mistral',
+        sessionId: 'test-session-id',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      });
+
+      const result = await service.ask({
+        message: 'Test message',
+        context: 'broken-context',
+      });
+
+      expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
+      expect(result.model).toBe('mistral-large-latest');
+    });
   });
 });

@@ -7,7 +7,17 @@ import {
   IsNumber,
   IsArray,
   IsUrl,
+  IsIn,
 } from 'class-validator';
+
+// Models the `ask` endpoint accepts; kept in sync with AppService's
+// availableModels list
+export const CONTEXT_MODELS = [
+  'mistral',
+  'anthropic',
+  'openai',
+  'anthropic-web-search',
+] as const;
 
 // Export these interfaces so they can be imported by other modules
 export interface ContextFile {
@@ -33,6 +43,7 @@ export interface ContextIndex {
   name: string;
   password: string;
   description: string;
+  model?: string;
   numberOfFiles: number;
   totalSize: number;
   files: ContextFile[];
@@ -69,6 +80,17 @@ export class CreateContextDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiProperty({
+    description:
+      "Model this context forces on every /ask request against it, overriding the request's own model param. Omit to let the request choose.",
+    example: 'anthropic-web-search',
+    enum: CONTEXT_MODELS,
+    required: false,
+  })
+  @IsIn(CONTEXT_MODELS)
+  @IsOptional()
+  model?: string;
 }
 
 export class ContextPasswordHeaderDto {

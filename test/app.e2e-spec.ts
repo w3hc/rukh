@@ -228,7 +228,7 @@ describe('App (e2e)', () => {
             })
             .expect(201);
 
-          expect(response.body).toHaveProperty('model', 'mistral-large-2411');
+          expect(response.body).toHaveProperty('model', 'mistral-large-latest');
           expect(response.body).toHaveProperty('sessionId', 'test-session');
 
           // Verify the service was called (without checking exact parameters)
@@ -250,10 +250,7 @@ describe('App (e2e)', () => {
             })
             .expect(201);
 
-          expect(response.body).toHaveProperty(
-            'model',
-            'claude-3-7-sonnet-20250219',
-          );
+          expect(response.body).toHaveProperty('model', 'claude-sonnet-5');
           expect(response.body).toHaveProperty('sessionId', 'test-session');
 
           // Verify the service was called (without checking exact parameters)

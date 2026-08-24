@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
@@ -18,6 +17,8 @@ import { RagService } from './rag/rag.service';
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
+  // Maximum number of files/URLs the two-step RAG selection step may pick
+  private readonly RAG_MAX_FILES = 5;
   private contexts: Map<string, string> = new Map();
   private writeQueue: Map<string, Promise<void>> = new Map();
 
@@ -26,7 +27,6 @@ export class AppService {
     private readonly anthropicService: AnthropicService,
     private readonly openaiService: OpenAIService,
     private readonly costTracker: CostTracker,
-    private readonly configService: ConfigService,
     private readonly subsService: SubsService,
     private readonly contextService: ContextService,
     private readonly webReaderService: WebReaderService,
@@ -130,6 +130,43 @@ export class AppService {
       return stats.isDirectory();
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Reads a context's index.json for a `model` override, if present.
+   * Lets a context force a specific model (e.g. one that needs live web
+   * fetch to verify external evidence) regardless of what the request asks
+   * for.
+   */
+  private async getContextModelOverride(
+    contextName: string,
+  ): Promise<string | undefined> {
+    if (!contextName) {
+      return undefined;
+    }
+
+    try {
+      const indexPath = join(
+        process.cwd(),
+        'data',
+        'contexts',
+        contextName,
+        'index.json',
+      );
+
+      if (!existsSync(indexPath)) {
+        return undefined;
+      }
+
+      const indexData = await readFile(indexPath, 'utf-8');
+      const contextIndex = JSON.parse(indexData);
+      return contextIndex.model || undefined;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to read model override for context ${contextName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
     }
   }
 
@@ -568,11 +605,28 @@ export class AppService {
     };
     let cost: any = undefined;
 
-    // Define available models for fallback
-    const availableModels = ['mistral', 'anthropic', 'openai'];
+    // Define available models
+    const availableModels = [
+      'mistral',
+      'anthropic',
+      'openai',
+      'anthropic-web-search',
+    ];
 
-    // Initialize with the selected model, or default to anthropic
-    let selectedModel = askDto.model || 'anthropic';
+    // Models eligible as fallbacks: anthropic-web-search is excluded because
+    // it incurs per-search fees and should only run when explicitly requested
+    const fallbackModels = ['mistral', 'anthropic', 'openai'];
+
+    const contextName = askDto.context || 'rukh';
+
+    // A context can force a specific model via a `model` key in its
+    // index.json. That takes precedence over the request's own model.
+    const contextModelOverride =
+      await this.getContextModelOverride(contextName);
+
+    // Initialize with the context override, then the request's model, or
+    // default to anthropic
+    let selectedModel = contextModelOverride || askDto.model || 'anthropic';
 
     // Validate the model and prepare fallback sequence
     if (!availableModels.includes(selectedModel)) {
@@ -585,7 +639,7 @@ export class AppService {
     // Create a fallback sequence starting with the selected model
     const modelsToTry = [
       selectedModel,
-      ...availableModels.filter((m) => m !== selectedModel),
+      ...fallbackModels.filter((m) => m !== selectedModel),
     ];
 
     this.logger.log(
@@ -598,15 +652,35 @@ export class AppService {
       let ragMetadata: any = undefined;
 
       // Load context information if context is specified
-      const contextName = askDto.context || 'rukh';
       if (contextName && contextName !== '') {
-        // Check if two-step RAG is enabled
-        const ragEnabled =
-          this.configService.get<string>('RAG_ENABLE_TWO_STEP') === 'true';
-        const maxFiles = parseInt(
-          this.configService.get<string>('RAG_MAX_FILES') || '5',
-          10,
+        // Look up how many selectable resources this context actually has,
+        // so two-step RAG selection only kicks in when there's something to
+        // choose between. This replaces a blanket on/off env flag with
+        // per-request gating based on context content.
+        const contextPath = join(
+          process.cwd(),
+          'data',
+          'contexts',
+          contextName,
         );
+        const indexPath = join(contextPath, 'index.json');
+        let totalFiles = 0;
+        let totalUrls = 0;
+        if (existsSync(indexPath)) {
+          const indexData = await readFile(indexPath, 'utf-8');
+          const contextIndex = JSON.parse(indexData);
+          totalFiles = contextIndex.files?.length || 0;
+          totalUrls = contextIndex.links?.length || 0;
+        }
+        const totalResources = totalFiles + totalUrls;
+
+        const maxFiles = this.RAG_MAX_FILES;
+
+        // Two-step selection only runs when the caller explicitly asked for
+        // a context (an implicit default context skips it) and that context
+        // has more than one resource to choose from (nothing to select
+        // otherwise).
+        const ragEnabled = !!askDto.context && totalResources > 1;
 
         if (ragEnabled) {
           this.logger.log(`Using two-step RAG for context: ${contextName}`);
@@ -626,23 +700,6 @@ export class AppService {
             this.logger.log(
               `Selected ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
             );
-
-            // Get total files and URLs count
-            const contextPath = join(
-              process.cwd(),
-              'data',
-              'contexts',
-              contextName,
-            );
-            const indexPath = join(contextPath, 'index.json');
-            let totalFiles = 0;
-            let totalUrls = 0;
-            if (existsSync(indexPath)) {
-              const indexData = await readFile(indexPath, 'utf-8');
-              const contextIndex = JSON.parse(indexData);
-              totalFiles = contextIndex.files?.length || 0;
-              totalUrls = contextIndex.links?.length || 0;
-            }
 
             // STEP 2: Build context with only selected files and URLs
             this.logger.log(`Step 2: Building context with selected resources`);
@@ -783,7 +840,7 @@ export class AppService {
               fullOutput = response.content;
               usedSessionId = response.sessionId;
               cost = response.cost;
-              usedModel = 'mistral-large-2411';
+              usedModel = 'mistral-large-latest';
 
               // Make sure we have valid usage data
               usage = response.usage || {
@@ -821,7 +878,7 @@ export class AppService {
               output = response.content;
               fullOutput = response.content;
               usedSessionId = response.sessionId;
-              usedModel = 'claude-3-7-sonnet-20250219';
+              usedModel = 'claude-sonnet-5';
               cost = response.cost;
 
               // Make sure we have valid usage data
@@ -832,6 +889,48 @@ export class AppService {
 
               modelProcessed = true;
               this.logger.log(`Successfully processed with Anthropic model`);
+              break;
+            }
+
+            case 'anthropic-web-search': {
+              // Check if there's existing conversation
+              const { isFirstMessage } =
+                await this.anthropicService.getConversationHistory(
+                  usedSessionId,
+                );
+
+              // Only use system prompt for first message or if no history is available
+              const effectiveSystemPrompt = isFirstMessage
+                ? systemPrompt
+                : undefined;
+
+              this.logger.debug(
+                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic (web search)`,
+              );
+
+              const response =
+                await this.anthropicService.processMessageWithWebSearch(
+                  askDto.message, // Send the clean message without context
+                  usedSessionId,
+                  effectiveSystemPrompt,
+                );
+
+              output = response.content;
+              fullOutput = response.content;
+              usedSessionId = response.sessionId;
+              usedModel = 'claude-sonnet-5';
+              cost = response.cost;
+
+              // Make sure we have valid usage data
+              usage = response.usage || {
+                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+                output_tokens: Math.ceil(fullOutput.length / 4),
+              };
+
+              modelProcessed = true;
+              this.logger.log(
+                `Successfully processed with Anthropic web search model`,
+              );
               break;
             }
 

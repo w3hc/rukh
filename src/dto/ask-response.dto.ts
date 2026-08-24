@@ -38,7 +38,7 @@ export class CostDto {
 export class AskResponseDto {
   @ApiProperty({
     description: 'The model used for processing',
-    example: 'mistral-large-2411',
+    example: 'mistral-large-latest',
   })
   model: string;
 

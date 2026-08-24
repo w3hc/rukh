@@ -13,15 +13,16 @@ export class AskDto {
 
   @ApiProperty({
     description:
-      'The model to use for processing. Use "mistral" for Mistral AI, "anthropic" for Anthropic Claude, "openai" for OpenAI GPT-4o, or leave empty for no processing.',
+      'The model to use for processing. Use "mistral" for Mistral AI, "anthropic" for Anthropic Claude, "anthropic-web-search" for Anthropic Claude with server-side web search, "openai" for OpenAI GPT-4o, or leave empty for no processing.',
     example: 'anthropic',
     required: false,
     default: 'mistral',
-    enum: ['mistral', 'anthropic', 'openai', ''],
+    enum: ['mistral', 'anthropic', 'anthropic-web-search', 'openai', ''],
   })
   @IsOptional()
-  @IsIn(['mistral', 'anthropic', 'openai', ''], {
-    message: 'Model must be "mistral", "anthropic", "openai", or empty',
+  @IsIn(['mistral', 'anthropic', 'anthropic-web-search', 'openai', ''], {
+    message:
+      'Model must be "mistral", "anthropic", "anthropic-web-search", "openai", or empty',
   })
   model?: string;
 

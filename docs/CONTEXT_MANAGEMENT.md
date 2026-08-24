@@ -148,7 +148,7 @@ The web reader service supports:
 
 ## RAG Workflow with URLs
 
-When RAG is enabled (`RAG_ENABLE_TWO_STEP=true`), URLs are treated the same as files:
+When two-step RAG is active (an explicit `context` with more than one resource), URLs are treated the same as files:
 
 ### Step 1: Resource Selection
 
@@ -230,17 +230,11 @@ Complete schema for `index.json`:
 
 ### RAG Configuration
 
-Enable RAG for cost optimization:
+Two-step RAG is automatic and has no `.env` settings — it activates whenever a request passes an explicit `context` with more than one resource (files + URLs). Its parameters are hardcoded:
 
-```env
-RAG_ENABLE_TWO_STEP=true
-RAG_MAX_FILES=5
-RAG_REQUIRED_FILES=instruction-file.md
-```
-
-- `RAG_ENABLE_TWO_STEP`: Enable the two-step RAG workflow
-- `RAG_MAX_FILES`: Maximum resources (files + URLs) to select
-- `RAG_REQUIRED_FILES`: Comma-separated list of files to always include
+- Activation logic: `AppService.ask`
+- Max resources selected: `AppService.RAG_MAX_FILES` (5)
+- Always-included files: `RagService.REQUIRED_FILES` (`['instruction-file.md']`)
 
 ### Query Tracking
 
@@ -382,7 +376,7 @@ curl -X POST http://localhost:3000/ask \
 
 ### 2. Test with RAG Enabled
 
-Set `RAG_ENABLE_TWO_STEP=true` in `.env` and test:
+Two-step RAG activates automatically for any context with more than one resource — just pass an explicit `context` with at least two files/URLs:
 
 ```bash
 curl -X POST http://localhost:3000/ask \
@@ -420,14 +414,14 @@ Check the response:
 
 ### URLs Not Being Fetched
 
-1. Check that `RAG_ENABLE_TWO_STEP=true` in your `.env`
+1. Check that the request passes an explicit `context` with more than one resource (two-step RAG is skipped otherwise)
 2. Verify URL descriptions contain relevant keywords
 3. Check that the URL is accessible
 4. Review the `rag.selectedUrls` in the response
 
 ### High Costs
 
-1. Reduce `RAG_MAX_FILES` to select fewer resources
+1. Reduce the selection cap by editing `AppService.RAG_MAX_FILES` in code
 2. Improve file/URL descriptions for better selection
 3. Split large files into smaller, focused files
 4. Monitor the `rag.selectionCost` in responses
@@ -453,11 +447,7 @@ Check the response:
 
 ### Required Files
 
-Some files should always be included (like instruction files):
-
-```env
-RAG_REQUIRED_FILES=instruction-file.md,guidelines.md
-```
+Some files should always be included (like instruction files). This list is hardcoded as `RagService.REQUIRED_FILES` (currently `['instruction-file.md']`) — edit it in code to add more.
 
 ### Custom Selection Logic
 

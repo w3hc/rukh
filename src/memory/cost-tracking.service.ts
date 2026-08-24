@@ -46,7 +46,12 @@ export class CostTracker implements OnModuleInit {
       inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
       outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
     },
-    // Claude 3.7 Sonnet rates
+    // Claude Sonnet 5 rates (current default Anthropic model)
+    'claude-sonnet-5': {
+      inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
+      outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
+    },
+    // Claude 3.7 Sonnet rates (retired - kept for historical cost records)
     'claude-3-7-sonnet-20250219': {
       inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
       outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
