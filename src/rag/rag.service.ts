@@ -28,7 +28,7 @@ export class RagService {
 
   /**
    * Step 1: Select relevant files and URLs based on user's question
-   * Uses mistral-small for cost-effective resource selection
+   * Uses ministral-3b for cost-effective, low-latency resource selection
    * Returns both selected resources (files and URLs) and selection cost
    */
   async selectRelevantFiles(
@@ -96,11 +96,11 @@ export class RagService {
         maxFiles,
       );
 
-      // Call mistral-small for resource selection
-      this.logger.debug('Calling mistral-small for resource selection');
+      // Call ministral-3b for resource selection
+      this.logger.debug('Calling ministral-3b for resource selection');
       const response = await this.mistralService.processMessageWithModel(
         selectionPrompt,
-        'mistral-small-latest', // Use mistral-small for cost efficiency
+        'ministral-3b-latest', // Use Ministral 3B: cheapest and fastest, well-suited to simple resource selection
         undefined, // No session needed for this one-off request
         undefined, // No system prompt needed
       );

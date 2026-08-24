@@ -109,6 +109,15 @@ export class AppController {
           model: 'anthropic',
         },
       },
+      WithWebSearch: {
+        summary: 'With Web Search',
+        description:
+          'Uses Anthropic Claude with server-side web search enabled',
+        value: {
+          message: 'What are the latest developments in Ethereum scaling?',
+          model: 'anthropic-web-search',
+        },
+      },
     },
   })
   @ApiResponse({

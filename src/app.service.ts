@@ -568,8 +568,17 @@ export class AppService {
     };
     let cost: any = undefined;
 
-    // Define available models for fallback
-    const availableModels = ['mistral', 'anthropic', 'openai'];
+    // Define available models
+    const availableModels = [
+      'mistral',
+      'anthropic',
+      'openai',
+      'anthropic-web-search',
+    ];
+
+    // Models eligible as fallbacks: anthropic-web-search is excluded because
+    // it incurs per-search fees and should only run when explicitly requested
+    const fallbackModels = ['mistral', 'anthropic', 'openai'];
 
     // Initialize with the selected model, or default to anthropic
     let selectedModel = askDto.model || 'anthropic';
@@ -585,7 +594,7 @@ export class AppService {
     // Create a fallback sequence starting with the selected model
     const modelsToTry = [
       selectedModel,
-      ...availableModels.filter((m) => m !== selectedModel),
+      ...fallbackModels.filter((m) => m !== selectedModel),
     ];
 
     this.logger.log(
@@ -832,6 +841,48 @@ export class AppService {
 
               modelProcessed = true;
               this.logger.log(`Successfully processed with Anthropic model`);
+              break;
+            }
+
+            case 'anthropic-web-search': {
+              // Check if there's existing conversation
+              const { isFirstMessage } =
+                await this.anthropicService.getConversationHistory(
+                  usedSessionId,
+                );
+
+              // Only use system prompt for first message or if no history is available
+              const effectiveSystemPrompt = isFirstMessage
+                ? systemPrompt
+                : undefined;
+
+              this.logger.debug(
+                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic (web search)`,
+              );
+
+              const response =
+                await this.anthropicService.processMessageWithWebSearch(
+                  askDto.message, // Send the clean message without context
+                  usedSessionId,
+                  effectiveSystemPrompt,
+                );
+
+              output = response.content;
+              fullOutput = response.content;
+              usedSessionId = response.sessionId;
+              usedModel = 'claude-sonnet-5';
+              cost = response.cost;
+
+              // Make sure we have valid usage data
+              usage = response.usage || {
+                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+                output_tokens: Math.ceil(fullOutput.length / 4),
+              };
+
+              modelProcessed = true;
+              this.logger.log(
+                `Successfully processed with Anthropic web search model`,
+              );
               break;
             }
 

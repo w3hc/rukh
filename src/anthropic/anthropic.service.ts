@@ -5,7 +5,9 @@ import { CustomJsonMemory } from '../memory/custom-memory';
 
 interface AnthropicMessage {
   role: 'user' | 'assistant';
-  content: string;
+  // A string for plain turns; an array of content blocks when replaying
+  // assistant turns that contain server tool use (web search)
+  content: string | Array<Record<string, unknown>>;
 }
 
 interface AnthropicResponse {
@@ -16,9 +18,13 @@ interface AnthropicResponse {
   }>;
   model: string;
   role: string;
+  stop_reason?: string;
   usage: {
     input_tokens: number;
     output_tokens: number;
+    server_tool_use?: {
+      web_search_requests?: number;
+    };
   };
 }
 
@@ -26,6 +32,7 @@ interface CostInfo {
   input_cost: number;
   output_cost: number;
   total_cost: number;
+  web_search_cost?: number;
 }
 
 @Injectable()
@@ -41,6 +48,12 @@ export class AnthropicService {
     inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
     outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
   };
+
+  // Web search server tool: $10 per 1,000 searches, on top of token costs
+  private readonly WEB_SEARCH_COST_PER_REQUEST = 0.01;
+  private readonly WEB_SEARCH_MAX_USES = 8;
+  // Long server-tool turns may pause; cap the continuation loop defensively
+  private readonly MAX_CONTINUATIONS = 5;
 
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
@@ -258,6 +271,210 @@ export class AnthropicService {
 
       throw new HttpException(
         'Failed to process message with Anthropic',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Process a message with the Anthropic server-side web search tool enabled.
+   * The whole search loop runs on Anthropic's infrastructure; the only
+   * orchestration needed here is a continuation loop on the `pause_turn`
+   * stop reason. Usage and cost are summed across all continuation calls,
+   * including the per-search fee.
+   */
+  async processMessageWithWebSearch(
+    message: string,
+    sessionId: string = randomUUID(),
+    systemPrompt?: string,
+  ): Promise<{
+    content: string;
+    sessionId: string;
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+    };
+    cost: CostInfo;
+  }> {
+    const requestId = this.generateRequestId();
+    const memory = new CustomJsonMemory(sessionId);
+
+    this.logger.log(
+      `Processing message [${requestId}] for session [${sessionId}] with Anthropic (web search enabled)`,
+    );
+
+    try {
+      const { history } = await memory.loadMemoryVariables();
+
+      let messages: AnthropicMessage[] = history.map((msg) => ({
+        role: msg.role === 'user' ? ('user' as const) : ('assistant' as const),
+        content: msg.content,
+      }));
+
+      messages.push({
+        role: 'user',
+        content: message,
+      });
+
+      const tools = [
+        {
+          type: 'web_search_20260209',
+          name: 'web_search',
+          max_uses: this.WEB_SEARCH_MAX_USES,
+        },
+      ];
+
+      const totalUsage = { input_tokens: 0, output_tokens: 0 };
+      let totalSearches = 0;
+
+      const callApi = async (
+        currentMessages: AnthropicMessage[],
+      ): Promise<AnthropicResponse> => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+        try {
+          const requestBody: any = {
+            model: this.model,
+            max_tokens: 64000,
+            messages: currentMessages,
+            tools,
+          };
+
+          if (systemPrompt) {
+            requestBody.system = systemPrompt;
+          }
+
+          const response = await fetch(this.apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': this.apiKey,
+              'anthropic-version': this.apiVersion,
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            const errorData = await response
+              .json()
+              .catch(() => ({ error: 'Unknown error' }));
+            this.logger.error(
+              `Anthropic API error response: ${JSON.stringify(errorData)}`,
+            );
+            throw new Error(
+              `Anthropic API error: ${JSON.stringify(errorData)}`,
+            );
+          }
+
+          return (await response.json()) as AnthropicResponse;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      const accumulateUsage = (responseData: AnthropicResponse) => {
+        const usage = responseData.usage || {
+          input_tokens: 0,
+          output_tokens: 0,
+        };
+        totalUsage.input_tokens += usage.input_tokens || 0;
+        totalUsage.output_tokens += usage.output_tokens || 0;
+        totalSearches += usage.server_tool_use?.web_search_requests || 0;
+      };
+
+      let responseData = await callApi(messages);
+      accumulateUsage(responseData);
+
+      let hops = 0;
+      while (
+        responseData.stop_reason === 'pause_turn' &&
+        hops++ < this.MAX_CONTINUATIONS
+      ) {
+        this.logger.log(
+          `Continuing paused turn [${requestId}] (continuation ${hops}/${this.MAX_CONTINUATIONS})`,
+        );
+        messages = [
+          ...messages,
+          {
+            role: 'assistant',
+            content: responseData.content as Array<Record<string, unknown>>,
+          },
+        ];
+        responseData = await callApi(messages);
+        accumulateUsage(responseData);
+      }
+
+      // The content array interleaves server_tool_use and search result
+      // blocks with text. Keep only the last contiguous run of text blocks:
+      // earlier runs are pre-search preamble ("let me search for that...").
+      // Within a run, blocks are joined without separator because citations
+      // split text mid-sentence into adjacent blocks.
+      let lastSegment = '';
+      let currentSegment = '';
+      for (const block of responseData.content) {
+        if (block.type === 'text' && block.text) {
+          currentSegment += block.text;
+        } else if (currentSegment) {
+          lastSegment = currentSegment;
+          currentSegment = '';
+        }
+      }
+      if (currentSegment) {
+        lastSegment = currentSegment;
+      }
+      const responseContent = lastSegment || 'No text content in response';
+
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
+      const cost = this.calculateCost(
+        totalUsage.input_tokens,
+        totalUsage.output_tokens,
+      );
+      const webSearchCost = Number(
+        (totalSearches * this.WEB_SEARCH_COST_PER_REQUEST).toFixed(6),
+      );
+      cost.web_search_cost = webSearchCost;
+      cost.total_cost = Number((cost.total_cost + webSearchCost).toFixed(6));
+
+      this.logger.debug({
+        message: `Anthropic web search response [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          model: this.model,
+          web_searches: totalSearches,
+          continuations: hops,
+          input_tokens: totalUsage.input_tokens,
+          output_tokens: totalUsage.output_tokens,
+          total_cost: cost.total_cost,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      return {
+        content: responseContent,
+        sessionId,
+        usage: totalUsage,
+        cost,
+      };
+    } catch (error) {
+      this.logger.error({
+        message: `Error processing message with Anthropic web search [${requestId}]`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to process message with Anthropic web search',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
