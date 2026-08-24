@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { MistralService } from '../mistral/mistral.service';
 import { ContextService } from '../context/context.service';
 import { WebReaderService } from '../web/web-reader.service';
@@ -18,11 +17,12 @@ interface FileMetadata {
 @Injectable()
 export class RagService {
   private readonly logger = new Logger(RagService.name);
+  // Files always included in the context, regardless of selection
+  private readonly REQUIRED_FILES = ['instruction-file.md'];
 
   constructor(
     private readonly mistralService: MistralService,
     private readonly contextService: ContextService,
-    private readonly configService: ConfigService,
     private readonly webReaderService: WebReaderService,
   ) {}
 
@@ -120,16 +120,8 @@ export class RagService {
         .filter((r) => r.startsWith('url:'))
         .map((r) => r.replace('url:', ''));
 
-      // Get list of required files from config
-      const requiredFilesConfig =
-        this.configService.get<string>('RAG_REQUIRED_FILES') || '';
-      const requiredFiles = requiredFilesConfig
-        .split(',')
-        .map((f) => f.trim())
-        .filter((f) => f.length > 0);
-
       // Always include required files if they exist in the context
-      for (const requiredFile of requiredFiles) {
+      for (const requiredFile of this.REQUIRED_FILES) {
         const fileExists = contextIndex.files.find(
           (f: any) => f.name === requiredFile,
         );
@@ -293,23 +285,17 @@ Your response:`;
         contextContent += `## Selected Context Files\n\n`;
       }
 
-      // Get list of required files from config to ensure they come first
-      const requiredFilesConfig =
-        this.configService.get<string>('RAG_REQUIRED_FILES') || '';
-      const requiredFiles = requiredFilesConfig
-        .split(',')
-        .map((f) => f.trim())
-        .filter((f) => f.length > 0);
-
       // Sort files: required files first (in order), then other files
       const sortedFiles = [...selectedFiles].sort((a, b) => {
-        const aIsRequired = requiredFiles.includes(a);
-        const bIsRequired = requiredFiles.includes(b);
+        const aIsRequired = this.REQUIRED_FILES.includes(a);
+        const bIsRequired = this.REQUIRED_FILES.includes(b);
 
         if (aIsRequired && !bIsRequired) return -1;
         if (!aIsRequired && bIsRequired) return 1;
         if (aIsRequired && bIsRequired) {
-          return requiredFiles.indexOf(a) - requiredFiles.indexOf(b);
+          return (
+            this.REQUIRED_FILES.indexOf(a) - this.REQUIRED_FILES.indexOf(b)
+          );
         }
         return 0;
       });

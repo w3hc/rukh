@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
@@ -18,6 +17,8 @@ import { RagService } from './rag/rag.service';
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
+  // Maximum number of files/URLs the two-step RAG selection step may pick
+  private readonly RAG_MAX_FILES = 5;
   private contexts: Map<string, string> = new Map();
   private writeQueue: Map<string, Promise<void>> = new Map();
 
@@ -26,7 +27,6 @@ export class AppService {
     private readonly anthropicService: AnthropicService,
     private readonly openaiService: OpenAIService,
     private readonly costTracker: CostTracker,
-    private readonly configService: ConfigService,
     private readonly subsService: SubsService,
     private readonly contextService: ContextService,
     private readonly webReaderService: WebReaderService,
@@ -609,13 +609,34 @@ export class AppService {
       // Load context information if context is specified
       const contextName = askDto.context || 'rukh';
       if (contextName && contextName !== '') {
-        // Check if two-step RAG is enabled
-        const ragEnabled =
-          this.configService.get<string>('RAG_ENABLE_TWO_STEP') === 'true';
-        const maxFiles = parseInt(
-          this.configService.get<string>('RAG_MAX_FILES') || '5',
-          10,
+        // Look up how many selectable resources this context actually has,
+        // so two-step RAG selection only kicks in when there's something to
+        // choose between. This replaces a blanket on/off env flag with
+        // per-request gating based on context content.
+        const contextPath = join(
+          process.cwd(),
+          'data',
+          'contexts',
+          contextName,
         );
+        const indexPath = join(contextPath, 'index.json');
+        let totalFiles = 0;
+        let totalUrls = 0;
+        if (existsSync(indexPath)) {
+          const indexData = await readFile(indexPath, 'utf-8');
+          const contextIndex = JSON.parse(indexData);
+          totalFiles = contextIndex.files?.length || 0;
+          totalUrls = contextIndex.links?.length || 0;
+        }
+        const totalResources = totalFiles + totalUrls;
+
+        const maxFiles = this.RAG_MAX_FILES;
+
+        // Two-step selection only runs when the caller explicitly asked for
+        // a context (an implicit default context skips it) and that context
+        // has more than one resource to choose from (nothing to select
+        // otherwise).
+        const ragEnabled = !!askDto.context && totalResources > 1;
 
         if (ragEnabled) {
           this.logger.log(`Using two-step RAG for context: ${contextName}`);
@@ -635,23 +656,6 @@ export class AppService {
             this.logger.log(
               `Selected ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
             );
-
-            // Get total files and URLs count
-            const contextPath = join(
-              process.cwd(),
-              'data',
-              'contexts',
-              contextName,
-            );
-            const indexPath = join(contextPath, 'index.json');
-            let totalFiles = 0;
-            let totalUrls = 0;
-            if (existsSync(indexPath)) {
-              const indexData = await readFile(indexPath, 'utf-8');
-              const contextIndex = JSON.parse(indexData);
-              totalFiles = contextIndex.files?.length || 0;
-              totalUrls = contextIndex.links?.length || 0;
-            }
 
             // STEP 2: Build context with only selected files and URLs
             this.logger.log(`Step 2: Building context with selected resources`);
@@ -792,7 +796,7 @@ export class AppService {
               fullOutput = response.content;
               usedSessionId = response.sessionId;
               cost = response.cost;
-              usedModel = 'mistral-large-2411';
+              usedModel = 'mistral-large-latest';
 
               // Make sure we have valid usage data
               usage = response.usage || {

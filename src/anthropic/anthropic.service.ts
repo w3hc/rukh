@@ -52,6 +52,7 @@ export class AnthropicService {
   // Web search server tool: $10 per 1,000 searches, on top of token costs
   private readonly WEB_SEARCH_COST_PER_REQUEST = 0.01;
   private readonly WEB_SEARCH_MAX_USES = 8;
+  private readonly WEB_FETCH_MAX_USES = 8;
   // Long server-tool turns may pause; cap the continuation loop defensively
   private readonly MAX_CONTINUATIONS = 5;
 
@@ -213,7 +214,10 @@ export class AnthropicService {
         const responseData: AnthropicResponse = await response.json();
 
         const responseContent =
-          responseData.content[0]?.text || 'No text content in response';
+          responseData.content
+            .filter((block) => block.type === 'text' && block.text)
+            .map((block) => block.text)
+            .join('') || 'No text content in response';
 
         // Save only the user message and response to the conversation history
         // We don't want to save the system prompt in the conversation history
@@ -322,6 +326,11 @@ export class AnthropicService {
           name: 'web_search',
           max_uses: this.WEB_SEARCH_MAX_USES,
         },
+        {
+          type: 'web_fetch_20260209',
+          name: 'web_fetch',
+          max_uses: this.WEB_FETCH_MAX_USES,
+        },
       ];
 
       const totalUsage = { input_tokens: 0, output_tokens: 0 };
@@ -331,7 +340,7 @@ export class AnthropicService {
         currentMessages: AnthropicMessage[],
       ): Promise<AnthropicResponse> => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000);
+        const timeoutId = setTimeout(() => controller.abort(), 600000);
 
         try {
           const requestBody: any = {

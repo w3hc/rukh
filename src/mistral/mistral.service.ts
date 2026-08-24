@@ -15,7 +15,7 @@ export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
-  private readonly modelName: string = 'mistral-large-2411';
+  private readonly modelName: string = 'mistral-large-latest';
 
   // Cost per 1K tokens in USD - Ministral 3B rates
   private readonly COST_RATES = {
@@ -71,7 +71,7 @@ export class MistralService {
    */
   async processMessageWithModel(
     message: string,
-    modelName: string = 'mistral-large-2411',
+    modelName: string = 'mistral-large-latest',
     sessionId?: string,
     systemPrompt?: string,
   ): Promise<{

@@ -39,7 +39,7 @@ describe('AppController', () => {
             },
             ask: jest.fn().mockImplementation(async (askDto) => ({
               output: askDto.model === 'mistral' ? 'AI response' : undefined,
-              model: askDto.model === 'mistral' ? 'mistral-large-2411' : 'none',
+              model: askDto.model === 'mistral' ? 'mistral-large-latest' : 'none',
               sessionId: askDto.sessionId || 'generated-session-id',
             })),
           },
@@ -101,7 +101,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-2411',
+        model: 'mistral-large-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -114,7 +114,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-2411',
+        model: 'mistral-large-latest',
         sessionId: expect.any(String),
       });
     });
@@ -136,7 +136,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-2411',
+        model: 'mistral-large-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -165,7 +165,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-2411',
+        model: 'mistral-large-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -184,7 +184,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-2411',
+        model: 'mistral-large-latest',
         sessionId: 'generated-session-id',
       });
     });

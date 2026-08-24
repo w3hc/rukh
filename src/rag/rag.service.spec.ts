@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RagService } from './rag.service';
 import { MistralService } from '../mistral/mistral.service';
 import { ContextService } from '../context/context.service';
-import { ConfigService } from '@nestjs/config';
 import { WebReaderService } from '../web/web-reader.service';
 import { Logger } from '@nestjs/common';
 
@@ -25,13 +24,6 @@ describe('RagService', () => {
       getFileContent: jest.fn(),
     };
 
-    const mockConfigService = {
-      get: jest.fn().mockImplementation((key: string) => {
-        if (key === 'RAG_REQUIRED_FILES') return '';
-        return undefined;
-      }),
-    };
-
     const mockWebReaderService = {
       extractForLLM: jest.fn().mockResolvedValue({
         text: 'Extracted web content',
@@ -44,7 +36,6 @@ describe('RagService', () => {
         RagService,
         { provide: MistralService, useValue: mockMistralService },
         { provide: ContextService, useValue: mockContextService },
-        { provide: ConfigService, useValue: mockConfigService },
         { provide: WebReaderService, useValue: mockWebReaderService },
       ],
     }).compile();

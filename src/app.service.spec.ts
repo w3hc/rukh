@@ -8,7 +8,6 @@ import { ContextService } from './context/context.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
-import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 
 describe('AppService - Model Fallback', () => {
@@ -105,21 +104,6 @@ describe('AppService - Model Fallback', () => {
               .mockResolvedValue('Mock RAG context'),
           },
         },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn().mockImplementation((key) => {
-              switch (key) {
-                case 'RAG_ENABLE_TWO_STEP':
-                  return 'false'; // Disable RAG in tests by default
-                case 'RAG_MAX_FILES':
-                  return '5';
-                default:
-                  return undefined;
-              }
-            }),
-          },
-        },
       ],
     }).compile();
 
@@ -182,7 +166,7 @@ describe('AppService - Model Fallback', () => {
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(anthropicService.processMessage).not.toHaveBeenCalled();
     expect(result.output).toBe('Response from Mistral');
-    expect(result.model).toBe('mistral-large-2411');
+    expect(result.model).toBe('mistral-large-latest');
   });
 
   it('should fall back to Mistral if Anthropic fails', async () => {
@@ -202,7 +186,7 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Fallback response from Mistral');
-    expect(result.model).toBe('mistral-large-2411');
+    expect(result.model).toBe('mistral-large-latest');
   });
 
   it('should fall back to Anthropic if Mistral fails', async () => {
