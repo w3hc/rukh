@@ -6,10 +6,11 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "transformIgnorePatterns": ["node_modules/(?!.*uuid)"],
+  "transformIgnorePatterns": ["node_modules/(?!.*(uuid|@noble|w3pk))"],
   "moduleNameMapper": {
     "^@langchain/mistralai$": "<rootDir>/../src/__mocks__/@langchain/mistralai.ts",
-    "^puppeteer-core$": "<rootDir>/../src/__mocks__/puppeteer-core.ts"
+    "^puppeteer-core$": "<rootDir>/../src/__mocks__/puppeteer-core.ts",
+    "^@nestjs/observe$": "<rootDir>/../src/__mocks__/@nestjs/observe.ts"
   },
   "silent": true
 }

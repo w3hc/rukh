@@ -4,6 +4,8 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import * as fs from 'fs';
 import { join } from 'path';
+import { Wallet, type HDNodeWallet } from 'ethers';
+import { createSiweMessage, generateSiweNonce } from 'w3pk';
 import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
@@ -12,6 +14,35 @@ import { WebReaderService } from '../src/web/web-reader.service';
 
 // Set global timeout for all tests
 jest.setTimeout(60000);
+
+// Signs a SIWE message authorizing exactly `${method} ${path}`, matching
+// what SiweAuthGuard expects on protected /context routes.
+async function siweHeaders(
+  wallet: Wallet | HDNodeWallet,
+  method: string,
+  path: string,
+) {
+  const issuedAt = new Date();
+  const expirationTime = new Date(issuedAt.getTime() + 60_000);
+
+  const message = createSiweMessage({
+    domain: 'localhost',
+    address: wallet.address,
+    statement: `Authorize ${method.toUpperCase()} ${path}`,
+    uri: `http://localhost${path}`,
+    version: '1',
+    chainId: 1,
+    nonce: generateSiweNonce(),
+    issuedAt: issuedAt.toISOString(),
+    expirationTime: expirationTime.toISOString(),
+  });
+  const signature = await wallet.signMessage(message);
+
+  return {
+    'x-siwe-message': encodeURIComponent(message),
+    'x-siwe-signature': signature,
+  };
+}
 
 describe('App (e2e)', () => {
   let app: INestApplication;
@@ -24,7 +55,6 @@ describe('App (e2e)', () => {
 
   // Setup for context tests
   const contextName = 'test-context';
-  const password = 'test-password';
   const fileName = 'test-file.md';
 
   // Mock implementations
@@ -336,94 +366,110 @@ describe('App (e2e)', () => {
     });
   });
 
-  describe('Context Endpoint with Password Authentication', () => {
+  describe('Context Endpoint with SIWE Authentication', () => {
     describe('POST /context', () => {
-      it('should create context with password', async () => {
+      it('should create context with a valid SIWE signature', async () => {
         // Use a unique context name to avoid conflicts with previous test runs
         const uniqueContextName = `test-context-${Date.now()}`;
+        const wallet = Wallet.createRandom();
 
         const response = await request(app.getHttpServer())
           .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
           .send({
             name: uniqueContextName,
-            password: password,
+            creatorAddress: wallet.address,
             description: 'Test context for e2e tests',
           });
 
-        // Accept either 201 or 400 (if context already exists)
-        expect([201, 400]).toContain(response.status);
-
-        if (response.status === 201) {
-          expect(response.body).toHaveProperty(
-            'message',
-            'Context created successfully',
-          );
-          expect(response.body).toHaveProperty('path');
-        }
+        expect(response.status).toBe(201);
+        expect(response.body).toHaveProperty(
+          'message',
+          'Context created successfully',
+        );
+        expect(response.body).toHaveProperty('path');
       });
 
-      it('should reject context creation without password', () => {
+      it('should reject context creation without SIWE headers', () => {
         return request(app.getHttpServer())
           .post('/context')
           .send({
             name: 'incomplete-context',
+            creatorAddress: Wallet.createRandom().address,
           })
           .expect(400);
+      });
+
+      it('should reject context creation when signer does not match creatorAddress', async () => {
+        const wallet = Wallet.createRandom();
+
+        return request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
+            name: `test-context-${Date.now()}`,
+            creatorAddress: Wallet.createRandom().address,
+          })
+          .expect(401);
       });
     });
 
     describe('DELETE /context/:name', () => {
-      // First we need to make sure the context exists before we can delete it
-      beforeEach(async () => {
-        try {
-          await request(app.getHttpServer()).post('/context').send({
-            name: contextName,
-            password: password,
-          });
-        } catch {
-          // Context might already exist, which is fine
-        }
-      });
-
-      it('should delete context with correct password', async () => {
-        // Create a unique context for this test
+      it('should delete context with the creator signature', async () => {
+        const wallet = Wallet.createRandom();
         const deleteContextName = `delete-context-${Date.now()}`;
-        const deletePassword = 'delete-pass';
 
-        // Create the context first
-        try {
-          await request(app.getHttpServer()).post('/context').send({
+        await request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
             name: deleteContextName,
-            password: deletePassword,
+            creatorAddress: wallet.address,
           });
-        } catch {
-          // It's OK if this fails
-        }
 
-        // Now try to delete it
         const response = await request(app.getHttpServer())
           .delete(`/context/${deleteContextName}`)
-          .set('x-context-password', deletePassword);
-
-        // Accept either 200 or 404 - the context might not exist
-        expect([200, 404]).toContain(response.status);
-
-        if (response.status === 200) {
-          expect(response.body).toHaveProperty(
-            'message',
-            'Context deleted successfully',
+          .set(
+            await siweHeaders(
+              wallet,
+              'DELETE',
+              `/context/${deleteContextName}`,
+            ),
           );
-        }
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty(
+          'message',
+          'Context deleted successfully',
+        );
       });
 
-      it('should reject context deletion with incorrect password', () => {
+      it('should reject context deletion signed by a different wallet', async () => {
+        const wallet = Wallet.createRandom();
+        const otherWallet = Wallet.createRandom();
+        const deleteContextName = `delete-context-${Date.now()}`;
+
+        await request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
+            name: deleteContextName,
+            creatorAddress: wallet.address,
+          });
+
         return request(app.getHttpServer())
-          .delete(`/context/${contextName}`)
-          .set('x-context-password', 'wrong-password')
+          .delete(`/context/${deleteContextName}`)
+          .set(
+            await siweHeaders(
+              otherWallet,
+              'DELETE',
+              `/context/${deleteContextName}`,
+            ),
+          )
           .expect(401);
       });
 
-      it('should reject context deletion without password header', () => {
+      it('should reject context deletion without SIWE headers', () => {
         return request(app.getHttpServer())
           .delete(`/context/${contextName}`)
           .expect(400);
@@ -431,46 +477,50 @@ describe('App (e2e)', () => {
     });
 
     describe('POST /context/upload', () => {
-      // Create a unique context name for upload tests
-      const uploadContextName = `upload-context-${Date.now()}`;
-      const uploadPassword = 'upload-pass';
+      it('should upload file with the creator signature', async () => {
+        const wallet = Wallet.createRandom();
+        const uploadContextName = `upload-context-${Date.now()}`;
 
-      // Ensure context exists before uploading
-      beforeEach(async () => {
-        try {
-          await request(app.getHttpServer()).post('/context').send({
+        await request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
             name: uploadContextName,
-            password: uploadPassword,
+            creatorAddress: wallet.address,
             description: 'Upload test context',
           });
-        } catch {
-          // Context might already exist, which is fine
-        }
-      });
 
-      it('should upload file with correct password', async () => {
         const response = await request(app.getHttpServer())
           .post('/context/upload')
-          .set('x-context-password', uploadPassword)
+          .set(await siweHeaders(wallet, 'POST', '/context/upload'))
           .field('contextName', uploadContextName)
           .attach('file', testFilePath);
 
-        // Accept either 201 or 401 - there might be auth issues in tests
-        expect([201, 401, 404]).toContain(response.status);
-
-        if (response.status === 201) {
-          expect(response.body).toHaveProperty('message');
-          expect([
-            'File uploaded successfully',
-            'File updated successfully',
-          ]).toContain(response.body.message);
-        }
+        expect(response.status).toBe(201);
+        expect(response.body).toHaveProperty('message');
+        expect([
+          'File uploaded successfully',
+          'File updated successfully',
+        ]).toContain(response.body.message);
       });
 
-      it('should reject file upload with incorrect password', () => {
+      it('should reject file upload signed by a different wallet', async () => {
+        const wallet = Wallet.createRandom();
+        const otherWallet = Wallet.createRandom();
+        const uploadContextName = `upload-context-${Date.now()}`;
+
+        await request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
+            name: uploadContextName,
+            creatorAddress: wallet.address,
+            description: 'Upload test context',
+          });
+
         return request(app.getHttpServer())
           .post('/context/upload')
-          .set('x-context-password', 'wrong-password')
+          .set(await siweHeaders(otherWallet, 'POST', '/context/upload'))
           .field('contextName', uploadContextName)
           .attach('file', testFilePath)
           .expect(401);
@@ -478,55 +528,64 @@ describe('App (e2e)', () => {
     });
 
     describe('DELETE /context/:name/file', () => {
-      // Create a unique context name for file deletion tests
-      const deleteContextName = `file-delete-context-${Date.now()}`;
-      const deletePassword = 'file-delete-pass';
+      it('should delete file with the creator signature', async () => {
+        const wallet = Wallet.createRandom();
+        const deleteContextName = `file-delete-context-${Date.now()}`;
 
-      // Try to create a file to delete
-      beforeEach(async () => {
-        // First, ensure context exists
-        try {
-          await request(app.getHttpServer()).post('/context').send({
+        await request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
             name: deleteContextName,
-            password: deletePassword,
+            creatorAddress: wallet.address,
           });
-        } catch {
-          // Context might already exist, which is fine
-        }
 
-        // Then upload a file
-        try {
-          await request(app.getHttpServer())
-            .post('/context/upload')
-            .set('x-context-password', deletePassword)
-            .field('contextName', deleteContextName)
-            .attach('file', testFilePath);
-        } catch {
-          // File upload might fail, which is OK
-        }
-      });
+        await request(app.getHttpServer())
+          .post('/context/upload')
+          .set(await siweHeaders(wallet, 'POST', '/context/upload'))
+          .field('contextName', deleteContextName)
+          .attach('file', testFilePath);
 
-      it('should delete file with correct password', async () => {
         const response = await request(app.getHttpServer())
           .delete(`/context/${deleteContextName}/file`)
-          .set('x-context-password', deletePassword)
+          .set(
+            await siweHeaders(
+              wallet,
+              'DELETE',
+              `/context/${deleteContextName}/file`,
+            ),
+          )
           .send({ filename: 'test.md' });
 
-        // Accept either 200 or 404 - the file might not exist
-        expect([200, 404]).toContain(response.status);
-
-        if (response.status === 200) {
-          expect(response.body).toHaveProperty(
-            'message',
-            'File deleted successfully',
-          );
-        }
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty(
+          'message',
+          'File deleted successfully',
+        );
       });
 
-      it('should reject file deletion with incorrect password', () => {
+      it('should reject file deletion signed by a different wallet', async () => {
+        const wallet = Wallet.createRandom();
+        const otherWallet = Wallet.createRandom();
+        const deleteContextName = `file-delete-context-${Date.now()}`;
+
+        await request(app.getHttpServer())
+          .post('/context')
+          .set(await siweHeaders(wallet, 'POST', '/context'))
+          .send({
+            name: deleteContextName,
+            creatorAddress: wallet.address,
+          });
+
         return request(app.getHttpServer())
-          .delete(`/context/${contextName}/file`)
-          .set('x-context-password', 'wrong-password')
+          .delete(`/context/${deleteContextName}/file`)
+          .set(
+            await siweHeaders(
+              otherWallet,
+              'DELETE',
+              `/context/${deleteContextName}/file`,
+            ),
+          )
           .send({ filename: fileName })
           .expect(401);
       });

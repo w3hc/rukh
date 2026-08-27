@@ -86,11 +86,11 @@ export class ContextService {
   }
 
   /**
-   * Validate a context's password
+   * Check that a signer owns a context (their address matches its creatorAddress)
    */
-  private async validatePassword(
+  private async validateOwnership(
     contextName: string,
-    password: string,
+    signerAddress: string,
   ): Promise<boolean> {
     const contextIndex = await this.getContextIndex(contextName);
 
@@ -98,22 +98,34 @@ export class ContextService {
       return false;
     }
 
-    return contextIndex.password === password;
+    return (
+      contextIndex.creatorAddress.toLowerCase() === signerAddress.toLowerCase()
+    );
   }
 
   /**
-   * Create a new context
+   * Create a new context. The signer must match creatorAddress: SIWE only
+   * proves who signed, it's this equality check that grants ownership.
    */
   async createContext(
     name: string,
-    password: string,
+    signerAddress: string,
     description: string = '',
     model?: string,
+    creatorAddress?: string,
+    creatorName?: string,
   ): Promise<string> {
     const contextPath = join(this.contextsPath, name);
 
     if (existsSync(contextPath)) {
       throw new Error(`Context '${name}' already exists`);
+    }
+
+    if (
+      !creatorAddress ||
+      creatorAddress.toLowerCase() !== signerAddress.toLowerCase()
+    ) {
+      throw new UnauthorizedException('Signer does not match creatorAddress');
     }
 
     try {
@@ -123,9 +135,10 @@ export class ContextService {
       // Create the index file
       const contextIndex: ContextIndex = {
         name,
-        password,
         description,
         ...(model && { model }),
+        creatorAddress,
+        ...(creatorName && { creatorName }),
         numberOfFiles: 0,
         totalSize: 0,
         files: [],
@@ -148,15 +161,17 @@ export class ContextService {
   /**
    * Delete a context
    */
-  async deleteContext(name: string, password: string): Promise<void> {
+  async deleteContext(name: string, signerAddress: string): Promise<void> {
     const contextPath = join(this.contextsPath, name);
 
     if (!existsSync(contextPath)) {
       throw new Error(`Context '${name}' not found`);
     }
 
-    if (!(await this.validatePassword(name, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(name, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     try {
@@ -177,7 +192,7 @@ export class ContextService {
     contextName: string,
     fileName: string,
     content: string,
-    password: string,
+    signerAddress: string,
     fileDescription: string = '',
   ): Promise<{ path: string; wasOverwritten: boolean }> {
     const contextPath = join(this.contextsPath, contextName);
@@ -187,8 +202,10 @@ export class ContextService {
       throw new Error(`Context '${contextName}' not found`);
     }
 
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     if (!fileName.endsWith('.md')) {
@@ -268,7 +285,7 @@ export class ContextService {
   async deleteFile(
     contextName: string,
     fileName: string,
-    password: string,
+    signerAddress: string,
   ): Promise<void> {
     const contextPath = join(this.contextsPath, contextName);
     const filePath = join(contextPath, fileName);
@@ -277,8 +294,10 @@ export class ContextService {
       throw new Error(`Context '${contextName}' not found`);
     }
 
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     if (!existsSync(filePath)) {
@@ -364,7 +383,14 @@ export class ContextService {
   /**
    * List all contexts
    */
-  async listContexts(): Promise<{ name: string; description: string }[]> {
+  async listContexts(): Promise<
+    {
+      name: string;
+      description: string;
+      creatorAddress?: string;
+      creatorName?: string;
+    }[]
+  > {
     try {
       // Create contexts directory if it doesn't exist
       if (!existsSync(this.contextsPath)) {
@@ -372,7 +398,12 @@ export class ContextService {
       }
 
       const contextFolders = await readdir(this.contextsPath);
-      const contexts: { name: string; description: string }[] = [];
+      const contexts: {
+        name: string;
+        description: string;
+        creatorAddress?: string;
+        creatorName?: string;
+      }[] = [];
 
       for (const folderName of contextFolders) {
         const indexPath = join(
@@ -386,6 +417,10 @@ export class ContextService {
           contexts.push({
             name: index.name,
             description: index.description,
+            ...(index.creatorAddress && {
+              creatorAddress: index.creatorAddress,
+            }),
+            ...(index.creatorName && { creatorName: index.creatorName }),
           });
         }
       }
@@ -419,10 +454,12 @@ export class ContextService {
    */
   async listContextFiles(
     contextName: string,
-    password: string,
+    signerAddress: string,
   ): Promise<ContextFile[]> {
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     const contextIndex = await this.getContextIndex(contextName);
@@ -439,7 +476,7 @@ export class ContextService {
   async getFileContent(
     contextName: string,
     fileName: string,
-    password: string,
+    signerAddress: string,
   ): Promise<string> {
     const contextPath = join(this.contextsPath, contextName);
     const filePath = join(contextPath, fileName);
@@ -448,8 +485,10 @@ export class ContextService {
       throw new Error(`Context '${contextName}' not found`);
     }
 
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     if (!existsSync(filePath)) {
@@ -480,7 +519,7 @@ export class ContextService {
       url: string;
       description?: string;
     },
-    password: string,
+    signerAddress: string,
   ): Promise<{ success: boolean; link: ContextLink }> {
     const contextPath = join(this.contextsPath, contextName);
 
@@ -488,8 +527,10 @@ export class ContextService {
       throw new Error(`Context '${contextName}' not found`);
     }
 
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     try {
@@ -539,10 +580,12 @@ export class ContextService {
    */
   async listLinks(
     contextName: string,
-    password: string,
+    signerAddress: string,
   ): Promise<ContextLink[]> {
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     const contextIndex = await this.getContextIndex(contextName);
@@ -560,7 +603,7 @@ export class ContextService {
   async deleteLink(
     contextName: string,
     url: string,
-    password: string,
+    signerAddress: string,
   ): Promise<boolean> {
     const contextPath = join(this.contextsPath, contextName);
 
@@ -568,8 +611,10 @@ export class ContextService {
       throw new Error(`Context '${contextName}' not found`);
     }
 
-    if (!(await this.validatePassword(contextName, password))) {
-      throw new UnauthorizedException('Invalid password for context');
+    if (!(await this.validateOwnership(contextName, signerAddress))) {
+      throw new UnauthorizedException(
+        'Signer is not the creator of this context',
+      );
     }
 
     try {

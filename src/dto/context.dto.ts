@@ -41,9 +41,10 @@ export interface ContextQuery {
 
 export interface ContextIndex {
   name: string;
-  password: string;
   description: string;
   model?: string;
+  creatorAddress: string;
+  creatorName?: string;
   numberOfFiles: number;
   totalSize: number;
   files: ContextFile[];
@@ -65,14 +66,6 @@ export class CreateContextDto {
   name: string;
 
   @ApiProperty({
-    description: 'Password for the context',
-    example: 'my-password',
-  })
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @ApiProperty({
     description: 'Description of the context',
     example: 'Information about Ethereum, its roadmap, and EIPs',
     required: false,
@@ -91,16 +84,46 @@ export class CreateContextDto {
   @IsIn(CONTEXT_MODELS)
   @IsOptional()
   model?: string;
-}
 
-export class ContextPasswordHeaderDto {
   @ApiProperty({
-    description: 'Password for the context',
-    example: 'my-password',
+    description:
+      'Wallet address of the context creator. Must match the signer of the SIWE signature authorizing this request.',
+    example: '0x1234567890abcdef1234567890abcdef12345678',
   })
   @IsString()
   @IsNotEmpty()
-  'x-context-password': string;
+  @Matches(/^0x[a-fA-F0-9]{40}$/, {
+    message: 'creatorAddress must be a valid Ethereum address',
+  })
+  creatorAddress: string;
+
+  @ApiProperty({
+    description: 'Display name of the context creator',
+    example: 'Julien Béranger',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  creatorName?: string;
+}
+
+export class SiweAuthHeadersDto {
+  @ApiProperty({
+    description: 'EIP-4361 SIWE message, statement scoped to this request',
+    example:
+      'example.com wants you to sign in with your Ethereum account:\n0x...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  'x-siwe-message': string;
+
+  @ApiProperty({
+    description: 'Signature over the x-siwe-message value',
+    example: '0x...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  'x-siwe-signature': string;
 }
 
 export class ContextFileDto {
@@ -191,6 +214,24 @@ export class ContextMetadataDto {
   })
   @IsString()
   description: string;
+
+  @ApiProperty({
+    description: 'Wallet address of the context creator',
+    example: '0x1234567890abcdef1234567890abcdef12345678',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  creatorAddress?: string;
+
+  @ApiProperty({
+    description: 'Display name of the context creator',
+    example: 'Julien Béranger',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  creatorName?: string;
 
   @ApiProperty({
     description: 'Number of files in the context',

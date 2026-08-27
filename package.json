@@ -26,16 +26,19 @@
     "@nestjs/common": "^11.1.27",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.27",
+    "@nestjs/observe": "^0.1.7",
     "@nestjs/platform-express": "^11.1.27",
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/throttler": "^6.5.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "ethers": "^6.17.0",
     "multer": "2.2.0",
     "puppeteer-core": "^25.1.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "w3pk": "^0.10.2"
   },
   "devDependencies": {
     "@jest/types": "^30.4.1",
