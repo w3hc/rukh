@@ -51,6 +51,8 @@ The `index.json` file is **required** and contains metadata about your context:
 {
   "name": "your-context",
   "description": "Brief description of what this context provides",
+  "creatorAddress": "0x1234567890abcdef1234567890abcdef12345678",
+  "creatorName": "Julien Béranger",
   "numberOfFiles": 2,
   "totalSize": 15,
   "files": [
@@ -183,8 +185,9 @@ Complete schema for `index.json`:
 ```json
 {
   "name": "string (required)",
-  "password": "string (optional) - for protected contexts",
   "description": "string (required)",
+  "creatorAddress": "string (required) - wallet address of the context creator; only its signer can manage this context",
+  "creatorName": "string (optional) - display name of the context creator",
   "numberOfFiles": "number (required)",
   "totalSize": "number (required) - total KB",
   "files": [
@@ -435,15 +438,16 @@ Check the response:
 
 ## Advanced Topics
 
-### Password-Protected Contexts
+### SIWE-Authenticated Contexts
 
-```json
-{
-  "name": "private-context",
-  "password": "your-secure-password",
-  "description": "Protected context requiring authentication"
-}
-```
+Every context-management endpoint other than `GET /context` (create, delete, upload/delete files, read/list files, add/delete/list links) requires a SIWE (EIP-4361) signature proving the caller is the context's creator:
+
+- `x-siwe-message`: a SIWE message, percent-encoded (header values can't contain the message's raw newlines), whose `statement` is exactly `Authorize <METHOD> <path>` for the request being made — e.g. `Authorize DELETE /context/my-context`
+- `x-siwe-signature`: the signature over that message
+
+The signature must be fresh (short `issuedAt`/`expirationTime` window, checked server-side — see `SIWE_MAX_AGE_SECONDS` in `.env.template`) and its recovered address must equal the context's `creatorAddress`; for `POST /context`, it must equal the `creatorAddress` in the request body instead, since the context doesn't exist yet. See `src/guards/siwe-auth.guard.ts`.
+
+On the rukh-ui side, `useW3PK().signSiwe(method, path)` builds and signs this message with the connected wallet.
 
 ### Required Files
 

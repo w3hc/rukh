@@ -13,9 +13,12 @@ describe('ContextService', () => {
   const testContextsPath = join(process.cwd(), 'data', 'contexts');
   let loggerErrorSpy: jest.SpyInstance;
 
+  const creatorAddress = '0x1234567890abcdef1234567890abcdef12345678';
+  const otherAddress = '0xffffffffffffffffffffffffffffffffffffffff';
+
   const mockContextIndex = {
     name: 'existing-context',
-    password: 'correct-password',
+    creatorAddress,
     description: '',
     numberOfFiles: 1,
     totalSize: 5,
@@ -26,6 +29,7 @@ describe('ContextService', () => {
         size: 5,
       },
     ],
+    links: [],
     queries: [],
   };
 
@@ -57,13 +61,11 @@ describe('ContextService', () => {
   });
 
   describe('createContext', () => {
-    it('should create a new context with password', async () => {
+    it('should create a new context owned by the signer', async () => {
       const contextName = 'new-context';
-      const password = 'new-password';
       const description = 'Test description';
       const contextPath = join(testContextsPath, contextName);
 
-      // Fix the mock chain issue by separating the mocks
       (existsSync as jest.Mock).mockImplementation(
         (path) => path !== contextPath,
       );
@@ -72,8 +74,10 @@ describe('ContextService', () => {
 
       const result = await service.createContext(
         contextName,
-        password,
+        creatorAddress,
         description,
+        undefined,
+        creatorAddress,
       );
 
       expect(result).toBe(contextPath);
@@ -81,12 +85,12 @@ describe('ContextService', () => {
 
       const expectedIndex = {
         name: contextName,
-        password,
         description,
+        creatorAddress,
         numberOfFiles: 0,
         totalSize: 0,
         files: [],
-        links: [], // Add this line to match the new structure
+        links: [],
         queries: [],
       };
 
@@ -100,20 +104,58 @@ describe('ContextService', () => {
 
     it('should throw error if context already exists', async () => {
       const contextName = 'existing-context';
-      const password = 'new-password';
 
       (existsSync as jest.Mock).mockReturnValue(true);
 
       await expect(
-        service.createContext(contextName, password),
+        service.createContext(
+          contextName,
+          creatorAddress,
+          '',
+          undefined,
+          creatorAddress,
+        ),
       ).rejects.toThrow(`Context '${contextName}' already exists`);
       expect(mkdir).not.toHaveBeenCalled();
       expect(loggerErrorSpy).not.toHaveBeenCalled();
     });
 
+    it('should reject when the signer does not match creatorAddress', async () => {
+      const contextName = 'new-context';
+      const contextPath = join(testContextsPath, contextName);
+
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+
+      await expect(
+        service.createContext(
+          contextName,
+          otherAddress,
+          '',
+          undefined,
+          creatorAddress,
+        ),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mkdir).not.toHaveBeenCalled();
+    });
+
+    it('should reject when creatorAddress is missing', async () => {
+      const contextName = 'new-context';
+      const contextPath = join(testContextsPath, contextName);
+
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+
+      await expect(
+        service.createContext(contextName, creatorAddress),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mkdir).not.toHaveBeenCalled();
+    });
+
     it('should include the model override in the index when provided', async () => {
       const contextName = 'model-context';
-      const password = 'new-password';
       const description = 'Test description';
       const model = 'anthropic-web-search';
       const contextPath = join(testContextsPath, contextName);
@@ -126,18 +168,19 @@ describe('ContextService', () => {
 
       const result = await service.createContext(
         contextName,
-        password,
+        creatorAddress,
         description,
         model,
+        creatorAddress,
       );
 
       expect(result).toBe(contextPath);
 
       const expectedIndex = {
         name: contextName,
-        password,
         description,
         model,
+        creatorAddress,
         numberOfFiles: 0,
         totalSize: 0,
         files: [],
@@ -155,7 +198,6 @@ describe('ContextService', () => {
 
     it('should omit the model key when no override is given', async () => {
       const contextName = 'no-model-context';
-      const password = 'new-password';
       const contextPath = join(testContextsPath, contextName);
 
       (existsSync as jest.Mock).mockImplementation(
@@ -164,37 +206,90 @@ describe('ContextService', () => {
       (mkdir as jest.Mock).mockResolvedValue(undefined);
       (writeFile as jest.Mock).mockResolvedValue(undefined);
 
-      await service.createContext(contextName, password);
+      await service.createContext(
+        contextName,
+        creatorAddress,
+        '',
+        undefined,
+        creatorAddress,
+      );
 
       const writeCallArgs = (writeFile as jest.Mock).mock.calls[0];
       const writtenIndex = JSON.parse(writeCallArgs[1]);
       expect(writtenIndex).not.toHaveProperty('model');
     });
+
+    it('should include creatorName when provided', async () => {
+      const contextName = 'creator-context';
+      const creatorName = 'Julien Béranger';
+      const contextPath = join(testContextsPath, contextName);
+
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+      (mkdir as jest.Mock).mockResolvedValue(undefined);
+      (writeFile as jest.Mock).mockResolvedValue(undefined);
+
+      await service.createContext(
+        contextName,
+        creatorAddress,
+        '',
+        undefined,
+        creatorAddress,
+        creatorName,
+      );
+
+      const writeCallArgs = (writeFile as jest.Mock).mock.calls[0];
+      const writtenIndex = JSON.parse(writeCallArgs[1]);
+      expect(writtenIndex.creatorAddress).toBe(creatorAddress);
+      expect(writtenIndex.creatorName).toBe(creatorName);
+    });
+
+    it('should omit creatorName when not given', async () => {
+      const contextName = 'no-creator-name-context';
+      const contextPath = join(testContextsPath, contextName);
+
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path !== contextPath,
+      );
+      (mkdir as jest.Mock).mockResolvedValue(undefined);
+      (writeFile as jest.Mock).mockResolvedValue(undefined);
+
+      await service.createContext(
+        contextName,
+        creatorAddress,
+        '',
+        undefined,
+        creatorAddress,
+      );
+
+      const writeCallArgs = (writeFile as jest.Mock).mock.calls[0];
+      const writtenIndex = JSON.parse(writeCallArgs[1]);
+      expect(writtenIndex).not.toHaveProperty('creatorName');
+    });
   });
 
   describe('deleteContext', () => {
-    it('should delete context with correct password', async () => {
+    it('should delete context when signer is the creator', async () => {
       const contextName = 'existing-context';
-      const password = 'correct-password';
       const contextPath = join(testContextsPath, contextName);
 
       (existsSync as jest.Mock).mockReturnValue(true);
       (rm as jest.Mock).mockResolvedValue(undefined);
 
-      await service.deleteContext(contextName, password);
+      await service.deleteContext(contextName, creatorAddress);
 
       expect(rm).toHaveBeenCalledWith(contextPath, { recursive: true });
       expect(loggerErrorSpy).not.toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException with incorrect password', async () => {
+    it('should throw UnauthorizedException when signer is not the creator', async () => {
       const contextName = 'existing-context';
-      const password = 'wrong-password';
 
       (existsSync as jest.Mock).mockReturnValue(true);
 
       await expect(
-        service.deleteContext(contextName, password),
+        service.deleteContext(contextName, otherAddress),
       ).rejects.toThrow(UnauthorizedException);
       expect(rm).not.toHaveBeenCalled();
       expect(loggerErrorSpy).not.toHaveBeenCalled();
@@ -202,12 +297,11 @@ describe('ContextService', () => {
 
     it('should throw error if context does not exist', async () => {
       const contextName = 'non-existent-context';
-      const password = 'any-password';
 
       (existsSync as jest.Mock).mockReturnValue(false);
 
       await expect(
-        service.deleteContext(contextName, password),
+        service.deleteContext(contextName, creatorAddress),
       ).rejects.toThrow(`Context '${contextName}' not found`);
       expect(rm).not.toHaveBeenCalled();
       expect(loggerErrorSpy).not.toHaveBeenCalled();
@@ -217,29 +311,18 @@ describe('ContextService', () => {
   describe('uploadFile', () => {
     it('should upload a new file to the context', async () => {
       const contextName = 'existing-context';
-      const password = 'correct-password';
       const fileName = 'new-file.md';
       const content = 'Test content';
       const description = 'Test file description';
 
-      // We need to specifically handle the existsSync check inside uploadFile
       const existsSyncSpy = existsSync as jest.Mock;
-
-      // First return true for context path check, then false for file existence check
       let callCount = 0;
       existsSyncSpy.mockImplementation((path) => {
         callCount++;
-        // For context path check (first check)
         if (callCount === 1) return true;
-        // For file path check (second check)
         if (path.includes(fileName)) return false;
-        // Default behavior
         return true;
       });
-
-      // Mock the actual implementation
-      const uploadFileSpy = jest.spyOn(service, 'uploadFile');
-      // This will use the original implementation but with our mocked dependencies
 
       (writeFile as jest.Mock).mockResolvedValue(undefined);
 
@@ -247,54 +330,23 @@ describe('ContextService', () => {
         contextName,
         fileName,
         content,
-        password,
+        creatorAddress,
         description,
       );
 
-      // Just test that uploadFile was called with the right parameters
-      expect(uploadFileSpy).toHaveBeenCalledWith(
-        contextName,
-        fileName,
-        content,
-        password,
-        description,
-      );
-
-      // For the actual test, we'll need to ensure the wasOverwritten flag matches
-      // the value that would be determined by existsSync
-      // Just verify it's returning something rather than the specific value
       expect(result).toHaveProperty('path');
       expect(result).toHaveProperty('wasOverwritten');
-
-      // Reset spies
-      uploadFileSpy.mockRestore();
     });
 
-    // Add another test that just calls the service method directly
-    it('should use direct override for testing', async () => {
-      const testContextName = 'test-context';
-      const testFileName = 'test.md';
+    it('should reject when signer is not the creator', async () => {
+      const contextName = 'existing-context';
 
-      // Create a direct mock implementation of the method
-      const originalMethod = service.uploadFile;
-      service.uploadFile = jest.fn().mockImplementation(() => {
-        return Promise.resolve({
-          path: join(testContextsPath, testContextName, testFileName),
-          wasOverwritten: false, // Explicitly set for testing
-        });
-      });
+      (existsSync as jest.Mock).mockReturnValue(true);
 
-      const result = await service.uploadFile(
-        'test-context',
-        'test.md',
-        'content',
-        'password',
-      );
-
-      expect(result.wasOverwritten).toBe(false);
-
-      // Restore the original method
-      service.uploadFile = originalMethod;
+      await expect(
+        service.uploadFile(contextName, 'new-file.md', 'content', otherAddress),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(writeFile).not.toHaveBeenCalled();
     });
   });
 

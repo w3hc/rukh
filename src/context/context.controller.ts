@@ -9,13 +9,13 @@ import {
   UploadedFile,
   ParseFilePipe,
   MaxFileSizeValidator,
-  Headers,
   BadRequestException,
   Logger,
   UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ContextPasswordGuard } from '../guards/context-password.guard';
+import { SiweAuthGuard } from '../guards/siwe-auth.guard';
+import { SiweAddress } from '../guards/siwe-address.decorator';
 import { FILE_UPLOAD } from '../config/file-upload.config';
 import {
   ApiTags,
@@ -36,6 +36,20 @@ import {
 } from '../dto/context.dto';
 import { SkipThrottle } from '@nestjs/throttler';
 
+const SIWE_HEADERS = [
+  {
+    name: 'x-siwe-message',
+    description:
+      'EIP-4361 SIWE message whose statement is "Authorize <METHOD> <path>" for this exact request',
+    required: true,
+  },
+  {
+    name: 'x-siwe-signature',
+    description: 'Signature over the x-siwe-message value',
+    required: true,
+  },
+] as const;
+
 @ApiTags('Context')
 @Controller('context')
 @SkipThrottle()
@@ -45,7 +59,10 @@ export class ContextController {
   constructor(private readonly contextService: ContextService) {}
 
   @Post()
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Create a new context' })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiResponse({
     status: 201,
     description: 'Context created successfully',
@@ -61,12 +78,22 @@ export class ContextController {
     status: 400,
     description: 'Invalid context name or context already exists',
   })
-  async createContext(@Body() createContextDto: CreateContextDto) {
+  @ApiResponse({
+    status: 401,
+    description:
+      'Invalid or missing SIWE signature, or signer does not match creatorAddress',
+  })
+  async createContext(
+    @SiweAddress() signerAddress: string,
+    @Body() createContextDto: CreateContextDto,
+  ) {
     const result = await this.contextService.createContext(
       createContextDto.name,
-      createContextDto.password,
+      signerAddress,
       createContextDto.description || '',
       createContextDto.model,
+      createContextDto.creatorAddress,
+      createContextDto.creatorName,
     );
     return {
       message: 'Context created successfully',
@@ -86,6 +113,8 @@ export class ContextController {
         properties: {
           name: { type: 'string' },
           description: { type: 'string' },
+          creatorAddress: { type: 'string' },
+          creatorName: { type: 'string' },
         },
       },
     },
@@ -95,18 +124,15 @@ export class ContextController {
   }
 
   @Get(':name/files')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'List files in a context' })
   @ApiParam({
     name: 'name',
     description: 'Name of the context',
     required: true,
   })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiResponse({
     status: 200,
     description: 'List of files in the context',
@@ -114,7 +140,7 @@ export class ContextController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -122,9 +148,12 @@ export class ContextController {
   })
   async listContextFiles(
     @Param('name') name: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
   ): Promise<ContextFileDto[]> {
-    const files = await this.contextService.listContextFiles(name, password);
+    const files = await this.contextService.listContextFiles(
+      name,
+      signerAddress,
+    );
     // Convert ContextFile[] to ContextFileDto[] if needed
     return files.map((file) => ({
       name: file.name,
@@ -134,7 +163,7 @@ export class ContextController {
   }
 
   @Get(':name/file/:filename')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Get file content from a context' })
   @ApiParam({
     name: 'name',
@@ -146,11 +175,8 @@ export class ContextController {
     description: 'Name of the file',
     required: true,
   })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiResponse({
     status: 200,
     description: 'File content',
@@ -160,7 +186,7 @@ export class ContextController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -169,20 +195,21 @@ export class ContextController {
   async getFileContent(
     @Param('name') name: string,
     @Param('filename') filename: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
   ): Promise<string> {
-    return await this.contextService.getFileContent(name, filename, password);
+    return await this.contextService.getFileContent(
+      name,
+      filename,
+      signerAddress,
+    );
   }
 
   @Post('upload')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Upload a markdown file to a context' })
   @ApiConsumes('multipart/form-data')
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiBody({
     type: UploadContextFileDto,
   })
@@ -204,11 +231,11 @@ export class ContextController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
     @Body('contextName') contextName: string,
     @Body('fileDescription') fileDescription: string,
     @UploadedFile(
@@ -233,7 +260,7 @@ export class ContextController {
       contextName,
       file.originalname,
       file.buffer.toString('utf-8'),
-      password,
+      signerAddress,
       fileDescription || '',
     );
 
@@ -247,13 +274,10 @@ export class ContextController {
   }
 
   @Delete(':name')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Delete a context' })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiResponse({
     status: 200,
     description: 'Context deleted successfully',
@@ -265,12 +289,8 @@ export class ContextController {
     },
   })
   @ApiResponse({
-    status: 400,
-    description: 'Missing password header',
-  })
-  @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -278,22 +298,19 @@ export class ContextController {
   })
   async deleteContext(
     @Param('name') name: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
   ) {
-    await this.contextService.deleteContext(name, password);
+    await this.contextService.deleteContext(name, signerAddress);
     return {
       message: 'Context deleted successfully',
     };
   }
 
   @Delete(':name/file')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Delete a markdown file from a context' })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiResponse({
     status: 200,
     description: 'File deleted successfully',
@@ -305,12 +322,8 @@ export class ContextController {
     },
   })
   @ApiResponse({
-    status: 400,
-    description: 'Missing password header',
-  })
-  @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -318,13 +331,13 @@ export class ContextController {
   })
   async deleteFile(
     @Param('name') contextName: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
     @Body() deleteFileDto: DeleteFileDto,
   ) {
     await this.contextService.deleteFile(
       contextName,
       deleteFileDto.filename,
-      password,
+      signerAddress,
     );
     return {
       message: 'File deleted successfully',
@@ -332,18 +345,15 @@ export class ContextController {
   }
 
   @Post(':name/link')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Add a link to a context' })
   @ApiParam({
     name: 'name',
     description: 'Name of the context',
     required: true,
   })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiBody({
     description: 'Link details',
     type: ContextLinkDto,
@@ -369,7 +379,7 @@ export class ContextController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -377,25 +387,22 @@ export class ContextController {
   })
   async addLink(
     @Param('name') name: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
     @Body() linkDto: ContextLinkDto,
   ): Promise<{ success: boolean; link: ContextLink }> {
-    return await this.contextService.addLink(name, linkDto, password);
+    return await this.contextService.addLink(name, linkDto, signerAddress);
   }
 
   @Get(':name/links')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'List links in a context' })
   @ApiParam({
     name: 'name',
     description: 'Name of the context',
     required: true,
   })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiResponse({
     status: 200,
     description: 'List of links in the context',
@@ -414,7 +421,7 @@ export class ContextController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -422,24 +429,21 @@ export class ContextController {
   })
   async listLinks(
     @Param('name') name: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
   ): Promise<ContextLink[]> {
-    return await this.contextService.listLinks(name, password);
+    return await this.contextService.listLinks(name, signerAddress);
   }
 
   @Delete(':name/link')
-  @UseGuards(ContextPasswordGuard)
+  @UseGuards(SiweAuthGuard)
   @ApiOperation({ summary: 'Delete a link from a context' })
   @ApiParam({
     name: 'name',
     description: 'Name of the context',
     required: true,
   })
-  @ApiHeader({
-    name: 'x-context-password',
-    description: 'Password for the context',
-    required: true,
-  })
+  @ApiHeader(SIWE_HEADERS[0])
+  @ApiHeader(SIWE_HEADERS[1])
   @ApiBody({
     description: 'URL of the link to delete',
     schema: {
@@ -466,7 +470,7 @@ export class ContextController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Invalid password',
+    description: 'Invalid signature or signer is not the context creator',
   })
   @ApiResponse({
     status: 404,
@@ -474,14 +478,14 @@ export class ContextController {
   })
   async deleteLink(
     @Param('name') name: string,
-    @Headers('x-context-password') password: string,
+    @SiweAddress() signerAddress: string,
     @Body() body: { url: string },
   ): Promise<{ success: boolean; message: string }> {
     if (!body.url) {
       throw new BadRequestException('URL is required');
     }
 
-    await this.contextService.deleteLink(name, body.url, password);
+    await this.contextService.deleteLink(name, body.url, signerAddress);
     return {
       success: true,
       message: 'Link deleted successfully',
