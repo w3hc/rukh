@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
@@ -15,12 +15,28 @@ import { CostTracker } from './memory/cost-tracking.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
+import { ObserveModule, isObserveEnabled } from './observe';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // Evaluated after ConfigModule.forRoot has loaded .env into process.env
+    ...(isObserveEnabled()
+      ? [
+          ObserveModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => ({
+              appKey: config.getOrThrow<string>('OBSERVE_APP_KEY'),
+              appSecret: config.getOrThrow<string>('OBSERVE_APP_SECRET'),
+              serviceId: config.get<string>('OBSERVE_SERVICE_ID') ?? 'rukh',
+              serviceVersion: '0.2.0',
+              debug: config.get<string>('OBSERVE_DEBUG') === 'true',
+            }),
+          }),
+        ]
+      : []),
     ThrottlerModule.forRoot([
       {
         ttl: 3600000,

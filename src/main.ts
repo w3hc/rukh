@@ -3,10 +3,13 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
+import { ObserveInstrument, isObserveEnabled } from './observe';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = (await NestFactory.create(AppModule)) as any;
+  const app = (await NestFactory.create(AppModule, {
+    instrument: ObserveInstrument,
+  })) as any;
 
   // Enable CORS for all origins
   app.enableCors({
@@ -42,6 +45,9 @@ async function bootstrap() {
   logger.log(`Environment: ${process.env.NODE_ENV || 'unset'}`);
   logger.log(`Server running on port: ${port}`);
   logger.log(`Swagger docs available at: http://localhost:${port}/api`);
+  logger.log(
+    `NestJS Observe: ${isObserveEnabled() ? 'enabled' : 'disabled (missing OBSERVE_APP_KEY/OBSERVE_APP_SECRET)'}`,
+  );
   logger.log(`See the Rukh fly! ❤️`);
 }
 bootstrap().catch((error) => {

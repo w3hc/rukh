@@ -16,6 +16,7 @@ const config: Config.InitialOptions = {
     '^src/(.*)$': '<rootDir>/$1',
     '^@langchain/mistralai$': '<rootDir>/__mocks__/@langchain/mistralai.ts',
     '^puppeteer-core$': '<rootDir>/__mocks__/puppeteer-core.ts',
+    '^@nestjs/observe$': '<rootDir>/__mocks__/@nestjs/observe.ts',
   },
   silent: true,
 };
