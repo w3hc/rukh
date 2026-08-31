@@ -4,10 +4,13 @@ import {
   Post,
   Body,
   Header,
+  Req,
+  Res,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -72,6 +75,13 @@ export class AppController {
           nullable: true,
           example: 'rukh',
         },
+        stream: {
+          type: 'boolean',
+          nullable: true,
+          example: false,
+          description:
+            'Stream the answer as server-sent events instead of a single JSON body',
+        },
         file: {
           type: 'string',
           format: 'binary',
@@ -109,6 +119,16 @@ export class AppController {
           model: 'anthropic',
         },
       },
+      Streaming: {
+        summary: 'Streaming',
+        description:
+          'Streams the answer back as text/event-stream instead of JSON.',
+        value: {
+          message: 'Describe the app in three sentences max.',
+          model: 'anthropic',
+          stream: true,
+        },
+      },
       WithWebSearch: {
         summary: 'With Web Search',
         description:
@@ -122,7 +142,8 @@ export class AppController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Message processed successfully',
+    description:
+      'Message processed successfully. With `stream: true` the response is instead a `text/event-stream` of `chunk` events (`{ "text": "..." }`), an optional `reset` event telling the client to discard what it has rendered so far, and a terminal `done` event whose data is this same payload - or an `error` event if every model failed.',
     type: AskResponseDto,
   })
   @ApiResponse({
@@ -147,9 +168,79 @@ export class AppController {
   @UseInterceptors(FileInterceptor('file'))
   async ask(
     @Body() askDto: AskDto,
+    @Req() req: Request,
+    // passthrough keeps Nest's normal serialization for the JSON path; only
+    // the streaming branch writes to the response itself
+    @Res({ passthrough: true }) res: Response,
     @UploadedFile(new FileValidator({ optional: true }))
     file?: Express.Multer['File'],
-  ): Promise<AskResponseDto> {
-    return this.appService.ask(askDto, file);
+  ): Promise<AskResponseDto | void> {
+    if (!askDto.stream) {
+      return this.appService.ask(askDto, file);
+    }
+
+    return this.streamAsk(askDto, req, res, file);
+  }
+
+  /**
+   * Writes an `askStream` run out as server-sent events.
+   *
+   * `X-Accel-Buffering: no` matters behind nginx, which otherwise buffers the
+   * whole response and defeats the point of streaming.
+   */
+  private async streamAsk(
+    askDto: AskDto,
+    req: Request,
+    res: Response,
+    file?: Express.Multer['File'],
+  ): Promise<void> {
+    res.status(201);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    let clientGone = false;
+    req.on('close', () => {
+      clientGone = true;
+    });
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      for await (const event of this.appService.askStream(askDto, file)) {
+        if (clientGone) {
+          // Breaking here returns the generator, which cancels the upstream
+          // provider request instead of paying for tokens nobody will read
+          break;
+        }
+
+        switch (event.type) {
+          case 'chunk':
+            send('chunk', { text: event.text });
+            break;
+          case 'reset':
+            send('reset', {});
+            break;
+          case 'done':
+            send('done', event.response);
+            break;
+          case 'error':
+            send('error', { message: event.message });
+            break;
+        }
+      }
+    } catch (error) {
+      // Headers are already sent, so the exception filter can't turn this
+      // into a status code - report it in-band instead
+      send('error', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      res.end();
+    }
   }
 }

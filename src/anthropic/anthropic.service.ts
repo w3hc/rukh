@@ -2,6 +2,8 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { CustomJsonMemory } from '../memory/custom-memory';
+import { ModelStreamEvent } from '../types/llm-stream';
+import { readSseData } from '../utils/sse';
 
 interface AnthropicMessage {
   role: 'user' | 'assistant';
@@ -44,7 +46,7 @@ export class AnthropicService {
   private readonly apiVersion: string = '2023-06-01';
 
   // Cost per 1K tokens in USD - Claude Sonnet 5 rates
-  // https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-08-24)
+  // https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-08-31)
   private readonly COST_RATES = {
     inputCost: 0.002, // $2 per million tokens = $0.002 per 1K tokens
     outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens
@@ -485,6 +487,465 @@ export class AnthropicService {
 
       throw new HttpException(
         'Failed to process message with Anthropic web search',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Opens a streaming request to the Messages API and hands back the raw SSE
+   * body.
+   *
+   * The abort controller only guards connection setup: once the first bytes
+   * arrive the answer may legitimately take minutes to finish, so the timeout
+   * is cleared rather than cutting a healthy stream short. Generators reading
+   * the body cancel the reader when the consumer walks away, which aborts the
+   * underlying request.
+   */
+  private async openStream(
+    requestBody: Record<string, unknown>,
+    timeoutMs: number,
+  ): Promise<ReadableStream<Uint8Array>> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': this.apiVersion,
+        },
+        body: JSON.stringify({ ...requestBody, stream: true }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: 'Unknown error' }));
+        this.logger.error(
+          `Anthropic API error response: ${JSON.stringify(errorData)}`,
+        );
+        throw new Error(`Anthropic API error: ${JSON.stringify(errorData)}`);
+      }
+
+      if (!response.body) {
+        throw new Error(
+          'Anthropic API returned a streaming response with no body',
+        );
+      }
+
+      return response.body;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /** Parses one SSE payload, tolerating the keep-alive lines the API sends. */
+  private parseStreamEvent(data: string): any | null {
+    if (!data || data === '[DONE]') {
+      return null;
+    }
+    try {
+      return JSON.parse(data);
+    } catch {
+      this.logger.warn(`Skipping unparseable Anthropic stream payload`);
+      return null;
+    }
+  }
+
+  /**
+   * Streaming counterpart of {@link processMessage}: yields text deltas as
+   * they arrive, then a terminal `final` event carrying the assembled answer
+   * with usage and cost. History is saved once, at the end, exactly as the
+   * non-streaming path does.
+   */
+  async *streamMessage(
+    message: string,
+    sessionId: string = randomUUID(),
+    systemPrompt?: string,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const requestId = this.generateRequestId();
+    const memory = new CustomJsonMemory(sessionId);
+
+    this.logger.log(
+      `Streaming message [${requestId}] for session [${sessionId}] with Anthropic`,
+    );
+
+    try {
+      const { history } = await memory.loadMemoryVariables();
+
+      const formattedMessages: AnthropicMessage[] = history.map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      }));
+
+      formattedMessages.push({
+        role: 'user',
+        content: message,
+      });
+
+      const requestBody: Record<string, unknown> = {
+        model: this.model,
+        max_tokens: 64000,
+        messages: formattedMessages,
+      };
+
+      if (systemPrompt) {
+        requestBody.system = systemPrompt;
+      }
+
+      const body = await this.openStream(requestBody, 300000);
+
+      const usage = { input_tokens: 0, output_tokens: 0 };
+      let content = '';
+
+      for await (const data of readSseData(body)) {
+        const event = this.parseStreamEvent(data);
+        if (!event) continue;
+
+        switch (event.type) {
+          case 'message_start':
+            usage.input_tokens = event.message?.usage?.input_tokens ?? 0;
+            break;
+          case 'content_block_delta':
+            if (event.delta?.type === 'text_delta' && event.delta.text) {
+              content += event.delta.text;
+              yield { type: 'text', text: event.delta.text };
+            }
+            break;
+          case 'message_delta':
+            // Output tokens are only final on this event; earlier events
+            // report the running count for the current block.
+            usage.output_tokens =
+              event.usage?.output_tokens ?? usage.output_tokens;
+            break;
+          case 'error':
+            throw new Error(
+              `Anthropic API stream error: ${JSON.stringify(event.error)}`,
+            );
+        }
+      }
+
+      const responseContent = content || 'No text content in response';
+
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
+      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+
+      this.logger.debug({
+        message: `Anthropic stream completed [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          model: this.model,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          total_cost: cost.total_cost,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      yield {
+        type: 'final',
+        content: responseContent,
+        sessionId,
+        usage,
+        cost,
+      };
+    } catch (error) {
+      this.logger.error({
+        message: `Error streaming message with Anthropic [${requestId}]`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to stream message with Anthropic',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Reads a single streamed API call, yielding text deltas and rebuilding the
+   * response's content blocks into `turn`.
+   *
+   * The blocks have to be reassembled because a paused turn can only be
+   * continued by replaying the assistant message verbatim, tool-use blocks
+   * included - the same replay the non-streaming path does with the JSON
+   * response body.
+   */
+  private async *streamWebSearchTurn(
+    requestBody: Record<string, unknown>,
+    turn: {
+      blocks: Array<Record<string, any>>;
+      stopReason?: string;
+      usage: { input_tokens: number; output_tokens: number };
+      searches: number;
+      streamedSegment: string;
+    },
+  ): AsyncGenerator<ModelStreamEvent> {
+    const body = await this.openStream(requestBody, 600000);
+
+    // Accumulated `input_json_delta` fragments, keyed by content block index
+    const partialJson = new Map<number, string>();
+    turn.blocks = [];
+    turn.stopReason = undefined;
+
+    for await (const data of readSseData(body)) {
+      const event = this.parseStreamEvent(data);
+      if (!event) continue;
+
+      switch (event.type) {
+        case 'message_start':
+          turn.usage.input_tokens += event.message?.usage?.input_tokens ?? 0;
+          break;
+
+        case 'content_block_start': {
+          const block = { ...(event.content_block ?? {}) };
+          turn.blocks[event.index] = block;
+          if (block.type !== 'text' && turn.streamedSegment) {
+            // A tool call interrupts the answer: what came before it was
+            // preamble, so tell the client to drop it.
+            turn.streamedSegment = '';
+            yield { type: 'reset' };
+          }
+          break;
+        }
+
+        case 'content_block_delta': {
+          const block = turn.blocks[event.index];
+          if (!block) break;
+
+          if (event.delta?.type === 'text_delta' && event.delta.text) {
+            block.text = (block.text ?? '') + event.delta.text;
+            turn.streamedSegment += event.delta.text;
+            yield { type: 'text', text: event.delta.text };
+          } else if (event.delta?.type === 'input_json_delta') {
+            partialJson.set(
+              event.index,
+              (partialJson.get(event.index) ?? '') +
+                (event.delta.partial_json ?? ''),
+            );
+          } else if (event.delta?.type === 'citations_delta') {
+            block.citations = [
+              ...(block.citations ?? []),
+              event.delta.citation,
+            ];
+          }
+          break;
+        }
+
+        case 'content_block_stop': {
+          const json = partialJson.get(event.index);
+          if (json !== undefined && turn.blocks[event.index]) {
+            try {
+              turn.blocks[event.index].input = JSON.parse(json || '{}');
+            } catch {
+              this.logger.warn(
+                `Unparseable tool input JSON on block ${event.index}`,
+              );
+              turn.blocks[event.index].input = {};
+            }
+            partialJson.delete(event.index);
+          }
+          break;
+        }
+
+        case 'message_delta':
+          turn.usage.output_tokens += event.usage?.output_tokens ?? 0;
+          turn.searches +=
+            event.usage?.server_tool_use?.web_search_requests ?? 0;
+          turn.stopReason = event.delta?.stop_reason ?? turn.stopReason;
+          break;
+
+        case 'error':
+          throw new Error(
+            `Anthropic API stream error: ${JSON.stringify(event.error)}`,
+          );
+      }
+    }
+
+    // Blocks arrive indexed, and a dropped index would leave a hole that
+    // breaks the replay, so compact before handing the array back.
+    turn.blocks = turn.blocks.filter(Boolean);
+  }
+
+  /**
+   * Streaming counterpart of {@link processMessageWithWebSearch}.
+   *
+   * Text is emitted as it arrives so the caller sees progress during a long
+   * search, and a `reset` event marks the point where narration gives way to
+   * the real answer - keeping the streamed text in step with the `content` of
+   * the final event, which applies the same last-text-segment rule as the
+   * non-streaming path.
+   */
+  async *streamMessageWithWebSearch(
+    message: string,
+    sessionId: string = randomUUID(),
+    systemPrompt?: string,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const requestId = this.generateRequestId();
+    const memory = new CustomJsonMemory(sessionId);
+
+    this.logger.log(
+      `Streaming message [${requestId}] for session [${sessionId}] with Anthropic (web search enabled)`,
+    );
+
+    try {
+      const { history } = await memory.loadMemoryVariables();
+
+      let messages: AnthropicMessage[] = history.map((msg) => ({
+        role: msg.role === 'user' ? ('user' as const) : ('assistant' as const),
+        content: msg.content,
+      }));
+
+      messages.push({
+        role: 'user',
+        content: message,
+      });
+
+      const tools = [
+        {
+          type: 'web_search_20260209',
+          name: 'web_search',
+          max_uses: this.WEB_SEARCH_MAX_USES,
+        },
+        {
+          type: 'web_fetch_20260209',
+          name: 'web_fetch',
+          max_uses: this.WEB_FETCH_MAX_USES,
+        },
+      ];
+
+      const buildBody = (currentMessages: AnthropicMessage[]) => {
+        const requestBody: Record<string, unknown> = {
+          model: this.model,
+          max_tokens: 64000,
+          messages: currentMessages,
+          tools,
+        };
+        if (systemPrompt) {
+          requestBody.system = systemPrompt;
+        }
+        return requestBody;
+      };
+
+      const turn = {
+        blocks: [] as Array<Record<string, any>>,
+        stopReason: undefined as string | undefined,
+        usage: { input_tokens: 0, output_tokens: 0 },
+        searches: 0,
+        streamedSegment: '',
+      };
+
+      yield* this.streamWebSearchTurn(buildBody(messages), turn);
+
+      let hops = 0;
+      while (
+        turn.stopReason === 'pause_turn' &&
+        hops++ < this.MAX_CONTINUATIONS
+      ) {
+        this.logger.log(
+          `Continuing paused turn [${requestId}] (continuation ${hops}/${this.MAX_CONTINUATIONS})`,
+        );
+
+        // Only the final continuation's text counts as the answer, so drop
+        // whatever the paused turn had already streamed.
+        if (turn.streamedSegment) {
+          turn.streamedSegment = '';
+          yield { type: 'reset' };
+        }
+
+        messages = [
+          ...messages,
+          {
+            role: 'assistant',
+            content: turn.blocks as Array<Record<string, unknown>>,
+          },
+        ];
+
+        yield* this.streamWebSearchTurn(buildBody(messages), turn);
+      }
+
+      // Keep only the last contiguous run of text blocks: earlier runs are
+      // pre-search preamble. Within a run, blocks are joined without
+      // separator because citations split text mid-sentence.
+      let lastSegment = '';
+      let currentSegment = '';
+      for (const block of turn.blocks) {
+        if (block.type === 'text' && block.text) {
+          currentSegment += block.text;
+        } else if (currentSegment) {
+          lastSegment = currentSegment;
+          currentSegment = '';
+        }
+      }
+      if (currentSegment) {
+        lastSegment = currentSegment;
+      }
+      const responseContent = lastSegment || 'No text content in response';
+
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
+      const cost = this.calculateCost(
+        turn.usage.input_tokens,
+        turn.usage.output_tokens,
+      );
+      const webSearchCost = Number(
+        (turn.searches * this.WEB_SEARCH_COST_PER_REQUEST).toFixed(6),
+      );
+      cost.web_search_cost = webSearchCost;
+      cost.total_cost = Number((cost.total_cost + webSearchCost).toFixed(6));
+
+      this.logger.debug({
+        message: `Anthropic web search stream completed [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          model: this.model,
+          web_searches: turn.searches,
+          continuations: hops,
+          input_tokens: turn.usage.input_tokens,
+          output_tokens: turn.usage.output_tokens,
+          total_cost: cost.total_cost,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      yield {
+        type: 'final',
+        content: responseContent,
+        sessionId,
+        usage: turn.usage,
+        cost,
+      };
+    } catch (error) {
+      this.logger.error({
+        message: `Error streaming message with Anthropic web search [${requestId}]`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to stream message with Anthropic web search',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

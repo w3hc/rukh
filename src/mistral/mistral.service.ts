@@ -3,6 +3,7 @@ import { ChatMistralAI } from '@langchain/mistralai';
 import { CustomJsonMemory } from '../memory/custom-memory';
 import { randomUUID } from 'crypto';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
+import { ModelStreamEvent } from '../types/llm-stream';
 
 interface CostInfo {
   input_cost: number;
@@ -15,15 +16,25 @@ export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
-  private readonly modelName: string = 'mistral-large-latest';
+  private readonly modelName: string = 'mistral-small-latest';
 
   // Cost per 1K tokens in USD, per model - https://mistral.ai/pricing/api/
-  // (verified 2026-08-24). Rates vary a lot between the two models this
-  // service actually calls, so they can't share a single flat rate.
+  // (verified 2026-08-31). Rates vary a lot between the models this service
+  // actually calls, so they can't share a single flat rate.
   private readonly MODEL_RATES: Record<
     string,
     { inputCost: number; outputCost: number }
   > = {
+    'mistral-small-latest': {
+      inputCost: 0.00015, // $0.15 per million tokens = $0.00015 per 1K tokens
+      outputCost: 0.0006, // $0.60 per million tokens = $0.0006 per 1K tokens
+    },
+    'mistral-medium-latest': {
+      inputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
+      outputCost: 0.0075, // $7.50 per million tokens = $0.0075 per 1K tokens
+    },
+    // Large is cheaper than Medium but gated behind a paid subscription
+    // tier; a key without that tier gets a 403 tier_not_allowed on it.
     'mistral-large-latest': {
       inputCost: 0.0005, // $0.50 per million tokens = $0.0005 per 1K tokens
       outputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
@@ -88,7 +99,7 @@ export class MistralService {
    */
   async processMessageWithModel(
     message: string,
-    modelName: string = 'mistral-large-latest',
+    modelName: string = 'mistral-small-latest',
     sessionId?: string,
     systemPrompt?: string,
   ): Promise<{
@@ -366,6 +377,141 @@ export class MistralService {
 
       throw new HttpException(
         'Failed to process message with Mistral AI',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * LangChain chunks carry either a plain string or an array of content
+   * parts; flatten both to the text the caller can append.
+   */
+  private chunkToText(content: unknown): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content
+        .map((part: any) =>
+          typeof part === 'string' ? part : (part?.text ?? ''),
+        )
+        .join('');
+    }
+    return '';
+  }
+
+  /**
+   * Streaming counterpart of {@link processMessage}: yields text deltas as
+   * they arrive, then a terminal `final` event with the assembled answer,
+   * usage and cost. History is saved once, at the end, exactly as the
+   * non-streaming path does.
+   */
+  async *streamMessage(
+    message: string,
+    sessionId: string = randomUUID(),
+    systemPrompt?: string,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const requestId = this.generateRequestId();
+    const memory = new CustomJsonMemory(sessionId);
+
+    this.logger.log(
+      `Streaming message [${requestId}] for session [${sessionId}] with Mistral`,
+    );
+
+    try {
+      const { history, isFirstMessage } =
+        await this.getConversationHistory(sessionId);
+
+      const langChainMessages = [];
+
+      if (isFirstMessage && systemPrompt) {
+        this.logger.debug(
+          `Using system prompt (${systemPrompt.length} characters)`,
+        );
+        // Mistral via LangChain gets the system content folded into the
+        // first user message, matching the non-streaming path
+        langChainMessages.push(
+          new HumanMessage(`System: ${systemPrompt}\n\nUser: ${message}`),
+        );
+      } else {
+        history.forEach((msg) => {
+          if (msg.role === 'user') {
+            langChainMessages.push(new HumanMessage(msg.content));
+          } else if (msg.role === 'assistant') {
+            langChainMessages.push(new AIMessage(msg.content));
+          }
+        });
+
+        langChainMessages.push(new HumanMessage(message));
+      }
+
+      let content = '';
+
+      const stream = await this.model.stream(langChainMessages);
+      for await (const chunk of stream) {
+        const text = this.chunkToText(chunk?.content);
+        if (text) {
+          content += text;
+          yield { type: 'text', text };
+        }
+      }
+
+      const responseContent = content || 'No text content in response';
+
+      // Mistral over LangChain reports no token counts, so estimate them the
+      // same way the non-streaming path does: roughly 1 token per 4 chars
+      const allText = langChainMessages.reduce((total, msg) => {
+        if (typeof msg.content === 'string') {
+          return total + msg.content.length;
+        }
+        return total;
+      }, 0);
+
+      const usage = {
+        input_tokens: Math.ceil(allText / 4),
+        output_tokens: Math.ceil(responseContent.length / 4),
+      };
+
+      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
+      this.logger.debug({
+        message: `Mistral stream completed [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          model: this.modelName,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          total_cost: cost.total_cost,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      yield {
+        type: 'final',
+        content: responseContent,
+        sessionId,
+        usage,
+        cost,
+      };
+    } catch (error) {
+      this.logger.error({
+        message: `Error streaming message with Mistral [${requestId}]`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to stream message with Mistral AI',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

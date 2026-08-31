@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsIn,
+  IsBoolean,
+} from 'class-validator';
 
 export class AskDto {
   @ApiProperty({
@@ -44,4 +51,20 @@ export class AskDto {
   @IsOptional()
   @IsString()
   context?: string;
+
+  @ApiProperty({
+    description:
+      'Stream the answer back as server-sent events instead of a single JSON body. The response is then `text/event-stream`: `chunk` events carrying incremental text, an optional `reset` event (Anthropic web search only) telling the client to discard what it has rendered so far, and a final `done` event with the same payload as the non-streaming response.',
+    example: false,
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  // multipart/form-data carries every field as a string, so "true"/"false"
+  // have to be folded into real booleans before validation
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toLowerCase() === 'true' : value,
+  )
+  @IsBoolean({ message: 'Stream must be a boolean' })
+  stream?: boolean;
 }

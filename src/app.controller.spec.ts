@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { ConfigService } from '@nestjs/config';
+import { Request, Response } from 'express';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -16,6 +17,17 @@ describe('AppController', () => {
     buffer: Buffer.from('This is test file content'),
     size: 26,
   } as Express.Multer['File'];
+
+  // The handler now takes the raw req/res so it can write SSE frames; the
+  // JSON path only ever touches them when `stream` is set.
+  const mockReq = { on: jest.fn() } as unknown as Request;
+  const mockRes = {
+    status: jest.fn(),
+    setHeader: jest.fn(),
+    flushHeaders: jest.fn(),
+    write: jest.fn(),
+    end: jest.fn(),
+  } as unknown as Response;
 
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
@@ -37,10 +49,22 @@ describe('AppController', () => {
 </body>
 </html>`;
             },
+            askStream: jest.fn().mockImplementation(async function* () {
+              yield { type: 'chunk', text: 'AI ' };
+              yield { type: 'chunk', text: 'response' };
+              yield {
+                type: 'done',
+                response: {
+                  output: 'AI response',
+                  model: 'mistral-small-latest',
+                  sessionId: 'test-session-id',
+                },
+              };
+            }),
             ask: jest.fn().mockImplementation(async (askDto) => ({
               output: askDto.model === 'mistral' ? 'AI response' : undefined,
               model:
-                askDto.model === 'mistral' ? 'mistral-large-latest' : 'none',
+                askDto.model === 'mistral' ? 'mistral-small-latest' : 'none',
               sessionId: askDto.sessionId || 'generated-session-id',
             })),
           },
@@ -82,9 +106,13 @@ describe('AppController', () => {
 
   describe('ask', () => {
     it('should return response with no model specified', async () => {
-      const result = await appController.ask({
-        message: 'test message',
-      });
+      const result = await appController.ask(
+        {
+          message: 'test message',
+        },
+        mockReq,
+        mockRes,
+      );
 
       expect(result).toEqual({
         output: undefined,
@@ -94,29 +122,117 @@ describe('AppController', () => {
     });
 
     it('should return response with Mistral model', async () => {
-      const result = await appController.ask({
-        message: 'test message',
-        model: 'mistral',
-        sessionId: 'test-session-id',
-      });
+      const result = await appController.ask(
+        {
+          message: 'test message',
+          model: 'mistral',
+          sessionId: 'test-session-id',
+        },
+        mockReq,
+        mockRes,
+      );
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'test-session-id',
       });
     });
 
     it('should generate sessionId if not provided', async () => {
-      const result = await appController.ask({
-        message: 'test message',
-        model: 'mistral',
-      });
+      const result = await appController.ask(
+        {
+          message: 'test message',
+          model: 'mistral',
+        },
+        mockReq,
+        mockRes,
+      );
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: expect.any(String),
+      });
+    });
+  });
+
+  describe('ask with streaming', () => {
+    const collectWrites = (res: Response) =>
+      (res.write as jest.Mock).mock.calls.map((call) => call[0]).join('');
+
+    it('should write the stream as server-sent events', async () => {
+      const res = {
+        status: jest.fn(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+      } as unknown as Response;
+
+      const result = await appController.ask(
+        { message: 'test message', model: 'mistral', stream: true },
+        mockReq,
+        res,
+      );
+
+      expect(result).toBeUndefined();
+      expect(appService.askStream).toHaveBeenCalled();
+      expect(appService.ask).not.toHaveBeenCalled();
+
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'text/event-stream; charset=utf-8',
+      );
+
+      const body = collectWrites(res);
+      expect(body).toContain('event: chunk\ndata: {"text":"AI "}\n\n');
+      expect(body).toContain('event: chunk\ndata: {"text":"response"}\n\n');
+      expect(body).toContain('event: done\ndata: {');
+      expect(body).toContain('"output":"AI response"');
+      expect(res.end).toHaveBeenCalled();
+    });
+
+    it('should report a mid-stream failure as an error event', async () => {
+      (appService.askStream as jest.Mock).mockImplementationOnce(
+        async function* () {
+          yield { type: 'chunk', text: 'partial' };
+          throw new Error('provider exploded');
+        },
+      );
+
+      const res = {
+        status: jest.fn(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+      } as unknown as Response;
+
+      await appController.ask(
+        { message: 'test message', stream: true },
+        mockReq,
+        res,
+      );
+
+      const body = collectWrites(res);
+      expect(body).toContain('event: error');
+      expect(body).toContain('provider exploded');
+      expect(res.end).toHaveBeenCalled();
+    });
+
+    it('should use the JSON path when stream is false', async () => {
+      const result = await appController.ask(
+        { message: 'test message', model: 'mistral', stream: false },
+        mockReq,
+        mockRes,
+      );
+
+      expect(appService.askStream).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        output: 'AI response',
+        model: 'mistral-small-latest',
+        sessionId: 'generated-session-id',
       });
     });
   });
@@ -129,6 +245,8 @@ describe('AppController', () => {
           model: 'mistral',
           sessionId: 'test-session-id',
         },
+        mockReq,
+        mockRes,
         mockFile,
       );
 
@@ -137,7 +255,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -150,6 +268,8 @@ describe('AppController', () => {
           sessionId: 'test-session-id',
           context: 'custom-context',
         },
+        mockReq,
+        mockRes,
         mockFile,
       );
 
@@ -166,7 +286,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -177,6 +297,8 @@ describe('AppController', () => {
           message: 'test message without file',
           model: 'mistral',
         },
+        mockReq,
+        mockRes,
         undefined,
       );
 
@@ -185,7 +307,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'generated-session-id',
       });
     });

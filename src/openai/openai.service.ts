@@ -2,6 +2,8 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { CustomJsonMemory } from '../memory/custom-memory';
+import { ModelStreamEvent } from '../types/llm-stream';
+import { readSseData } from '../utils/sse';
 
 interface OpenAIMessage {
   role: 'user' | 'assistant' | 'system';
@@ -40,7 +42,7 @@ export class OpenAIService {
     'https://api.openai.com/v1/chat/completions';
 
   // Cost per 1K tokens in USD - GPT-4o rates
-  // https://developers.openai.com/api/docs/pricing (verified 2026-08-24)
+  // https://developers.openai.com/api/docs/pricing (verified 2026-08-31)
   private readonly COST_RATES = {
     inputCost: 0.0025, // $2.50 per million tokens = $0.0025 per 1K tokens
     outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens
@@ -275,6 +277,175 @@ export class OpenAIService {
 
       throw new HttpException(
         'Failed to process message with OpenAI',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Streaming counterpart of {@link processMessage}: yields text deltas as
+   * they arrive, then a terminal `final` event with the assembled answer,
+   * usage and cost. History is saved once, at the end, exactly as the
+   * non-streaming path does.
+   */
+  async *streamMessage(
+    message: string,
+    sessionId: string = randomUUID(),
+    systemPrompt?: string,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const requestId = this.generateRequestId();
+    const memory = new CustomJsonMemory(sessionId);
+
+    this.logger.log(
+      `Streaming message [${requestId}] for session [${sessionId}] with OpenAI`,
+    );
+
+    if (!this.apiKey) {
+      this.logger.error('OpenAI API key is not configured');
+      throw new HttpException(
+        'OpenAI service unavailable',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    try {
+      const { history } = await memory.loadMemoryVariables();
+
+      const formattedMessages: OpenAIMessage[] = history.map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      }));
+
+      if (systemPrompt) {
+        formattedMessages.unshift({
+          role: 'system',
+          content: systemPrompt,
+        });
+      }
+
+      formattedMessages.push({
+        role: 'user',
+        content: message,
+      });
+
+      const requestBody = {
+        model: this.model,
+        messages: formattedMessages,
+        temperature: 0.3,
+        max_tokens: 4096,
+        stream: true,
+        // Without this the streamed response carries no usage at all, which
+        // would leave cost tracking blind on every streamed request.
+        stream_options: { include_usage: true },
+      };
+
+      // The timeout only guards connection setup: once tokens are flowing a
+      // long answer is healthy, not stalled.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+      let body: ReadableStream<Uint8Array>;
+      try {
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response
+            .json()
+            .catch(() => ({ error: 'Unknown error' }));
+          this.logger.error(
+            `OpenAI API error response: ${JSON.stringify(errorData)}`,
+          );
+          throw new Error(`OpenAI API error: ${JSON.stringify(errorData)}`);
+        }
+
+        if (!response.body) {
+          throw new Error(
+            'OpenAI API returned a streaming response with no body',
+          );
+        }
+
+        body = response.body;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      const usage = { input_tokens: 0, output_tokens: 0 };
+      let content = '';
+
+      for await (const data of readSseData(body)) {
+        if (!data || data === '[DONE]') continue;
+
+        let chunk: any;
+        try {
+          chunk = JSON.parse(data);
+        } catch {
+          this.logger.warn('Skipping unparseable OpenAI stream payload');
+          continue;
+        }
+
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (delta) {
+          content += delta;
+          yield { type: 'text', text: delta };
+        }
+
+        // The usage-bearing chunk arrives last and has an empty choices array
+        if (chunk.usage) {
+          usage.input_tokens = chunk.usage.prompt_tokens ?? 0;
+          usage.output_tokens = chunk.usage.completion_tokens ?? 0;
+        }
+      }
+
+      const responseContent = content || 'No text content in response';
+
+      await memory.saveContext(
+        { input: message },
+        { response: responseContent },
+      );
+
+      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+
+      this.logger.debug({
+        message: `OpenAI stream completed [${requestId}]`,
+        responseData: {
+          response_length: responseContent.length,
+          model: this.model,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          total_cost: cost.total_cost,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      yield {
+        type: 'final',
+        content: responseContent,
+        sessionId,
+        usage,
+        cost,
+      };
+    } catch (error) {
+      this.logger.error({
+        message: `Error streaming message with OpenAI [${requestId}]`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to stream message with OpenAI',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

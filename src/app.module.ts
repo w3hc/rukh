@@ -37,18 +37,21 @@ import { ObserveModule, isObserveEnabled } from './observe';
           }),
         ]
       : []),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 3600000,
-        limit: 50,
-        name: 'ask',
-      },
-      {
-        ttl: 60000,
-        limit: 20,
-        name: 'web',
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: 3600000,
+          limit: Number(config.get<string>('THROTTLE_ASK_LIMIT') ?? 1000),
+          name: 'ask',
+        },
+        {
+          ttl: 60000,
+          limit: Number(config.get<string>('THROTTLE_WEB_LIMIT') ?? 200),
+          name: 'web',
+        },
+      ],
+    }),
     ContextModule,
     AnthropicModule,
     OpenAIModule,

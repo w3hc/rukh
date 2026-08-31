@@ -1,4 +1,8 @@
-import { ThrottlerGuard, ThrottlerException } from '@nestjs/throttler';
+import {
+  ThrottlerGuard,
+  ThrottlerException,
+  ThrottlerLimitDetail,
+} from '@nestjs/throttler';
 import { Injectable, ExecutionContext } from '@nestjs/common';
 
 @Injectable()
@@ -9,11 +13,14 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
 
   protected async throwThrottlingException(
     context: ExecutionContext,
-    { timeToExpire }: { timeToExpire: number },
+    { timeToExpire, limit, ttl }: ThrottlerLimitDetail,
   ): Promise<void> {
     const minutesRemaining = Math.ceil(timeToExpire / (1000 * 60));
+    const windowMinutes = Math.round(ttl / (1000 * 60));
     throw new ThrottlerException(
-      `Rate limit exceeded. Maximum 50 requests allowed per hour. Please try again in ${minutesRemaining} ${
+      `Rate limit exceeded. Maximum ${limit} requests allowed per ${windowMinutes} ${
+        windowMinutes === 1 ? 'minute' : 'minutes'
+      }. Please try again in ${minutesRemaining} ${
         minutesRemaining === 1 ? 'minute' : 'minutes'
       }.`,
     );
