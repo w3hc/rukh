@@ -16,15 +16,25 @@ export class MistralService {
   private readonly apiKey: string;
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
-  private readonly modelName: string = 'mistral-large-latest';
+  private readonly modelName: string = 'mistral-small-latest';
 
   // Cost per 1K tokens in USD, per model - https://mistral.ai/pricing/api/
-  // (verified 2026-08-24). Rates vary a lot between the two models this
-  // service actually calls, so they can't share a single flat rate.
+  // (verified 2026-08-31). Rates vary a lot between the models this service
+  // actually calls, so they can't share a single flat rate.
   private readonly MODEL_RATES: Record<
     string,
     { inputCost: number; outputCost: number }
   > = {
+    'mistral-small-latest': {
+      inputCost: 0.00015, // $0.15 per million tokens = $0.00015 per 1K tokens
+      outputCost: 0.0006, // $0.60 per million tokens = $0.0006 per 1K tokens
+    },
+    'mistral-medium-latest': {
+      inputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
+      outputCost: 0.0075, // $7.50 per million tokens = $0.0075 per 1K tokens
+    },
+    // Large is cheaper than Medium but gated behind a paid subscription
+    // tier; a key without that tier gets a 403 tier_not_allowed on it.
     'mistral-large-latest': {
       inputCost: 0.0005, // $0.50 per million tokens = $0.0005 per 1K tokens
       outputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
@@ -89,7 +99,7 @@ export class MistralService {
    */
   async processMessageWithModel(
     message: string,
-    modelName: string = 'mistral-large-latest',
+    modelName: string = 'mistral-small-latest',
     sessionId?: string,
     systemPrompt?: string,
   ): Promise<{

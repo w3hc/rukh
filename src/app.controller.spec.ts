@@ -56,7 +56,7 @@ describe('AppController', () => {
                 type: 'done',
                 response: {
                   output: 'AI response',
-                  model: 'mistral-large-latest',
+                  model: 'mistral-small-latest',
                   sessionId: 'test-session-id',
                 },
               };
@@ -64,7 +64,7 @@ describe('AppController', () => {
             ask: jest.fn().mockImplementation(async (askDto) => ({
               output: askDto.model === 'mistral' ? 'AI response' : undefined,
               model:
-                askDto.model === 'mistral' ? 'mistral-large-latest' : 'none',
+                askDto.model === 'mistral' ? 'mistral-small-latest' : 'none',
               sessionId: askDto.sessionId || 'generated-session-id',
             })),
           },
@@ -134,7 +134,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -151,7 +151,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: expect.any(String),
       });
     });
@@ -231,7 +231,7 @@ describe('AppController', () => {
       expect(appService.askStream).not.toHaveBeenCalled();
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'generated-session-id',
       });
     });
@@ -255,7 +255,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -286,7 +286,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'test-session-id',
       });
     });
@@ -307,7 +307,7 @@ describe('AppController', () => {
 
       expect(result).toEqual({
         output: 'AI response',
-        model: 'mistral-large-latest',
+        model: 'mistral-small-latest',
         sessionId: 'generated-session-id',
       });
     });

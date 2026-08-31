@@ -811,7 +811,7 @@ export class AppService {
   private modelLabel(model: string): string {
     switch (model) {
       case 'mistral':
-        return 'mistral-large-latest';
+        return 'mistral-small-latest';
       case 'anthropic':
       case 'anthropic-web-search':
         return 'claude-sonnet-5';

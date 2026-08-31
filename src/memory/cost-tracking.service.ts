@@ -46,6 +46,19 @@ export class CostTracker implements OnModuleInit {
       inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
       outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
     },
+    // Mistral chat rates - https://mistral.ai/pricing/api/ (verified 2026-08-31)
+    'mistral-small-latest': {
+      inputCost: 0.00015, // $0.15 per million tokens = $0.00015 per 1K tokens
+      outputCost: 0.0006, // $0.60 per million tokens = $0.0006 per 1K tokens
+    },
+    'mistral-medium-latest': {
+      inputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
+      outputCost: 0.0075, // $7.50 per million tokens = $0.0075 per 1K tokens
+    },
+    'mistral-large-latest': {
+      inputCost: 0.0005, // $0.50 per million tokens = $0.0005 per 1K tokens
+      outputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
+    },
     // Claude Sonnet 5 rates (current default Anthropic model)
     'claude-sonnet-5': {
       inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens

@@ -173,7 +173,7 @@ describe('AppService - Model Fallback', () => {
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(anthropicService.processMessage).not.toHaveBeenCalled();
     expect(result.output).toBe('Response from Mistral');
-    expect(result.model).toBe('mistral-large-latest');
+    expect(result.model).toBe('mistral-small-latest');
   });
 
   it('should fall back to Mistral if Anthropic fails', async () => {
@@ -193,7 +193,7 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
     expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
     expect(result.output).toBe('Fallback response from Mistral');
-    expect(result.model).toBe('mistral-large-latest');
+    expect(result.model).toBe('mistral-small-latest');
   });
 
   it('should fall back to Anthropic if Mistral fails', async () => {
@@ -341,7 +341,7 @@ describe('AppService - Model Fallback', () => {
       );
       expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
       expect(anthropicService.processMessage).not.toHaveBeenCalled();
-      expect(result.model).toBe('mistral-large-latest');
+      expect(result.model).toBe('mistral-small-latest');
     });
 
     it('should route to Anthropic web search when the context forces it', async () => {
@@ -389,7 +389,7 @@ describe('AppService - Model Fallback', () => {
       });
 
       expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
-      expect(result.model).toBe('mistral-large-latest');
+      expect(result.model).toBe('mistral-small-latest');
     });
 
     it('should default to mistral when the context override names an unknown model', async () => {
@@ -409,7 +409,7 @@ describe('AppService - Model Fallback', () => {
       });
 
       expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
-      expect(result.model).toBe('mistral-large-latest');
+      expect(result.model).toBe('mistral-small-latest');
     });
   });
 
@@ -489,7 +489,7 @@ describe('AppService - Model Fallback', () => {
 
       expect(events[0]).toEqual({ type: 'chunk', text: 'Fallback answer' });
       expect(events[events.length - 1].response.model).toBe(
-        'mistral-large-latest',
+        'mistral-small-latest',
       );
     });
 
