@@ -42,7 +42,7 @@ export class OpenAIService {
     'https://api.openai.com/v1/chat/completions';
 
   // Cost per 1K tokens in USD - GPT-4o rates
-  // https://developers.openai.com/api/docs/pricing (verified 2026-08-24)
+  // https://developers.openai.com/api/docs/pricing (verified 2026-08-31)
   private readonly COST_RATES = {
     inputCost: 0.0025, // $2.50 per million tokens = $0.0025 per 1K tokens
     outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens

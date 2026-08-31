@@ -46,7 +46,7 @@ export class AnthropicService {
   private readonly apiVersion: string = '2023-06-01';
 
   // Cost per 1K tokens in USD - Claude Sonnet 5 rates
-  // https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-08-24)
+  // https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-08-31)
   private readonly COST_RATES = {
     inputCost: 0.002, // $2 per million tokens = $0.002 per 1K tokens
     outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens

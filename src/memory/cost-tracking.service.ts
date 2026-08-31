@@ -39,14 +39,11 @@ export class CostTracker implements OnModuleInit {
   private readonly dbPath: string;
   private data: CostDatabase;
 
-  // Cost per 1K tokens in USD - CORRECTED PRICING
+  // Cost per 1K tokens in USD, per model. Rates verified 2026-08-31 against
+  // https://mistral.ai/pricing/api, https://developers.openai.com/api/docs/pricing
+  // and https://platform.claude.com/docs/en/about-claude/pricing
   private readonly COST_RATES = {
-    // Ministral rates - CORRECTED: $0.04 per million = $0.00004 per 1K tokens
-    'ministral-3b-2410': {
-      inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
-      outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
-    },
-    // Mistral chat rates - https://mistral.ai/pricing/api/ (verified 2026-08-31)
+    // Mistral rates - https://mistral.ai/pricing/api (verified 2026-08-31)
     'mistral-small-latest': {
       inputCost: 0.00015, // $0.15 per million tokens = $0.00015 per 1K tokens
       outputCost: 0.0006, // $0.60 per million tokens = $0.0006 per 1K tokens
@@ -59,26 +56,48 @@ export class CostTracker implements OnModuleInit {
       inputCost: 0.0005, // $0.50 per million tokens = $0.0005 per 1K tokens
       outputCost: 0.0015, // $1.50 per million tokens = $0.0015 per 1K tokens
     },
-    // Claude Sonnet 5 rates (current default Anthropic model)
+    'ministral-3b-latest': {
+      inputCost: 0.0001, // $0.10 per million tokens = $0.0001 per 1K tokens
+      outputCost: 0.0001, // $0.10 per million tokens = $0.0001 per 1K tokens
+    },
+    // Ministral snapshot ID no longer listed by Mistral - kept at the rate it
+    // was billed at, for historical cost records
+    'ministral-3b-2410': {
+      inputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
+      outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
+    },
+    // OpenAI rates - https://developers.openai.com/api/docs/pricing
+    // (verified 2026-08-31). gpt-4o is the model OpenAIService calls.
+    'gpt-4o': {
+      inputCost: 0.0025, // $2.50 per million tokens = $0.0025 per 1K tokens
+      outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens
+    },
+    // Claude Sonnet 5 rates (current default Anthropic model). The $2/$10
+    // launch pricing is now the standard price - the increase to $3/$15 that
+    // had been scheduled for 2026-09-01 was cancelled.
     'claude-sonnet-5': {
-      inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
-      outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
+      inputCost: 0.002, // $2 per million tokens = $0.002 per 1K tokens
+      outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens
     },
-    // Claude 3.7 Sonnet rates (retired - kept for historical cost records)
+    // Retired Claude models - kept for historical cost records, at the rates
+    // they were billed at. Requests to these now fail.
     'claude-3-7-sonnet-20250219': {
+      // retired 2026-02-19
       inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
       outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
     },
-    // Add other Claude models for completeness
     'claude-3-opus-20240229': {
+      // retired 2026-01-05
       inputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
       outputCost: 0.075, // $75 per million tokens = $0.075 per 1K tokens
     },
     'claude-3-sonnet-20240229': {
+      // retired 2025-07-21
       inputCost: 0.003, // $3 per million tokens = $0.003 per 1K tokens
       outputCost: 0.015, // $15 per million tokens = $0.015 per 1K tokens
     },
     'claude-3-haiku-20240307': {
+      // retired 2026-04-20
       inputCost: 0.0005, // $0.5 per million tokens = $0.0005 per 1K tokens
       outputCost: 0.0025, // $2.5 per million tokens = $0.0025 per 1K tokens
     },
