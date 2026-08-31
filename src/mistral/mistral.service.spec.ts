@@ -10,6 +10,10 @@ jest.mock('@langchain/mistralai', () => {
         invoke: jest.fn().mockResolvedValue({
           content: 'Mocked response from Mistral',
         }),
+        stream: jest.fn().mockImplementation(async function* () {
+          yield { content: 'Mocked response ' };
+          yield { content: 'from Mistral' };
+        }),
       };
     }),
   };
@@ -203,6 +207,31 @@ describe('MistralService', () => {
       const result = await service.deleteConversation(sessionId);
 
       expect(result).toBe(true);
+    });
+  });
+
+  describe('streamMessage', () => {
+    it('should yield text deltas then a final event with usage and cost', async () => {
+      const events = [];
+      for await (const event of service.streamMessage(
+        'Hello',
+        'stream-session-id',
+      )) {
+        events.push(event);
+      }
+
+      expect(events.filter((e) => e.type === 'text')).toEqual([
+        { type: 'text', text: 'Mocked response ' },
+        { type: 'text', text: 'from Mistral' },
+      ]);
+
+      const final = events[events.length - 1] as any;
+      expect(final.type).toBe('final');
+      expect(final.content).toBe('Mocked response from Mistral');
+      expect(final.sessionId).toBe('stream-session-id');
+      // Mistral over LangChain reports no counts, so they're estimated
+      expect(final.usage.output_tokens).toBeGreaterThan(0);
+      expect(final.cost.total_cost).toBeGreaterThanOrEqual(0);
     });
   });
 });

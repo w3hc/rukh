@@ -14,6 +14,7 @@ describe('AppService - Model Fallback', () => {
   let service: AppService;
   let mistralService: MistralService;
   let anthropicService: AnthropicService;
+  let openaiService: OpenAIService;
   let costTracker: CostTracker;
   let loggerErrorSpy: jest.SpyInstance;
 
@@ -30,6 +31,7 @@ describe('AppService - Model Fallback', () => {
           provide: MistralService,
           useValue: {
             processMessage: jest.fn(),
+            streamMessage: jest.fn(),
             getConversationHistory: jest.fn().mockResolvedValue({
               history: [],
               isFirstMessage: true,
@@ -41,6 +43,8 @@ describe('AppService - Model Fallback', () => {
           useValue: {
             processMessage: jest.fn(),
             processMessageWithWebSearch: jest.fn(),
+            streamMessage: jest.fn(),
+            streamMessageWithWebSearch: jest.fn(),
             getConversationHistory: jest.fn().mockResolvedValue({
               history: [],
               isFirstMessage: true,
@@ -51,6 +55,7 @@ describe('AppService - Model Fallback', () => {
           provide: OpenAIService,
           useValue: {
             processMessage: jest.fn(),
+            streamMessage: jest.fn(),
             getConversationHistory: jest.fn().mockResolvedValue({
               history: [],
               isFirstMessage: true,
@@ -111,6 +116,7 @@ describe('AppService - Model Fallback', () => {
     service = module.get<AppService>(AppService);
     mistralService = module.get<MistralService>(MistralService);
     anthropicService = module.get<AnthropicService>(AnthropicService);
+    openaiService = module.get<OpenAIService>(OpenAIService);
     costTracker = module.get<CostTracker>(CostTracker);
 
     // Mock loadContextInformation for simplicity
@@ -404,6 +410,166 @@ describe('AppService - Model Fallback', () => {
 
       expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
       expect(result.model).toBe('mistral-large-latest');
+    });
+  });
+
+  describe('askStream', () => {
+    const collect = async (stream: AsyncIterable<any>) => {
+      const events = [];
+      for await (const event of stream) {
+        events.push(event);
+      }
+      return events;
+    };
+
+    const modelStream = (texts: string[], overrides: any = {}) =>
+      async function* () {
+        for (const text of texts) {
+          yield { type: 'text', text };
+        }
+        yield {
+          type: 'final',
+          content: texts.join(''),
+          sessionId: 'test-session-id',
+          usage: { input_tokens: 10, output_tokens: 5 },
+          cost: {
+            input_cost: 0.001,
+            output_cost: 0.002,
+            total_cost: 0.003,
+          },
+          ...overrides,
+        };
+      };
+
+    it('should stream chunks then a done event carrying the full response', async () => {
+      (anthropicService.streamMessage as jest.Mock).mockImplementation(
+        modelStream(['Hello', ' world']),
+      );
+
+      const events = await collect(
+        service.askStream({
+          message: 'test',
+          model: 'anthropic',
+          sessionId: 'test-session-id',
+          stream: true,
+        }),
+      );
+
+      expect(events.slice(0, 2)).toEqual([
+        { type: 'chunk', text: 'Hello' },
+        { type: 'chunk', text: ' world' },
+      ]);
+
+      const done = events[events.length - 1];
+      expect(done.type).toBe('done');
+      expect(done.response.output).toBe('Hello world');
+      expect(done.response.model).toBe('claude-sonnet-5');
+      expect(done.response.sessionId).toBe('test-session-id');
+      expect(costTracker.trackUsageWithTokens).toHaveBeenCalled();
+    });
+
+    it('should fall back to the next model when the first fails before emitting', async () => {
+      (anthropicService.streamMessage as jest.Mock).mockImplementation(
+        async function* () {
+          throw new Error('anthropic down');
+        },
+      );
+      (mistralService.streamMessage as jest.Mock).mockImplementation(
+        modelStream(['Fallback answer']),
+      );
+
+      const events = await collect(
+        service.askStream({
+          message: 'test',
+          model: 'anthropic',
+          sessionId: 'test-session-id',
+          stream: true,
+        }),
+      );
+
+      expect(events[0]).toEqual({ type: 'chunk', text: 'Fallback answer' });
+      expect(events[events.length - 1].response.model).toBe(
+        'mistral-large-latest',
+      );
+    });
+
+    it('should not fall back once text is already on the wire', async () => {
+      (anthropicService.streamMessage as jest.Mock).mockImplementation(
+        async function* () {
+          yield { type: 'text', text: 'Half an ans' };
+          throw new Error('connection reset');
+        },
+      );
+
+      const events = await collect(
+        service.askStream({
+          message: 'test',
+          model: 'anthropic',
+          sessionId: 'test-session-id',
+          stream: true,
+        }),
+      );
+
+      expect(events[0]).toEqual({ type: 'chunk', text: 'Half an ans' });
+      expect(events[1].type).toBe('error');
+      expect(events[1].message).toContain('connection reset');
+      expect(mistralService.streamMessage).not.toHaveBeenCalled();
+    });
+
+    it('should forward a reset and drop the discarded preamble', async () => {
+      (
+        anthropicService.streamMessageWithWebSearch as jest.Mock
+      ).mockImplementation(async function* () {
+        yield { type: 'text', text: 'Let me search.' };
+        yield { type: 'reset' };
+        yield { type: 'text', text: 'The answer.' };
+        yield {
+          type: 'final',
+          content: 'The answer.',
+          sessionId: 'test-session-id',
+          usage: { input_tokens: 10, output_tokens: 5 },
+          cost: { input_cost: 0.001, output_cost: 0.002, total_cost: 0.003 },
+        };
+      });
+
+      const events = await collect(
+        service.askStream({
+          message: 'test',
+          model: 'anthropic-web-search',
+          sessionId: 'test-session-id',
+          stream: true,
+        }),
+      );
+
+      expect(events.map((e) => e.type)).toEqual([
+        'chunk',
+        'reset',
+        'chunk',
+        'done',
+      ]);
+      expect(events[events.length - 1].response.output).toBe('The answer.');
+    });
+
+    it('should emit an error event when every model fails', async () => {
+      const failing = async function* () {
+        throw new Error('nope');
+      };
+      (anthropicService.streamMessage as jest.Mock).mockImplementation(failing);
+      (mistralService.streamMessage as jest.Mock).mockImplementation(failing);
+      (openaiService.streamMessage as jest.Mock).mockImplementation(failing);
+
+      const events = await collect(
+        service.askStream({
+          message: 'test',
+          model: 'anthropic',
+          sessionId: 'test-session-id',
+          stream: true,
+        }),
+      );
+
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('error');
+      expect(events[0].message).toContain('All models failed');
     });
   });
 });

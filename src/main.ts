@@ -22,6 +22,10 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: false,
+      // multipart/form-data delivers every field as a string; transform lets
+      // the DTOs' @Transform hooks coerce them (e.g. "true" -> true) before
+      // the handler sees them
+      transform: true,
     }),
   );
 

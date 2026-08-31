@@ -76,7 +76,7 @@ describe('App (e2e)', () => {
     deleteConversation: jest.fn().mockResolvedValue(true),
   };
 
-  const mockAnthropicService = {
+  const mockAnthropicService: Record<string, jest.Mock> = {
     processMessage: jest.fn().mockImplementation((message, sessionId) => {
       return Promise.resolve({
         content: 'This is a mocked response from Claude',
@@ -92,6 +92,20 @@ describe('App (e2e)', () => {
       isFirstMessage: true,
     }),
     deleteConversation: jest.fn().mockResolvedValue(true),
+    streamMessage: jest.fn().mockImplementation(async function* (
+      message: string,
+      sessionId: string,
+    ) {
+      yield { type: 'text', text: 'This is a mocked ' };
+      yield { type: 'text', text: 'streamed response' };
+      yield {
+        type: 'final',
+        content: 'This is a mocked streamed response',
+        sessionId: sessionId || 'mock-session-id',
+        usage: { input_tokens: 12, output_tokens: 18 },
+        cost: { input_cost: 0.001, output_cost: 0.002, total_cost: 0.003 },
+      };
+    }),
   };
 
   const mockCostTracker = {
@@ -178,6 +192,8 @@ describe('App (e2e)', () => {
       new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
+        // Mirrors main.ts: needed for the DTOs' @Transform hooks
+        transform: true,
       }),
     );
 
@@ -268,6 +284,62 @@ describe('App (e2e)', () => {
           const calledArgs = mockMistralService.processMessage.mock.calls[0];
           expect(calledArgs[0]).toContain('test message');
           expect(calledArgs[1]).toBe('test-session');
+        });
+
+        it('should stream the answer as server-sent events', async () => {
+          const response = await request(app.getHttpServer())
+            .post('/ask')
+            .send({
+              message: 'test message',
+              model: 'anthropic',
+              sessionId: 'test-session',
+              stream: true,
+            })
+            .expect(201)
+            .expect('Content-Type', 'text/event-stream; charset=utf-8');
+
+          expect(mockAnthropicService.streamMessage).toHaveBeenCalled();
+          expect(mockAnthropicService.processMessage).not.toHaveBeenCalled();
+
+          expect(response.text).toContain(
+            'event: chunk\ndata: {"text":"This is a mocked "}',
+          );
+          expect(response.text).toContain('event: done\ndata: {');
+
+          const done = JSON.parse(
+            response.text.split('event: done\ndata: ')[1].split('\n\n')[0],
+          );
+          expect(done.output).toBe('This is a mocked streamed response');
+          expect(done.model).toBe('claude-sonnet-5');
+          expect(done.sessionId).toBe('test-session');
+        });
+
+        it('should accept stream as the string multipart/form-data sends', async () => {
+          const response = await request(app.getHttpServer())
+            .post('/ask')
+            .field('message', 'test message')
+            .field('model', 'anthropic')
+            .field('sessionId', 'test-session')
+            .field('stream', 'true')
+            .expect(201)
+            .expect('Content-Type', 'text/event-stream; charset=utf-8');
+
+          expect(response.text).toContain('event: done');
+        });
+
+        it('should return JSON when stream is false', async () => {
+          const response = await request(app.getHttpServer())
+            .post('/ask')
+            .send({
+              message: 'test message',
+              model: 'anthropic',
+              sessionId: 'test-session',
+              stream: false,
+            })
+            .expect(201);
+
+          expect(response.body).toHaveProperty('model', 'claude-sonnet-5');
+          expect(mockAnthropicService.processMessage).toHaveBeenCalled();
         });
 
         it('should handle request with anthropic model', async () => {

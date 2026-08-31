@@ -6,6 +6,8 @@ import { OpenAIService } from './openai/openai.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
+import { AskStreamEvent } from './dto/ask-stream.dto';
+import { ModelStreamEvent } from './types/llm-stream';
 import { readFile, readdir, writeFile, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { SubsService } from './subs/subs.service';
@@ -590,20 +592,26 @@ export class AppService {
     }
   }
 
-  async ask(
+  /**
+   * Everything that has to happen before a model is called: model selection
+   * and fallback ordering, context loading (two-step RAG when the context has
+   * something to choose between), and folding an uploaded file into the
+   * system prompt.
+   *
+   * Shared by {@link ask} and {@link askStream} so the two paths cannot drift
+   * apart on which context a request ends up seeing.
+   */
+  private async prepareAsk(
     askDto: AskDto,
     file?: Express.Multer['File'],
-  ): Promise<AskResponseDto> {
-    let output: string | undefined;
-    let usedSessionId = askDto.sessionId || randomUUID();
-    let usedModel = 'none';
-    let fullInput = '';
-    let fullOutput = '';
-    let usage = {
-      input_tokens: 0,
-      output_tokens: 0,
-    };
-    let cost: any = undefined;
+  ): Promise<{
+    sessionId: string;
+    modelsToTry: string[];
+    systemPrompt: string;
+    ragMetadata: any;
+    fullInput: string;
+  }> {
+    const sessionId = askDto.sessionId || randomUUID();
 
     // Define available models
     const availableModels = [
@@ -646,161 +654,272 @@ export class AppService {
       `Processing request with models in fallback sequence: ${modelsToTry.join(', ')}`,
     );
 
-    try {
-      // Initialize a system prompt to contain context information
-      let systemPrompt = '';
-      let ragMetadata: any = undefined;
+    // Initialize a system prompt to contain context information
+    let systemPrompt = '';
+    let ragMetadata: any = undefined;
 
-      // Load context information if context is specified
-      if (contextName && contextName !== '') {
-        // Look up how many selectable resources this context actually has,
-        // so two-step RAG selection only kicks in when there's something to
-        // choose between. This replaces a blanket on/off env flag with
-        // per-request gating based on context content.
-        const contextPath = join(
-          process.cwd(),
-          'data',
-          'contexts',
-          contextName,
-        );
-        const indexPath = join(contextPath, 'index.json');
-        let totalFiles = 0;
-        let totalUrls = 0;
-        if (existsSync(indexPath)) {
-          const indexData = await readFile(indexPath, 'utf-8');
-          const contextIndex = JSON.parse(indexData);
-          totalFiles = contextIndex.files?.length || 0;
-          totalUrls = contextIndex.links?.length || 0;
-        }
-        const totalResources = totalFiles + totalUrls;
+    // Load context information if context is specified
+    if (contextName && contextName !== '') {
+      // Look up how many selectable resources this context actually has,
+      // so two-step RAG selection only kicks in when there's something to
+      // choose between. This replaces a blanket on/off env flag with
+      // per-request gating based on context content.
+      const contextPath = join(process.cwd(), 'data', 'contexts', contextName);
+      const indexPath = join(contextPath, 'index.json');
+      let totalFiles = 0;
+      let totalUrls = 0;
+      if (existsSync(indexPath)) {
+        const indexData = await readFile(indexPath, 'utf-8');
+        const contextIndex = JSON.parse(indexData);
+        totalFiles = contextIndex.files?.length || 0;
+        totalUrls = contextIndex.links?.length || 0;
+      }
+      const totalResources = totalFiles + totalUrls;
 
-        const maxFiles = this.RAG_MAX_FILES;
+      const maxFiles = this.RAG_MAX_FILES;
 
-        // Two-step selection only runs when the caller explicitly asked for
-        // a context (an implicit default context skips it) and that context
-        // has more than one resource to choose from (nothing to select
-        // otherwise).
-        const ragEnabled = !!askDto.context && totalResources > 1;
+      // Two-step selection only runs when the caller explicitly asked for
+      // a context (an implicit default context skips it) and that context
+      // has more than one resource to choose from (nothing to select
+      // otherwise).
+      const ragEnabled = !!askDto.context && totalResources > 1;
 
-        if (ragEnabled) {
-          this.logger.log(`Using two-step RAG for context: ${contextName}`);
+      if (ragEnabled) {
+        this.logger.log(`Using two-step RAG for context: ${contextName}`);
 
-          try {
-            // STEP 1: Select relevant files and URLs
-            this.logger.log(
-              `Step 1: Selecting relevant resources (max: ${maxFiles})`,
-            );
-            const { selectedFiles, selectedUrls, selectionCost } =
-              await this.ragService.selectRelevantFiles(
-                contextName,
-                askDto.message,
-                maxFiles,
-              );
-
-            this.logger.log(
-              `Selected ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
-            );
-
-            // STEP 2: Build context with only selected files and URLs
-            this.logger.log(`Step 2: Building context with selected resources`);
-            systemPrompt = await this.ragService.buildContextWithSelectedFiles(
-              contextName,
-              selectedFiles,
-              selectedUrls,
-            );
-
-            // Record the query with selected files and URLs
-            try {
-              const usedResources = [
-                ...selectedFiles,
-                ...(selectedUrls || []).map((url) => `link:${url}`),
-              ];
-              await this.recordContextQuery(
-                contextName,
-                usedResources,
-                askDto.message,
-              );
-              this.logger.debug(
-                `Recorded context query with ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
-              );
-            } catch (error) {
-              this.logger.warn(
-                `Failed to record context query: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-
-            // Store RAG metadata for response (including selection cost)
-            ragMetadata = {
-              selectedFiles,
-              selectedUrls,
-              totalFilesAvailable: totalFiles,
-              totalUrlsAvailable: totalUrls,
-              selectionMethod: 'rag-two-step',
-              selectionCost,
-            };
-
-            this.logger.log(
-              `Two-step RAG completed: ${selectedFiles.length}/${totalFiles} files and ${selectedUrls?.length || 0}/${totalUrls} URLs selected (${systemPrompt.length} characters)`,
-            );
-
-            if (selectionCost) {
-              this.logger.log(
-                `Selection cost: $${selectionCost.total_cost.toFixed(6)} (input: $${selectionCost.input_cost.toFixed(6)}, output: $${selectionCost.output_cost.toFixed(6)})`,
-              );
-            }
-          } catch (error) {
-            this.logger.error(
-              `Two-step RAG failed: ${error instanceof Error ? error.message : String(error)}, falling back to old method`,
-            );
-            // Fallback to old method
-            systemPrompt = await this.loadContextInformation(
+        try {
+          // STEP 1: Select relevant files and URLs
+          this.logger.log(
+            `Step 1: Selecting relevant resources (max: ${maxFiles})`,
+          );
+          const { selectedFiles, selectedUrls, selectionCost } =
+            await this.ragService.selectRelevantFiles(
               contextName,
               askDto.message,
+              maxFiles,
+            );
+
+          this.logger.log(
+            `Selected ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
+          );
+
+          // STEP 2: Build context with only selected files and URLs
+          this.logger.log(`Step 2: Building context with selected resources`);
+          systemPrompt = await this.ragService.buildContextWithSelectedFiles(
+            contextName,
+            selectedFiles,
+            selectedUrls,
+          );
+
+          // Record the query with selected files and URLs
+          try {
+            const usedResources = [
+              ...selectedFiles,
+              ...(selectedUrls || []).map((url) => `link:${url}`),
+            ];
+            await this.recordContextQuery(
+              contextName,
+              usedResources,
+              askDto.message,
+            );
+            this.logger.debug(
+              `Recorded context query with ${selectedFiles.length} files and ${selectedUrls?.length || 0} URLs`,
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Failed to record context query: ${error instanceof Error ? error.message : String(error)}`,
             );
           }
-        } else {
-          // Use old method if RAG is disabled
+
+          // Store RAG metadata for response (including selection cost)
+          ragMetadata = {
+            selectedFiles,
+            selectedUrls,
+            totalFilesAvailable: totalFiles,
+            totalUrlsAvailable: totalUrls,
+            selectionMethod: 'rag-two-step',
+            selectionCost,
+          };
+
           this.logger.log(
-            `Loading context information (legacy method): ${contextName}`,
+            `Two-step RAG completed: ${selectedFiles.length}/${totalFiles} files and ${selectedUrls?.length || 0}/${totalUrls} URLs selected (${systemPrompt.length} characters)`,
           );
+
+          if (selectionCost) {
+            this.logger.log(
+              `Selection cost: $${selectionCost.total_cost.toFixed(6)} (input: $${selectionCost.input_cost.toFixed(6)}, output: $${selectionCost.output_cost.toFixed(6)})`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Two-step RAG failed: ${error instanceof Error ? error.message : String(error)}, falling back to old method`,
+          );
+          // Fallback to old method
           systemPrompt = await this.loadContextInformation(
             contextName,
             askDto.message,
           );
         }
-
-        this.logger.debug(
-          `Generated system prompt with context information (${systemPrompt.length} characters)`,
-        );
-      }
-
-      // Handle file upload if present
-      const allowedExtensions = ['.md', '.csv'];
-      const hasAllowedExtension =
-        file &&
-        allowedExtensions.some((ext) =>
-          file.originalname.toLowerCase().endsWith(ext),
-        );
-
-      if (hasAllowedExtension) {
-        const fileContent = file.buffer.toString('utf-8');
+      } else {
+        // Use old method if RAG is disabled
         this.logger.log(
-          `Processing uploaded file: ${file.originalname} (${file.size} bytes)`,
+          `Loading context information (legacy method): ${contextName}`,
         );
-
-        // Add file content to system prompt
-        if (systemPrompt) {
-          systemPrompt += '\n\n';
-        }
-        systemPrompt += `Uploaded file (${file.originalname}):\n${fileContent}`;
-      } else if (file) {
-        this.logger.warn(`Ignoring unsupported file: ${file.originalname}`);
+        systemPrompt = await this.loadContextInformation(
+          contextName,
+          askDto.message,
+        );
       }
 
-      // Store full input for cost tracking (combining system prompt and user message)
-      fullInput = systemPrompt
-        ? systemPrompt + '\n\n' + askDto.message
-        : askDto.message;
+      this.logger.debug(
+        `Generated system prompt with context information (${systemPrompt.length} characters)`,
+      );
+    }
+
+    // Handle file upload if present
+    const allowedExtensions = ['.md', '.csv'];
+    const hasAllowedExtension =
+      file &&
+      allowedExtensions.some((ext) =>
+        file.originalname.toLowerCase().endsWith(ext),
+      );
+
+    if (hasAllowedExtension) {
+      const fileContent = file.buffer.toString('utf-8');
+      this.logger.log(
+        `Processing uploaded file: ${file.originalname} (${file.size} bytes)`,
+      );
+
+      // Add file content to system prompt
+      if (systemPrompt) {
+        systemPrompt += '\n\n';
+      }
+      systemPrompt += `Uploaded file (${file.originalname}):\n${fileContent}`;
+    } else if (file) {
+      this.logger.warn(`Ignoring unsupported file: ${file.originalname}`);
+    }
+
+    // Store full input for cost tracking (combining system prompt and user message)
+    const fullInput = systemPrompt
+      ? systemPrompt + '\n\n' + askDto.message
+      : askDto.message;
+
+    return { sessionId, modelsToTry, systemPrompt, ragMetadata, fullInput };
+  }
+
+  /** The public model name reported back for each internal model key. */
+  private modelLabel(model: string): string {
+    switch (model) {
+      case 'mistral':
+        return 'mistral-large-latest';
+      case 'anthropic':
+      case 'anthropic-web-search':
+        return 'claude-sonnet-5';
+      case 'openai':
+        return 'gpt-4o';
+      default:
+        return model;
+    }
+  }
+
+  /**
+   * The system prompt only goes out on the first turn of a session; later
+   * turns already have it folded into the stored history.
+   */
+  private async effectiveSystemPrompt(
+    model: string,
+    sessionId: string,
+    systemPrompt: string,
+  ): Promise<string | undefined> {
+    const service =
+      model === 'mistral'
+        ? this.mistralService
+        : model === 'openai'
+          ? this.openaiService
+          : this.anthropicService;
+
+    const { isFirstMessage } = await service.getConversationHistory(sessionId);
+    return isFirstMessage ? systemPrompt : undefined;
+  }
+
+  /** Adds the RAG selection cost onto the generation cost, when both exist. */
+  private combineCost(cost: any, ragMetadata: any): any {
+    if (!cost) {
+      return undefined;
+    }
+    if (!ragMetadata?.selectionCost) {
+      this.logger.log(
+        `Request completed with cost: $${cost.total_cost.toFixed(6)} (input: $${cost.input_cost.toFixed(6)}, output: $${cost.output_cost.toFixed(6)})`,
+      );
+      return cost;
+    }
+
+    const selection = ragMetadata.selectionCost;
+    const combinedCost = {
+      ...cost,
+      input_cost: Number((cost.input_cost + selection.input_cost).toFixed(6)),
+      output_cost: Number(
+        (cost.output_cost + selection.output_cost).toFixed(6),
+      ),
+      total_cost: Number((cost.total_cost + selection.total_cost).toFixed(6)),
+    };
+
+    this.logger.log(
+      `Combined cost (selection + generation): $${combinedCost.total_cost.toFixed(6)} (input: $${combinedCost.input_cost.toFixed(6)}, output: $${combinedCost.output_cost.toFixed(6)})`,
+    );
+    return combinedCost;
+  }
+
+  private async trackUsage(
+    askDto: AskDto,
+    sessionId: string,
+    usedModel: string,
+    fullInput: string,
+    fullOutput: string,
+    usage: { input_tokens: number; output_tokens: number },
+  ): Promise<void> {
+    this.logger.debug(`Tracking usage for anonymous with model ${usedModel}`);
+    this.logger.debug(
+      `Token usage: input=${usage.input_tokens}, output=${usage.output_tokens}`,
+    );
+
+    try {
+      await this.costTracker.trackUsageWithTokens(
+        'anonymous',
+        askDto.message,
+        sessionId,
+        usedModel,
+        fullInput, // Full input includes both system prompt and user message
+        fullOutput,
+        usage.input_tokens,
+        usage.output_tokens,
+      );
+      this.logger.debug('Usage tracking completed successfully');
+    } catch (error) {
+      this.logger.error('Failed to track usage:', error);
+    }
+  }
+
+  async ask(
+    askDto: AskDto,
+    file?: Express.Multer['File'],
+  ): Promise<AskResponseDto> {
+    let output: string | undefined;
+    let usedSessionId = askDto.sessionId || randomUUID();
+    let usedModel = 'none';
+    let fullInput = '';
+    let fullOutput = '';
+    let usage = {
+      input_tokens: 0,
+      output_tokens: 0,
+    };
+    let cost: any = undefined;
+
+    try {
+      const prepared = await this.prepareAsk(askDto, file);
+      const { modelsToTry, systemPrompt, ragMetadata } = prepared;
+      usedSessionId = prepared.sessionId;
+      fullInput = prepared.fullInput;
 
       // Try each model in the fallback sequence
       let lastError: Error | null = null;
@@ -814,168 +933,77 @@ export class AppService {
         try {
           this.logger.log(`Attempting to process with model: ${currentModel}`);
 
+          const effective = await this.effectiveSystemPrompt(
+            currentModel,
+            usedSessionId,
+            systemPrompt,
+          );
+
+          this.logger.debug(
+            `Using ${effective ? 'system prompt' : 'no system prompt'} with ${currentModel}`,
+          );
+
           // Process the message with the current model
+          let response: {
+            content: string;
+            sessionId: string;
+            usage?: { input_tokens: number; output_tokens: number };
+            cost?: any;
+          };
+
           switch (currentModel) {
-            case 'mistral': {
-              // Check if there's existing conversation
-              const { isFirstMessage } =
-                await this.mistralService.getConversationHistory(usedSessionId);
-
-              // Only use system prompt for first message or if no history is available
-              const effectiveSystemPrompt = isFirstMessage
-                ? systemPrompt
-                : undefined;
-
-              this.logger.debug(
-                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Mistral`,
-              );
-
-              const response = await this.mistralService.processMessage(
+            case 'mistral':
+              response = await this.mistralService.processMessage(
                 askDto.message, // Send the clean message without context
                 usedSessionId,
-                effectiveSystemPrompt,
+                effective,
               );
-
-              output = response.content;
-              fullOutput = response.content;
-              usedSessionId = response.sessionId;
-              cost = response.cost;
-              usedModel = 'mistral-large-latest';
-
-              // Make sure we have valid usage data
-              usage = response.usage || {
-                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-                output_tokens: Math.ceil(fullOutput.length / 4),
-              };
-
-              modelProcessed = true;
-              this.logger.log(`Successfully processed with Mistral model`);
               break;
-            }
 
-            case 'anthropic': {
-              // Check if there's existing conversation
-              const { isFirstMessage } =
-                await this.anthropicService.getConversationHistory(
-                  usedSessionId,
-                );
-
-              // Only use system prompt for first message or if no history is available
-              const effectiveSystemPrompt = isFirstMessage
-                ? systemPrompt
-                : undefined;
-
-              this.logger.debug(
-                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic`,
-              );
-
-              const response = await this.anthropicService.processMessage(
-                askDto.message, // Send the clean message without context
+            case 'anthropic':
+              response = await this.anthropicService.processMessage(
+                askDto.message,
                 usedSessionId,
-                effectiveSystemPrompt,
+                effective,
               );
-
-              output = response.content;
-              fullOutput = response.content;
-              usedSessionId = response.sessionId;
-              usedModel = 'claude-sonnet-5';
-              cost = response.cost;
-
-              // Make sure we have valid usage data
-              usage = response.usage || {
-                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-                output_tokens: Math.ceil(fullOutput.length / 4),
-              };
-
-              modelProcessed = true;
-              this.logger.log(`Successfully processed with Anthropic model`);
               break;
-            }
 
-            case 'anthropic-web-search': {
-              // Check if there's existing conversation
-              const { isFirstMessage } =
-                await this.anthropicService.getConversationHistory(
-                  usedSessionId,
-                );
-
-              // Only use system prompt for first message or if no history is available
-              const effectiveSystemPrompt = isFirstMessage
-                ? systemPrompt
-                : undefined;
-
-              this.logger.debug(
-                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with Anthropic (web search)`,
-              );
-
-              const response =
+            case 'anthropic-web-search':
+              response =
                 await this.anthropicService.processMessageWithWebSearch(
-                  askDto.message, // Send the clean message without context
+                  askDto.message,
                   usedSessionId,
-                  effectiveSystemPrompt,
+                  effective,
                 );
-
-              output = response.content;
-              fullOutput = response.content;
-              usedSessionId = response.sessionId;
-              usedModel = 'claude-sonnet-5';
-              cost = response.cost;
-
-              // Make sure we have valid usage data
-              usage = response.usage || {
-                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-                output_tokens: Math.ceil(fullOutput.length / 4),
-              };
-
-              modelProcessed = true;
-              this.logger.log(
-                `Successfully processed with Anthropic web search model`,
-              );
               break;
-            }
 
-            case 'openai': {
-              // Check if there's existing conversation
-              const { isFirstMessage } =
-                await this.openaiService.getConversationHistory(usedSessionId);
-
-              // Only use system prompt for first message or if no history is available
-              const effectiveSystemPrompt = isFirstMessage
-                ? systemPrompt
-                : undefined;
-
-              this.logger.debug(
-                `Using ${effectiveSystemPrompt ? 'system prompt' : 'no system prompt'} with OpenAI`,
-              );
-
-              const response = await this.openaiService.processMessage(
-                askDto.message, // Send the clean message without context
+            case 'openai':
+              response = await this.openaiService.processMessage(
+                askDto.message,
                 usedSessionId,
-                effectiveSystemPrompt,
+                effective,
               );
-
-              output = response.content;
-              fullOutput = response.content;
-              usedSessionId = response.sessionId;
-              usedModel = 'gpt-4o';
-              cost = response.cost;
-
-              // Make sure we have valid usage data
-              usage = response.usage || {
-                input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
-                output_tokens: Math.ceil(fullOutput.length / 4),
-              };
-
-              modelProcessed = true;
-              this.logger.log(`Successfully processed with OpenAI model`);
               break;
-            }
 
-            default: {
+            default:
               this.logger.warn(`Unsupported model: ${currentModel}, skipping`);
-              break;
-            }
+              continue;
           }
+
+          output = response.content;
+          fullOutput = response.content;
+          usedSessionId = response.sessionId;
+          cost = response.cost;
+          usedModel = this.modelLabel(currentModel);
+
+          // Make sure we have valid usage data
+          usage = response.usage || {
+            input_tokens: Math.ceil(fullInput.length / 4), // Estimate if not provided
+            output_tokens: Math.ceil(fullOutput.length / 4),
+          };
+
+          modelProcessed = true;
+          this.logger.log(`Successfully processed with ${currentModel} model`);
         } catch (error) {
           this.logger.error(
             `Error processing with model ${currentModel}: ${error instanceof Error ? error.message : String(error)}`,
@@ -994,28 +1022,14 @@ export class AppService {
 
       // Track usage for all successful responses
       if (output) {
-        this.logger.debug(
-          `Tracking usage for anonymous with model ${usedModel}`,
+        await this.trackUsage(
+          askDto,
+          usedSessionId,
+          usedModel,
+          fullInput,
+          fullOutput,
+          usage,
         );
-        this.logger.debug(
-          `Token usage: input=${usage.input_tokens}, output=${usage.output_tokens}`,
-        );
-
-        try {
-          await this.costTracker.trackUsageWithTokens(
-            'anonymous',
-            askDto.message,
-            usedSessionId,
-            usedModel,
-            fullInput, // Full input includes both system prompt and user message
-            fullOutput,
-            usage.input_tokens,
-            usage.output_tokens,
-          );
-          this.logger.debug('Usage tracking completed successfully');
-        } catch (error) {
-          this.logger.error('Failed to track usage:', error);
-        }
       } else {
         this.logger.warn('Skipping usage tracking - no output was generated');
       }
@@ -1028,30 +1042,9 @@ export class AppService {
       };
 
       // Combine costs if we have both RAG selection cost and response generation cost
-      if (cost && ragMetadata?.selectionCost) {
-        // Add the selection cost to the response generation cost
-        const combinedCost = {
-          input_cost: Number(
-            (cost.input_cost + ragMetadata.selectionCost.input_cost).toFixed(6),
-          ),
-          output_cost: Number(
-            (cost.output_cost + ragMetadata.selectionCost.output_cost).toFixed(
-              6,
-            ),
-          ),
-          total_cost: Number(
-            (cost.total_cost + ragMetadata.selectionCost.total_cost).toFixed(6),
-          ),
-        };
-        response.cost = combinedCost;
-        this.logger.log(
-          `Combined cost (selection + generation): $${combinedCost.total_cost.toFixed(6)} (input: $${combinedCost.input_cost.toFixed(6)}, output: $${combinedCost.output_cost.toFixed(6)})`,
-        );
-      } else if (cost) {
-        response.cost = cost;
-        this.logger.log(
-          `Request completed with cost: $${cost.total_cost.toFixed(6)} (input: $${cost.input_cost.toFixed(6)}, output: $${cost.output_cost.toFixed(6)})`,
-        );
+      const combined = this.combineCost(cost, ragMetadata);
+      if (combined) {
+        response.cost = combined;
       }
 
       // Add RAG metadata if available
@@ -1074,6 +1067,208 @@ export class AppService {
         usage: usage,
       };
     }
+  }
+
+  /** Routes one model key to the matching service's streaming generator. */
+  private async *streamFromModel(
+    model: string,
+    message: string,
+    sessionId: string,
+    systemPrompt: string,
+  ): AsyncGenerator<ModelStreamEvent> {
+    const effective = await this.effectiveSystemPrompt(
+      model,
+      sessionId,
+      systemPrompt,
+    );
+
+    this.logger.debug(
+      `Using ${effective ? 'system prompt' : 'no system prompt'} with ${model} (streaming)`,
+    );
+
+    switch (model) {
+      case 'mistral':
+        yield* this.mistralService.streamMessage(message, sessionId, effective);
+        return;
+      case 'anthropic':
+        yield* this.anthropicService.streamMessage(
+          message,
+          sessionId,
+          effective,
+        );
+        return;
+      case 'anthropic-web-search':
+        yield* this.anthropicService.streamMessageWithWebSearch(
+          message,
+          sessionId,
+          effective,
+        );
+        return;
+      case 'openai':
+        yield* this.openaiService.streamMessage(message, sessionId, effective);
+        return;
+      default:
+        throw new Error(`Unsupported model: ${model}`);
+    }
+  }
+
+  /**
+   * Streaming counterpart of {@link ask}.
+   *
+   * Context loading and cost accounting are identical - only the delivery
+   * differs: text is yielded as it is produced and the terminal `done` event
+   * carries the very same {@link AskResponseDto} the non-streaming call would
+   * have returned.
+   *
+   * Model fallback still applies, but only up to the first byte: once text
+   * has reached the client, silently restarting on another model would
+   * duplicate the answer, so a later failure is surfaced as an `error` event
+   * instead.
+   */
+  async *askStream(
+    askDto: AskDto,
+    file?: Express.Multer['File'],
+  ): AsyncGenerator<AskStreamEvent> {
+    let usedSessionId = askDto.sessionId || randomUUID();
+
+    let prepared: Awaited<ReturnType<AppService['prepareAsk']>>;
+    try {
+      prepared = await this.prepareAsk(askDto, file);
+      usedSessionId = prepared.sessionId;
+    } catch (error) {
+      this.logger.error(`Error preparing streamed request:`, error);
+      yield {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      };
+      return;
+    }
+
+    const { modelsToTry, systemPrompt, ragMetadata, fullInput } = prepared;
+
+    let lastError: Error | null = null;
+
+    for (const currentModel of modelsToTry) {
+      this.logger.log(`Attempting to stream with model: ${currentModel}`);
+
+      let fullOutput = '';
+      let emitted = false;
+      let usage = { input_tokens: 0, output_tokens: 0 };
+      let cost: any = undefined;
+      let completed = false;
+
+      try {
+        for await (const event of this.streamFromModel(
+          currentModel,
+          askDto.message, // Send the clean message without context
+          usedSessionId,
+          systemPrompt,
+        )) {
+          switch (event.type) {
+            case 'text':
+              emitted = true;
+              fullOutput += event.text;
+              yield { type: 'chunk', text: event.text };
+              break;
+
+            case 'reset':
+              // The model discarded its own preamble; the client should too
+              fullOutput = '';
+              yield { type: 'reset' };
+              break;
+
+            case 'final':
+              fullOutput = event.content;
+              usedSessionId = event.sessionId;
+              usage = event.usage;
+              cost = event.cost;
+              completed = true;
+              break;
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error streaming with model ${currentModel}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        lastError = error as Error;
+
+        if (emitted) {
+          // Half an answer is already on the wire - falling back now would
+          // splice a second answer onto it
+          yield {
+            type: 'error',
+            message: `Stream interrupted: ${lastError.message}`,
+          };
+          return;
+        }
+
+        this.logger.log(`Falling back to next model in sequence...`);
+        continue;
+      }
+
+      if (!completed) {
+        this.logger.warn(
+          `Model ${currentModel} ended its stream without a final event`,
+        );
+        lastError = new Error(`${currentModel} produced no final event`);
+        if (!emitted) {
+          continue;
+        }
+      }
+
+      const usedModel = this.modelLabel(currentModel);
+
+      // Fall back to the same 4-chars-per-token estimate the non-streaming
+      // path uses when a provider reports no counts
+      if (!usage.input_tokens && !usage.output_tokens) {
+        usage = {
+          input_tokens: Math.ceil(fullInput.length / 4),
+          output_tokens: Math.ceil(fullOutput.length / 4),
+        };
+      }
+
+      await this.trackUsage(
+        askDto,
+        usedSessionId,
+        usedModel,
+        fullInput,
+        fullOutput,
+        usage,
+      );
+
+      const response: AskResponseDto = {
+        output: fullOutput,
+        model: usedModel,
+        sessionId: usedSessionId,
+        usage,
+      };
+
+      const combined = this.combineCost(cost, ragMetadata);
+      if (combined) {
+        response.cost = combined;
+      }
+
+      if (ragMetadata) {
+        response.rag = ragMetadata;
+        this.logger.log(
+          `RAG metadata: ${ragMetadata.selectedFiles.length}/${ragMetadata.totalFilesAvailable} files used`,
+        );
+      }
+
+      this.logger.log(`Successfully streamed with ${currentModel} model`);
+      yield { type: 'done', response };
+      return;
+    }
+
+    this.logger.error(
+      `All models in fallback sequence failed. Last error: ${lastError ? lastError.message : 'none reported'}`,
+    );
+    yield {
+      type: 'error',
+      message: lastError
+        ? `All models failed. Last error: ${lastError.message}`
+        : 'All models failed',
+    };
   }
 
   getHello(): string {
