@@ -2,7 +2,11 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ChatMistralAI } from '@langchain/mistralai';
 import { CustomJsonMemory } from '../memory/custom-memory';
 import { randomUUID } from 'crypto';
-import { HumanMessage, AIMessage } from '@langchain/core/messages';
+import {
+  HumanMessage,
+  AIMessage,
+  SystemMessage,
+} from '@langchain/core/messages';
 import { ModelStreamEvent } from '../types/llm-stream';
 
 interface CostInfo {
@@ -52,11 +56,16 @@ export class MistralService {
       throw new Error('MISTRAL_API_KEY environment variable is not set');
     }
 
+    // No output ceiling. It used to be 1000 tokens - roughly 4000 characters -
+    // which silently truncated any answer longer than a few paragraphs, such
+    // as a column rewritten row by row, mid-sentence. Left unset rather than
+    // raised to a number, so the limit is whatever the model actually allows
+    // instead of a constant that has to be revisited every time the model
+    // changes.
     this.model = new ChatMistralAI({
       apiKey: this.apiKey,
       modelName: this.modelName,
       temperature: 0.3,
-      maxTokens: 1000,
     });
 
     this.logger.log('MistralService initialized successfully');
@@ -91,6 +100,43 @@ export class MistralService {
       output_cost: outputCost,
       total_cost: totalCost,
     };
+  }
+
+  /**
+   * Assembles the turn Mistral is asked to answer: the system prompt, the
+   * stored history, then the new message.
+   *
+   * The system content used to be folded into the first user message as
+   * `System: ...\n\nUser: ...`, and only on the first turn - which meant the
+   * two were mutually exclusive, so a request carrying instructions dropped
+   * the entire conversation history on the floor. A real SystemMessage keeps
+   * the two independent, and lets the instructions ride along on every turn
+   * the way the Anthropic and OpenAI services already do.
+   */
+  private buildMessages(
+    message: string,
+    history: { role: string; content: string }[],
+    systemPrompt?: string,
+  ) {
+    const messages = [];
+
+    if (systemPrompt) {
+      this.logger.debug(
+        `Using system prompt (${systemPrompt.length} characters)`,
+      );
+      messages.push(new SystemMessage(systemPrompt));
+    }
+
+    history.forEach((msg) => {
+      if (msg.role === 'user') {
+        messages.push(new HumanMessage(msg.content));
+      } else if (msg.role === 'assistant') {
+        messages.push(new AIMessage(msg.content));
+      }
+    });
+
+    messages.push(new HumanMessage(message));
+    return messages;
   }
 
   /**
@@ -216,34 +262,13 @@ export class MistralService {
     );
 
     try {
-      const { history, isFirstMessage } =
-        await this.getConversationHistory(sessionId);
+      const { history } = await this.getConversationHistory(sessionId);
 
-      // Convert history to LangChain message format
-      const langChainMessages = [];
-
-      // Add system message first if provided and it's the first message
-      if (isFirstMessage && systemPrompt) {
-        this.logger.debug(
-          `Using system prompt (${systemPrompt.length} characters)`,
-        );
-        // For Mistral via LangChain, we add system content as the first user message
-        langChainMessages.push(
-          new HumanMessage(`System: ${systemPrompt}\n\nUser: ${message}`),
-        );
-      } else {
-        // Add all history messages first
-        history.forEach((msg) => {
-          if (msg.role === 'user') {
-            langChainMessages.push(new HumanMessage(msg.content));
-          } else if (msg.role === 'assistant') {
-            langChainMessages.push(new AIMessage(msg.content));
-          }
-        });
-
-        // Add the current message
-        langChainMessages.push(new HumanMessage(message));
-      }
+      const langChainMessages = this.buildMessages(
+        message,
+        history,
+        systemPrompt,
+      );
 
       const containsUploadedFile = message.includes('Uploaded file (');
 
@@ -309,12 +334,6 @@ export class MistralService {
           2,
         ),
       );
-
-      if (isFirstMessage && systemPrompt) {
-        this.logger.debug(
-          `First message includes ${systemPrompt.length} characters of system prompt`,
-        );
-      }
 
       // Use LangChain's ChatMistralAI
       const response = await this.model.invoke(langChainMessages);
@@ -419,31 +438,13 @@ export class MistralService {
     );
 
     try {
-      const { history, isFirstMessage } =
-        await this.getConversationHistory(sessionId);
+      const { history } = await this.getConversationHistory(sessionId);
 
-      const langChainMessages = [];
-
-      if (isFirstMessage && systemPrompt) {
-        this.logger.debug(
-          `Using system prompt (${systemPrompt.length} characters)`,
-        );
-        // Mistral via LangChain gets the system content folded into the
-        // first user message, matching the non-streaming path
-        langChainMessages.push(
-          new HumanMessage(`System: ${systemPrompt}\n\nUser: ${message}`),
-        );
-      } else {
-        history.forEach((msg) => {
-          if (msg.role === 'user') {
-            langChainMessages.push(new HumanMessage(msg.content));
-          } else if (msg.role === 'assistant') {
-            langChainMessages.push(new AIMessage(msg.content));
-          }
-        });
-
-        langChainMessages.push(new HumanMessage(message));
-      }
+      const langChainMessages = this.buildMessages(
+        message,
+        history,
+        systemPrompt,
+      );
 
       let content = '';
 
