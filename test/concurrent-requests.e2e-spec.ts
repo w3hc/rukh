@@ -146,17 +146,17 @@ describe('Concurrent Requests (e2e)', () => {
       expect(response2.body.output).toContain('quantum computing');
       expect(response1.body.sessionId).not.toBe(response2.body.sessionId);
 
-      // Verify both services were called
-      expect(mockMistralService.processMessage).toHaveBeenCalledWith(
-        expect.stringContaining('capital of France'),
-        'session-1',
-        expect.any(String),
-      );
-      expect(mockAnthropicService.processMessage).toHaveBeenCalledWith(
-        expect.stringContaining('quantum computing'),
-        'session-2',
-        expect.any(String),
-      );
+      // Verify both services were called with the right turn and session.
+      // The system prompt slot is left unasserted: with no context requested
+      // it depends on whether data/contexts/rukh exists locally, and that
+      // directory is gitignored, so it is absent on CI.
+      const mistralCall = mockMistralService.processMessage.mock.calls[0];
+      expect(mistralCall[0]).toContain('capital of France');
+      expect(mistralCall[1]).toBe('session-1');
+
+      const anthropicCall = mockAnthropicService.processMessage.mock.calls[0];
+      expect(anthropicCall[0]).toContain('quantum computing');
+      expect(anthropicCall[1]).toBe('session-2');
 
       // Verify cost tracking was called for both requests
       expect(mockCostTracker.trackUsageWithTokens).toHaveBeenCalledTimes(2);
