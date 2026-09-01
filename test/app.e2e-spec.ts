@@ -683,19 +683,17 @@ describe('App (e2e)', () => {
           expect(mockMistralService.processMessage).toHaveBeenCalled();
           const calledArgs = mockMistralService.processMessage.mock.calls[0];
 
-          // First arg should be just the user message
-          expect(calledArgs[0]).toBe('test message with file');
+          // First arg is the user turn, delimited but carrying no file content
+          expect(calledArgs[0]).toContain('test message with file');
+          expect(calledArgs[0]).toContain('<user_message>');
+          expect(calledArgs[0]).not.toContain(
+            '# Test markdown file for e2e tests',
+          );
 
           // Third arg should be the system prompt containing the file content
-          if (calledArgs.length >= 3) {
-            expect(calledArgs[2]).toBeDefined();
-            expect(calledArgs[2]).toContain(
-              '# Test markdown file for e2e tests',
-            );
-          } else {
-            // If using older pattern (without systemPrompt), file content should be in message
-            expect(calledArgs[0]).toContain('test message with file');
-          }
+          expect(calledArgs.length).toBeGreaterThanOrEqual(3);
+          expect(calledArgs[2]).toBeDefined();
+          expect(calledArgs[2]).toContain('# Test markdown file for e2e tests');
         }
       });
 
@@ -720,16 +718,19 @@ describe('App (e2e)', () => {
           if (mockMistralService.processMessage.mock.calls.length > 0) {
             const calledArgs = mockMistralService.processMessage.mock.calls[0];
 
-            // First arg should be just the user message
-            expect(calledArgs[0]).toBe('test message with file');
+            // First arg is the user turn, delimited but carrying no file content
+            expect(calledArgs[0]).toContain('test message with file');
+            expect(calledArgs[0]).toContain('<user_message>');
+            expect(calledArgs[0]).not.toContain(
+              '# Test markdown file for e2e tests',
+            );
 
             // Third arg should be the system prompt containing the file content
-            if (calledArgs.length >= 3) {
-              expect(calledArgs[2]).toBeDefined();
-              expect(calledArgs[2]).toContain(
-                '# Test markdown file for e2e tests',
-              );
-            }
+            expect(calledArgs.length).toBeGreaterThanOrEqual(3);
+            expect(calledArgs[2]).toBeDefined();
+            expect(calledArgs[2]).toContain(
+              '# Test markdown file for e2e tests',
+            );
           }
         }
       });
