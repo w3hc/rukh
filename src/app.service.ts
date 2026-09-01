@@ -447,18 +447,11 @@ export class AppService {
       // First, try to get the context index to check for links and password
       const indexPath = join(contextPath, 'index.json');
       let contextIndex = null;
-      let contextPassword = '';
 
       if (existsSync(indexPath)) {
         try {
           const indexData = await readFile(indexPath, 'utf-8');
           contextIndex = JSON.parse(indexData);
-
-          // If we have a context index with password, store it for future use
-          if (contextIndex && contextIndex.password) {
-            contextPassword = contextIndex.password;
-            this.contexts.set(contextName, contextPassword);
-          }
         } catch (error) {
           this.logger.error(
             `Error reading context index: ${error instanceof Error ? error.message : String(error)}`,
@@ -466,32 +459,8 @@ export class AppService {
         }
       }
 
-      // If we still don't have a password, check if we have it stored already
-      if (!contextPassword && this.contexts.has(contextName)) {
-        contextPassword = this.contexts.get(contextName);
-      }
-
       // Get list of markdown files in the context
-      let files: string[] = [];
-      try {
-        if (contextPassword) {
-          // If we have a password, try to use the ContextService
-          const contextFiles = await this.contextService.listContextFiles(
-            contextName,
-            contextPassword,
-          );
-          files = contextFiles.map((file) => file.name);
-        } else {
-          // Fallback to direct file system access
-          files = await this.getMarkdownFiles(contextPath);
-        }
-      } catch (error) {
-        this.logger.error(
-          `Error listing context files: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        // Fallback to direct file system access
-        files = await this.getMarkdownFiles(contextPath);
-      }
+      const files = await this.getMarkdownFiles(contextPath);
 
       // Track which files and links are used for this query
       const usedFiles: string[] = [];
@@ -508,20 +477,10 @@ export class AppService {
 
         for (const file of files) {
           try {
-            let fileContent = '';
-
-            if (contextPassword) {
-              // Try to get file content using ContextService
-              fileContent = await this.contextService.getFileContent(
-                contextName,
-                file,
-                contextPassword,
-              );
-            } else {
-              // Fallback to direct file system access
-              const filePath = join(contextPath, file);
-              fileContent = await readFile(filePath, 'utf-8');
-            }
+            const fileContent = await readFile(
+              join(contextPath, file),
+              'utf-8',
+            );
 
             contextContent += `### File: ${file}\n${fileContent}\n\n`;
             usedFiles.push(file);
