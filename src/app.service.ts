@@ -444,21 +444,6 @@ export class AppService {
         return '';
       }
 
-      // First, try to get the context index to check for links and password
-      const indexPath = join(contextPath, 'index.json');
-      let contextIndex = null;
-
-      if (existsSync(indexPath)) {
-        try {
-          const indexData = await readFile(indexPath, 'utf-8');
-          contextIndex = JSON.parse(indexData);
-        } catch (error) {
-          this.logger.error(
-            `Error reading context index: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
-
       // Get list of markdown files in the context
       const files = await this.getMarkdownFiles(contextPath);
 
