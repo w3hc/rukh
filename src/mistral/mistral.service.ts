@@ -166,11 +166,12 @@ export class MistralService {
 
     try {
       // Create a model instance with the specified model name
+      // No output ceiling here either, for the same reason as in the
+      // constructor: a 1000-token cap truncated long answers mid-sentence.
       const model = new ChatMistralAI({
         apiKey: this.apiKey,
         modelName: modelName,
         temperature: 0.3,
-        maxTokens: 1000,
       });
 
       const langChainMessages = [];
