@@ -190,7 +190,10 @@ export class OpenAIService {
           model: this.model,
           messages: formattedMessages,
           temperature: 0.3,
-          max_tokens: 4096,
+          // No output ceiling. 4096 tokens silently truncated long answers,
+          // such as a spreadsheet column rewritten row by row, mid-sentence.
+          // Left unset so the limit is whatever the model allows rather than
+          // a constant that has to be revisited on every model change.
         };
 
         const response = await fetch(this.apiUrl, {
@@ -332,7 +335,7 @@ export class OpenAIService {
         model: this.model,
         messages: formattedMessages,
         temperature: 0.3,
-        max_tokens: 4096,
+        // No output ceiling, same reason as the non-streaming path above.
         stream: true,
         // Without this the streamed response carries no usage at all, which
         // would leave cost tracking blind on every streamed request.
