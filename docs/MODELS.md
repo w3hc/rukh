@@ -6,21 +6,23 @@ Rukh supports multiple LLM providers with automatic fallback capabilities. When 
 
 | Provider | Parameter Value | Model Name | Input Cost | Output Cost |
 |----------|----------------|------------|------------|-------------|
-| Mistral AI | `mistral` | `mistral-large-latest` | $0.04/M tokens | $0.04/M tokens |
-| Anthropic | `anthropic` | `claude-sonnet-5` | $3/M tokens | $15/M tokens |
+| Mistral AI | `mistral` | `mistral-small-latest` | $0.15/M tokens | $0.60/M tokens |
+| Anthropic | `anthropic` | `claude-sonnet-5` | $2/M tokens | $10/M tokens |
 | OpenAI | `openai` | `gpt-4o` | $2.50/M tokens | $10/M tokens |
+
+*Rates verified 2026-09-05 against each provider's official pricing page. They mirror the tables in `MistralService`, `AnthropicService`, `OpenAIService` and `CostTrackingService` — update all of them together.*
 
 ## Detailed Information
 
 ### Mistral AI
 
-**Model**: `mistral-large-latest`
+**Model**: `mistral-small-latest` (currently resolves to Mistral Small 4)
 
 **Parameter value**: `mistral`
 
 **Pricing**:
-- Input: $0.04 per million tokens
-- Output: $0.04 per million tokens
+- Input: $0.15 per million tokens
+- Output: $0.60 per million tokens
 
 **Configuration**:
 Set the `MISTRAL_API_KEY` environment variable in your `.env` file.
@@ -29,12 +31,33 @@ Set the `MISTRAL_API_KEY` environment variable in your `.env` file.
 - Fast response times
 - Cost-effective for most use cases
 - Good quality for general-purpose tasks
-- Excellent price-to-performance ratio
 
 **Use cases**:
 - High-volume applications where cost is a concern
 - General chat and Q&A
 - Content generation
+
+**Why not `mistral-large-latest`**:
+Large is cheaper per token ($0.50/M in, $1.50/M out) but sits behind a paid
+subscription tier - a key without that entitlement gets `403 tier_not_allowed`.
+`MistralService.MODEL_RATES` still carries its rate, along with
+`mistral-medium-latest` ($1.50/M in, $7.50/M out) and `ministral-3b-latest`
+($0.10/M in and out), for the paths that name a model explicitly.
+
+**Rate limits**:
+Mistral's limits are set by workspace tier, not by model - every model
+compatible with a given tier shares the same ceiling, so switching models does
+not buy headroom. Free mode allows 1 request/second, 500,000 tokens/minute and
+1 billion tokens/month; exceeding any of the three returns `429` with code
+`1300`. Pay-as-you-go unlocks Tier 1, and tiers rise automatically at EUR 20 /
+100 / 500 of cumulative *billed* usage (prepaid credits do not count). Your
+actual limits and consumption are visible only at
+<https://admin.mistral.ai/plateforme/limits>.
+
+Because a 429 is a tier problem rather than a transient one, `MistralService`
+caps retries at 1 (`maxRetries`) and logs the failure as a warning before the
+fallback chain moves on. LangChain's default of 6 retries with exponential
+backoff spent roughly 90 seconds per request before failing over.
 
 ---
 
@@ -45,8 +68,11 @@ Set the `MISTRAL_API_KEY` environment variable in your `.env` file.
 **Parameter value**: `anthropic`
 
 **Pricing**:
-- Input: $3 per million tokens
-- Output: $15 per million tokens
+- Input: $2 per million tokens
+- Output: $10 per million tokens
+
+The $2/$10 launch pricing is now Sonnet 5's standard price; the increase to
+$3/$15 that had been scheduled for 2026-09-01 was cancelled.
 
 **Configuration**:
 Set the `ANTHROPIC_API_KEY` environment variable in your `.env` file.
@@ -55,8 +81,16 @@ Set the `ANTHROPIC_API_KEY` environment variable in your `.env` file.
 - High-quality responses
 - Excellent for complex reasoning and analysis
 - Strong performance on nuanced tasks
-- Large context window (up to 64,000 tokens output)
+- 1M token context window
 - **Default model** if none is specified
+
+**Output ceiling**:
+`max_tokens` is 128,000 on the streaming paths and 64,000 on the non-streaming
+ones. That split is deliberate, not drift: 128,000 is Sonnet 5's maximum, but a
+ceiling that high needs streaming or the request times out before the answer
+lands. Thinking draws on the same budget and is on by default, so the visible
+answer gets whatever reasoning leaves behind - which is why the streaming paths
+ask for the model's full allowance.
 
 **Use cases**:
 - Complex analytical tasks
@@ -83,7 +117,9 @@ Set the `OPENAI_API_KEY` environment variable in your `.env` file.
 - Versatile performance across various tasks
 - Strong general-purpose capabilities
 - Good balance of quality and cost
-- Up to 4,096 tokens output
+- No output ceiling set - `OpenAIService` leaves `max_tokens` unset, so the
+  limit is whatever the model allows rather than a constant that has to be
+  revisited on every model change
 
 **Use cases**:
 - General-purpose applications
@@ -226,7 +262,7 @@ Consider a context with 50 files, where only 5 are relevant:
 Input tokens:  ~200,000 (all 50 files)
 Output tokens: ~500
 Model: claude-sonnet-5
-Cost: $0.60 + $0.0075 = $0.6075
+Cost: $0.40 + $0.005 = $0.405
 ```
 
 **Two-Step RAG Mode:**
@@ -241,9 +277,9 @@ Step 2 (Generation):
   Input tokens:  ~20,000 (5 files only)
   Output tokens: ~500
   Model: claude-sonnet-5
-  Cost: $0.06 + $0.0075 = $0.0676
+  Cost: $0.04 + $0.005 = $0.045
 
-Total: $0.0677 (89% cost reduction!)
+Total: $0.0451 (89% cost reduction!)
 ```
 
 ### Configuration
@@ -296,9 +332,9 @@ When RAG is enabled, responses include additional metadata:
     "output_tokens": 500
   },
   "cost": {
-    "input_cost": 0.0615,
-    "output_cost": 0.0075,
-    "total_cost": 0.069
+    "input_cost": 0.041,
+    "output_cost": 0.005,
+    "total_cost": 0.046
   },
   "rag": {
     "selectedFiles": ["intro.md", "api.md", "examples.md"],
@@ -412,7 +448,7 @@ All models return responses in the same format, including cost tracking:
 ```json
 {
   "output": "Response text...",
-  "model": "mistral-large-latest",
+  "model": "mistral-small-latest",
   "network": "arbitrum-sepolia",
   "txHash": "0x...",
   "explorerLink": "https://sepolia.arbiscan.io/tx/0x...",
@@ -422,9 +458,9 @@ All models return responses in the same format, including cost tracking:
     "output_tokens": 231
   },
   "cost": {
-    "input_cost": 0.000001,
-    "output_cost": 0.000009,
-    "total_cost": 0.00001
+    "input_cost": 0.000002,
+    "output_cost": 0.000139,
+    "total_cost": 0.000141
   }
 }
 ```
