@@ -589,7 +589,12 @@ export class AnthropicService {
 
       const requestBody: Record<string, unknown> = {
         model: this.model,
-        max_tokens: 64000,
+        // Thinking shares this budget with the answer, and on Sonnet 5
+        // thinking is on by default. A 182-row rewrite was already spending
+        // 56k of a 64k ceiling, most of it invisible, so the next slightly
+        // longer input would have been truncated mid-answer. 128k is the
+        // model's maximum and is only allowed because this path streams.
+        max_tokens: 128000,
         messages: formattedMessages,
       };
 
@@ -831,7 +836,8 @@ export class AnthropicService {
       const buildBody = (currentMessages: AnthropicMessage[]) => {
         const requestBody: Record<string, unknown> = {
           model: this.model,
-          max_tokens: 64000,
+          // 128k for the same reason as the plain streaming path above.
+          max_tokens: 128000,
           messages: currentMessages,
           tools,
         };
