@@ -25,6 +25,20 @@ export interface TextStreamEvent {
 }
 
 /**
+ * An incremental piece of the model's reasoning, to be shown separately from
+ * the answer - or not at all.
+ *
+ * Adaptive thinking can run for minutes before the first word of the answer
+ * appears. Without these events nothing at all reaches the socket during that
+ * window, which reads as a hung request to the user and as an idle connection
+ * to every proxy in between.
+ */
+export interface ThinkingStreamEvent {
+  type: 'thinking';
+  text: string;
+}
+
+/**
  * Everything streamed so far is preamble and should be discarded.
  *
  * Only the Anthropic web search path emits this: the model narrates before it
@@ -47,5 +61,22 @@ export interface FinalStreamEvent {
 
 export type ModelStreamEvent =
   | TextStreamEvent
+  | ThinkingStreamEvent
   | ResetStreamEvent
   | FinalStreamEvent;
+
+/**
+ * Thrown when a stream is cancelled because the client went away.
+ *
+ * A cancelled `fetch` surfaces as a generic `AbortError` that looks exactly
+ * like a genuine timeout, so the provider services raise this instead when
+ * they know the cancellation was ours - it tells the caller to stop quietly
+ * rather than log an error and fall back to the next model for a client that
+ * is no longer there.
+ */
+export class StreamAbortedError extends Error {
+  constructor(message = 'Stream aborted: client disconnected') {
+    super(message);
+    this.name = 'StreamAbortedError';
+  }
+}

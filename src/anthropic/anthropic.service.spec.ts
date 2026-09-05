@@ -201,6 +201,95 @@ describe('AnthropicService', () => {
         HttpException,
       );
     });
+
+    it('should ask for summarized thinking and forward it separately', async () => {
+      (global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          body: sseBody([
+            {
+              type: 'content_block_start',
+              index: 0,
+              content_block: { type: 'thinking', thinking: '' },
+            },
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'thinking_delta', thinking: 'weighing options' },
+            },
+            {
+              type: 'content_block_start',
+              index: 1,
+              content_block: { type: 'text', text: '' },
+            },
+            {
+              type: 'content_block_delta',
+              index: 1,
+              delta: { type: 'text_delta', text: 'Answer' },
+            },
+            { type: 'message_stop' },
+          ]),
+        }),
+      );
+
+      const events = await collect(service.streamMessage('Hi'));
+
+      expect(events.filter((e) => e.type === 'thinking')).toEqual([
+        { type: 'thinking', text: 'weighing options' },
+      ]);
+
+      // Reasoning is not the answer: it must not leak into the saved content
+      const final = events[events.length - 1] as any;
+      expect(final.content).toBe('Answer');
+
+      const body = JSON.parse(
+        (global.fetch as jest.Mock).mock.calls[0][1].body,
+      );
+      expect(body.thinking).toEqual({
+        type: 'adaptive',
+        display: 'summarized',
+      });
+      // No ANTHROPIC_EFFORT set, so the API's own default applies
+      expect(body.output_config).toBeUndefined();
+    });
+
+    it('should end quietly when the caller aborts mid-request', async () => {
+      const controller = new AbortController();
+
+      (global.fetch as jest.Mock).mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => {
+              const error = new Error('The operation was aborted');
+              error.name = 'AbortError';
+              reject(error);
+            });
+            // The client hangs up while the request is still in flight
+            controller.abort();
+          }),
+      );
+
+      const events = await collect(
+        service.streamMessage('Hi', 'session', undefined, controller.signal),
+      );
+
+      // No throw, no events: an abandoned stream is not an error to report
+      expect(events).toEqual([]);
+      expect(controller.signal.aborted).toBe(true);
+    });
+
+    it('should not issue a request at all if already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const before = (global.fetch as jest.Mock).mock.calls.length;
+      const events = await collect(
+        service.streamMessage('Hi', 'session', undefined, controller.signal),
+      );
+
+      expect(events).toEqual([]);
+      expect((global.fetch as jest.Mock).mock.calls.length).toBe(before);
+    });
   });
 
   describe('streamMessageWithWebSearch', () => {

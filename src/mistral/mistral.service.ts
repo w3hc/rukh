@@ -7,7 +7,7 @@ import {
   AIMessage,
   SystemMessage,
 } from '@langchain/core/messages';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { ModelStreamEvent, StreamAbortedError } from '../types/llm-stream';
 
 interface CostInfo {
   input_cost: number;
@@ -21,6 +21,15 @@ export class MistralService {
   private readonly model: ChatMistralAI;
   private readonly logger = new Logger(MistralService.name);
   private readonly modelName: string = 'mistral-small-latest';
+
+  // LangChain's AsyncCaller defaults to 6 retries with randomised exponential
+  // backoff, and it does not treat a 429 as terminal - so a rate-limited key
+  // sat in backoff for roughly 90 seconds before the error surfaced and the
+  // fallback chain moved on. Mistral is first in that chain, so every single
+  // request paid it, which read as "Mistral is slow" rather than "Mistral is
+  // rate limited". One retry still absorbs a transient blip; anything worse
+  // should fail over to the next provider immediately instead of waiting.
+  private readonly maxRetries: number = 1;
 
   // Cost per 1K tokens in USD, per model - https://mistral.ai/pricing/api/
   // (verified 2026-08-31). Rates vary a lot between the models this service
@@ -66,6 +75,7 @@ export class MistralService {
       apiKey: this.apiKey,
       modelName: this.modelName,
       temperature: 0.3,
+      maxRetries: this.maxRetries,
     });
 
     this.logger.log('MistralService initialized successfully');
@@ -172,6 +182,7 @@ export class MistralService {
         apiKey: this.apiKey,
         modelName: modelName,
         temperature: 0.3,
+        maxRetries: this.maxRetries,
       });
 
       const langChainMessages = [];
@@ -230,10 +241,16 @@ export class MistralService {
         cost,
       };
     } catch (error) {
-      this.logger.error({
-        message: `Error processing message with Mistral ${modelName} [${requestId}]`,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      if (this.isRateLimited(error)) {
+        this.logger.warn(
+          `Mistral rate limited (429) on ${modelName} [${requestId}]: failing over to the next model`,
+        );
+      } else {
+        this.logger.error({
+          message: `Error processing message with Mistral ${modelName} [${requestId}]`,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
 
       throw new HttpException(
         `Failed to process message with Mistral AI (${modelName})`,
@@ -384,12 +401,18 @@ export class MistralService {
         cost,
       };
     } catch (error) {
-      this.logger.error({
-        message: `Error processing message with Mistral [${requestId}]`,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        sessionId,
-        timestamp: new Date().toISOString(),
-      });
+      if (this.isRateLimited(error)) {
+        this.logger.warn(
+          `Mistral rate limited (429) [${requestId}] for session [${sessionId}]: failing over to the next model`,
+        );
+      } else {
+        this.logger.error({
+          message: `Error processing message with Mistral [${requestId}]`,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       if (error instanceof HttpException) {
         throw error;
@@ -430,6 +453,7 @@ export class MistralService {
     message: string,
     sessionId: string = randomUUID(),
     systemPrompt?: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -449,7 +473,13 @@ export class MistralService {
 
       let content = '';
 
-      const stream = await this.model.stream(langChainMessages);
+      if (signal?.aborted) {
+        throw new StreamAbortedError();
+      }
+
+      // LangChain forwards the signal to the underlying request, so an
+      // abandoned stream stops rather than running to completion unread
+      const stream = await this.model.stream(langChainMessages, { signal });
       for await (const chunk of stream) {
         const text = this.chunkToText(chunk?.content);
         if (text) {
@@ -501,12 +531,25 @@ export class MistralService {
         cost,
       };
     } catch (error) {
-      this.logger.error({
-        message: `Error streaming message with Mistral [${requestId}]`,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        sessionId,
-        timestamp: new Date().toISOString(),
-      });
+      if (error instanceof StreamAbortedError || signal?.aborted) {
+        this.logger.log(
+          `Mistral stream [${requestId}] cancelled: client disconnected`,
+        );
+        return;
+      }
+
+      if (this.isRateLimited(error)) {
+        this.logger.warn(
+          `Mistral rate limited (429) while streaming [${requestId}] for session [${sessionId}]: failing over to the next model`,
+        );
+      } else {
+        this.logger.error({
+          message: `Error streaming message with Mistral [${requestId}]`,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       if (error instanceof HttpException) {
         throw error;
@@ -527,6 +570,17 @@ export class MistralService {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Mistral answers 429 both for a rate limit and for an exhausted quota. It
+   * is worth naming in the logs rather than folding into the generic failure
+   * message: nothing is wrong with the request, and the caller will simply
+   * fall through to the next model in the sequence.
+   */
+  private isRateLimited(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('429') || message.includes('rate_limited');
   }
 
   private generateRequestId(): string {

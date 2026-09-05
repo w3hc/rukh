@@ -2,7 +2,7 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { CustomJsonMemory } from '../memory/custom-memory';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { ModelStreamEvent, StreamAbortedError } from '../types/llm-stream';
 import { readSseData } from '../utils/sse';
 
 interface OpenAIMessage {
@@ -295,6 +295,7 @@ export class OpenAIService {
     message: string,
     sessionId: string = randomUUID(),
     systemPrompt?: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -343,9 +344,16 @@ export class OpenAIService {
       };
 
       // The timeout only guards connection setup: once tokens are flowing a
-      // long answer is healthy, not stalled.
+      // long answer is healthy, not stalled. `signal` stays live for the whole
+      // stream so an abandoned request stops costing tokens.
+      if (signal?.aborted) {
+        throw new StreamAbortedError();
+      }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 300000);
+      signal?.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
 
       let body: ReadableStream<Uint8Array>;
       try {
@@ -436,6 +444,13 @@ export class OpenAIService {
         cost,
       };
     } catch (error) {
+      if (error instanceof StreamAbortedError || signal?.aborted) {
+        this.logger.log(
+          `OpenAI stream [${requestId}] cancelled: client disconnected`,
+        );
+        return;
+      }
+
       this.logger.error({
         message: `Error streaming message with OpenAI [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',

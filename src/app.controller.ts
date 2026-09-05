@@ -4,13 +4,12 @@ import {
   Post,
   Body,
   Header,
-  Req,
   Res,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -24,6 +23,14 @@ import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { FileValidator } from './validators/file.validator';
 import { RATE_LIMITS } from './config/rate-limit.config';
+
+/**
+ * How often to write a keep-alive comment on an open SSE stream.
+ *
+ * Well under nginx's 60s `proxy_read_timeout` default, so a long silent
+ * reasoning phase never looks idle to whatever sits in front of this.
+ */
+const HEARTBEAT_INTERVAL_MS = 15000;
 
 @ApiTags('Ask')
 @Controller()
@@ -63,7 +70,7 @@ export class AppController {
         },
         model: {
           type: 'string',
-          example: 'mistral',
+          example: 'anthropic',
         },
         sessionId: {
           type: 'string',
@@ -143,7 +150,7 @@ export class AppController {
   @ApiResponse({
     status: 201,
     description:
-      'Message processed successfully. With `stream: true` the response is instead a `text/event-stream` of `chunk` events (`{ "text": "..." }`), an optional `reset` event telling the client to discard what it has rendered so far, and a terminal `done` event whose data is this same payload - or an `error` event if every model failed.',
+      'Message processed successfully. With `stream: true` the response is instead a `text/event-stream` of `chunk` events (`{ "text": "..." }`), `thinking` events carrying the model\'s reasoning rather than the answer (safe to ignore or render separately), an optional `reset` event telling the client to discard what it has rendered so far, and a terminal `done` event whose data is this same payload - or an `error` event if every model failed. Comment frames (`: ping`) arrive periodically to keep the connection alive; `EventSource` ignores them.',
     type: AskResponseDto,
   })
   @ApiResponse({
@@ -168,7 +175,6 @@ export class AppController {
   @UseInterceptors(FileInterceptor('file'))
   async ask(
     @Body() askDto: AskDto,
-    @Req() req: Request,
     // passthrough keeps Nest's normal serialization for the JSON path; only
     // the streaming branch writes to the response itself
     @Res({ passthrough: true }) res: Response,
@@ -179,7 +185,7 @@ export class AppController {
       return this.appService.ask(askDto, file);
     }
 
-    return this.streamAsk(askDto, req, res, file);
+    return this.streamAsk(askDto, res, file);
   }
 
   /**
@@ -187,10 +193,16 @@ export class AppController {
    *
    * `X-Accel-Buffering: no` matters behind nginx, which otherwise buffers the
    * whole response and defeats the point of streaming.
+   *
+   * Two things keep a long answer alive. The heartbeat writes an SSE comment
+   * on a timer, because a model can reason for minutes before its first word
+   * and a connection with no bytes on it is an idle connection to every proxy
+   * in between - which cuts it. And the abort controller stops the upstream
+   * request the moment the client goes away, rather than paying for an answer
+   * to the end of a socket nobody is reading.
    */
   private async streamAsk(
     askDto: AskDto,
-    req: Request,
     res: Response,
     file?: Express.Multer['File'],
   ): Promise<void> {
@@ -202,25 +214,46 @@ export class AppController {
     res.flushHeaders();
 
     let clientGone = false;
-    req.on('close', () => {
+    const abort = new AbortController();
+
+    // `res`, not `req`: a client that hangs up mid-answer closes the response,
+    // and `writableFinished` is what separates that from our own normal end.
+    res.on('close', () => {
+      if (res.writableFinished) {
+        return;
+      }
       clientGone = true;
+      abort.abort();
     });
 
     const send = (event: string, data: unknown) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
+    // A comment frame: EventSource ignores it, proxies see a live connection
+    const heartbeat = setInterval(() => {
+      if (!clientGone && !res.writableEnded) {
+        res.write(': ping\n\n');
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref?.();
+
     try {
-      for await (const event of this.appService.askStream(askDto, file)) {
+      for await (const event of this.appService.askStream(
+        askDto,
+        file,
+        abort.signal,
+      )) {
         if (clientGone) {
-          // Breaking here returns the generator, which cancels the upstream
-          // provider request instead of paying for tokens nobody will read
           break;
         }
 
         switch (event.type) {
           case 'chunk':
             send('chunk', { text: event.text });
+            break;
+          case 'thinking':
+            send('thinking', { text: event.text });
             break;
           case 'reset':
             send('reset', {});
@@ -236,10 +269,13 @@ export class AppController {
     } catch (error) {
       // Headers are already sent, so the exception filter can't turn this
       // into a status code - report it in-band instead
-      send('error', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
+      if (!clientGone) {
+        send('error', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     } finally {
+      clearInterval(heartbeat);
       res.end();
     }
   }

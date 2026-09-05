@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ChatMistralAI } from '@langchain/mistralai';
 import { MistralService } from './mistral.service';
 import { Logger } from '@nestjs/common';
 
@@ -88,6 +89,52 @@ describe('MistralService', () => {
       'MISTRAL_API_KEY environment variable is not set',
     );
 
+    loggerErrorSpy.mockRestore();
+  });
+
+  it('should cap retries so a rate limit fails over instead of backing off', () => {
+    // LangChain's own default is 6 retries with exponential backoff, which
+    // spent ~90s on a 429 before the fallback chain could try another model.
+    const calls = (ChatMistralAI as unknown as jest.Mock).mock.calls;
+    const [config] = calls[calls.length - 1] as [{ maxRetries?: number }];
+
+    expect(config.maxRetries).toBe(1);
+  });
+
+  it('should log a rate limit as a warning rather than a generic error', async () => {
+    (ChatMistralAI as unknown as jest.Mock).mockImplementationOnce(() => ({
+      invoke: jest.fn(),
+      stream: jest
+        .fn()
+        .mockRejectedValue(
+          new Error('API error occurred: Status 429\nBody: {"code":"1300"}'),
+        ),
+    }));
+
+    const loggerWarnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation();
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+
+    const rateLimited = new MistralService();
+
+    await expect(
+      (async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of rateLimited.streamMessage('Hello')) {
+          // drain the stream so the rejection surfaces
+        }
+      })(),
+    ).rejects.toThrow('Failed to stream message with Mistral AI');
+
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('rate limited (429)'),
+    );
+    expect(loggerErrorSpy).not.toHaveBeenCalled();
+
+    loggerWarnSpy.mockRestore();
     loggerErrorSpy.mockRestore();
   });
 

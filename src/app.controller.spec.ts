@@ -3,7 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { ConfigService } from '@nestjs/config';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -18,15 +18,16 @@ describe('AppController', () => {
     size: 26,
   } as Express.Multer['File'];
 
-  // The handler now takes the raw req/res so it can write SSE frames; the
-  // JSON path only ever touches them when `stream` is set.
-  const mockReq = { on: jest.fn() } as unknown as Request;
+  // The handler now takes the raw res so it can write SSE frames; the JSON
+  // path only ever touches it when `stream` is set. `on` is part of the shape
+  // because the streaming branch subscribes to the response's `close`.
   const mockRes = {
     status: jest.fn(),
     setHeader: jest.fn(),
     flushHeaders: jest.fn(),
     write: jest.fn(),
     end: jest.fn(),
+    on: jest.fn(),
   } as unknown as Response;
 
   beforeEach(async () => {
@@ -110,7 +111,6 @@ describe('AppController', () => {
         {
           message: 'test message',
         },
-        mockReq,
         mockRes,
       );
 
@@ -128,7 +128,6 @@ describe('AppController', () => {
           model: 'mistral',
           sessionId: 'test-session-id',
         },
-        mockReq,
         mockRes,
       );
 
@@ -145,7 +144,6 @@ describe('AppController', () => {
           message: 'test message',
           model: 'mistral',
         },
-        mockReq,
         mockRes,
       );
 
@@ -168,11 +166,11 @@ describe('AppController', () => {
         flushHeaders: jest.fn(),
         write: jest.fn(),
         end: jest.fn(),
+        on: jest.fn(),
       } as unknown as Response;
 
       const result = await appController.ask(
         { message: 'test message', model: 'mistral', stream: true },
-        mockReq,
         res,
       );
 
@@ -207,13 +205,10 @@ describe('AppController', () => {
         flushHeaders: jest.fn(),
         write: jest.fn(),
         end: jest.fn(),
+        on: jest.fn(),
       } as unknown as Response;
 
-      await appController.ask(
-        { message: 'test message', stream: true },
-        mockReq,
-        res,
-      );
+      await appController.ask({ message: 'test message', stream: true }, res);
 
       const body = collectWrites(res);
       expect(body).toContain('event: error');
@@ -221,10 +216,75 @@ describe('AppController', () => {
       expect(res.end).toHaveBeenCalled();
     });
 
+    it('should write thinking as its own event, apart from the answer', async () => {
+      (appService.askStream as jest.Mock).mockImplementationOnce(
+        async function* () {
+          yield { type: 'thinking', text: 'weighing options' };
+          yield { type: 'chunk', text: 'Answer' };
+        },
+      );
+
+      const res = {
+        status: jest.fn(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn(),
+      } as unknown as Response;
+
+      await appController.ask({ message: 'test message', stream: true }, res);
+
+      const body = collectWrites(res);
+      expect(body).toContain(
+        'event: thinking\ndata: {"text":"weighing options"}\n\n',
+      );
+      expect(body).toContain('event: chunk\ndata: {"text":"Answer"}\n\n');
+    });
+
+    it('should abort the upstream stream when the client hangs up', async () => {
+      const handlers: Record<string, () => void> = {};
+      const res = {
+        status: jest.fn(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn((event: string, cb: () => void) => {
+          handlers[event] = cb;
+        }),
+        writableFinished: false,
+      } as unknown as Response;
+
+      let seenSignal: AbortSignal | undefined;
+      (appService.askStream as jest.Mock).mockImplementationOnce(
+        async function* (
+          _dto: unknown,
+          _file: unknown,
+          signal: AbortSignal | undefined,
+        ) {
+          seenSignal = signal;
+          yield { type: 'chunk', text: 'partial' };
+          // The client goes away half way through the answer
+          handlers.close();
+          yield { type: 'chunk', text: 'never rendered' };
+        },
+      );
+
+      await appController.ask({ message: 'test message', stream: true }, res);
+
+      // The signal is what stops the provider billing for the rest
+      expect(seenSignal?.aborted).toBe(true);
+
+      const body = collectWrites(res);
+      expect(body).toContain('"partial"');
+      expect(body).not.toContain('never rendered');
+      expect(res.end).toHaveBeenCalled();
+    });
+
     it('should use the JSON path when stream is false', async () => {
       const result = await appController.ask(
         { message: 'test message', model: 'mistral', stream: false },
-        mockReq,
         mockRes,
       );
 
@@ -245,7 +305,6 @@ describe('AppController', () => {
           model: 'mistral',
           sessionId: 'test-session-id',
         },
-        mockReq,
         mockRes,
         mockFile,
       );
@@ -268,7 +327,6 @@ describe('AppController', () => {
           sessionId: 'test-session-id',
           context: 'custom-context',
         },
-        mockReq,
         mockRes,
         mockFile,
       );
@@ -297,7 +355,6 @@ describe('AppController', () => {
           message: 'test message without file',
           model: 'mistral',
         },
-        mockReq,
         mockRes,
         undefined,
       );
