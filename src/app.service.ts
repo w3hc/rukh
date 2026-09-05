@@ -1049,6 +1049,7 @@ export class AppService {
     message: string,
     sessionId: string,
     systemPrompt: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
     const effective = this.effectiveSystemPrompt(systemPrompt);
 
@@ -1058,13 +1059,19 @@ export class AppService {
 
     switch (model) {
       case 'mistral':
-        yield* this.mistralService.streamMessage(message, sessionId, effective);
+        yield* this.mistralService.streamMessage(
+          message,
+          sessionId,
+          effective,
+          signal,
+        );
         return;
       case 'anthropic':
         yield* this.anthropicService.streamMessage(
           message,
           sessionId,
           effective,
+          signal,
         );
         return;
       case 'anthropic-web-search':
@@ -1072,10 +1079,16 @@ export class AppService {
           message,
           sessionId,
           effective,
+          signal,
         );
         return;
       case 'openai':
-        yield* this.openaiService.streamMessage(message, sessionId, effective);
+        yield* this.openaiService.streamMessage(
+          message,
+          sessionId,
+          effective,
+          signal,
+        );
         return;
       default:
         throw new Error(`Unsupported model: ${model}`);
@@ -1098,6 +1111,7 @@ export class AppService {
   async *askStream(
     askDto: AskDto,
     file?: Express.Multer['File'],
+    signal?: AbortSignal,
   ): AsyncGenerator<AskStreamEvent> {
     let usedSessionId = askDto.sessionId || randomUUID();
 
@@ -1120,6 +1134,13 @@ export class AppService {
     let lastError: Error | null = null;
 
     for (const currentModel of modelsToTry) {
+      // Falling back for a client that has hung up just burns a second
+      // model's tokens on an answer nobody will read
+      if (signal?.aborted) {
+        this.logger.log('Abandoning streamed request: client disconnected');
+        return;
+      }
+
       this.logger.log(`Attempting to stream with model: ${currentModel}`);
 
       let fullOutput = '';
@@ -1134,12 +1155,20 @@ export class AppService {
           userMessage, // Context travels in the system prompt, not here
           usedSessionId,
           systemPrompt,
+          signal,
         )) {
           switch (event.type) {
             case 'text':
               emitted = true;
               fullOutput += event.text;
               yield { type: 'chunk', text: event.text };
+              break;
+
+            case 'thinking':
+              // Passed through but not counted as output: it is not part of
+              // the answer, and treating it as first-byte would disable the
+              // model fallback before the answer has actually started
+              yield { type: 'thinking', text: event.text };
               break;
 
             case 'reset':
@@ -1158,6 +1187,13 @@ export class AppService {
           }
         }
       } catch (error) {
+        if (signal?.aborted) {
+          this.logger.log(
+            `Stream with ${currentModel} cancelled: client disconnected`,
+          );
+          return;
+        }
+
         this.logger.error(
           `Error streaming with model ${currentModel}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -1178,6 +1214,13 @@ export class AppService {
       }
 
       if (!completed) {
+        if (signal?.aborted) {
+          this.logger.log(
+            `Stream with ${currentModel} cancelled: client disconnected`,
+          );
+          return;
+        }
+
         this.logger.warn(
           `Model ${currentModel} ended its stream without a final event`,
         );

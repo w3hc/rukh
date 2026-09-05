@@ -2,7 +2,7 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { CustomJsonMemory } from '../memory/custom-memory';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { ModelStreamEvent, StreamAbortedError } from '../types/llm-stream';
 import { readSseData } from '../utils/sse';
 
 interface AnthropicMessage {
@@ -58,6 +58,9 @@ export class AnthropicService {
   private readonly WEB_FETCH_MAX_USES = 8;
   // Long server-tool turns may pause; cap the continuation loop defensively
   private readonly MAX_CONTINUATIONS = 5;
+  // Optional ANTHROPIC_EFFORT override; unset means the API's own default
+  private readonly EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+  private readonly effort?: string;
 
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
@@ -66,7 +69,39 @@ export class AnthropicService {
       throw new Error('ANTHROPIC_API_KEY environment variable is not set');
     }
 
-    this.logger.log('AnthropicService initialized successfully');
+    const effort = this.configService.get<string>('ANTHROPIC_EFFORT');
+    if (effort && !this.EFFORT_LEVELS.includes(effort)) {
+      this.logger.warn(
+        `Ignoring ANTHROPIC_EFFORT='${effort}': expected one of ${this.EFFORT_LEVELS.join(', ')}`,
+      );
+      this.effort = undefined;
+    } else {
+      this.effort = effort || undefined;
+    }
+
+    this.logger.log(
+      `AnthropicService initialized successfully (effort: ${this.effort ?? 'default'})`,
+    );
+  }
+
+  /**
+   * Reasoning configuration for the streaming paths.
+   *
+   * Thinking is on by default on this model, and its default `display` is
+   * `omitted` - the blocks stream with empty text. That reads as a dead
+   * connection for however long the model reasons, which on a long rewrite is
+   * minutes, so ask for the summary and forward it. Effort is the lever that
+   * decides how much of the token budget goes to reasoning at all; left unset
+   * the API applies its own default.
+   */
+  private reasoningFields(): Record<string, unknown> {
+    const fields: Record<string, unknown> = {
+      thinking: { type: 'adaptive', display: 'summarized' },
+    };
+    if (this.effort) {
+      fields.output_config = { effort: this.effort };
+    }
+    return fields;
   }
 
   async getConversationHistory(sessionId: string) {
@@ -496,18 +531,25 @@ export class AnthropicService {
    * Opens a streaming request to the Messages API and hands back the raw SSE
    * body.
    *
-   * The abort controller only guards connection setup: once the first bytes
-   * arrive the answer may legitimately take minutes to finish, so the timeout
-   * is cleared rather than cutting a healthy stream short. Generators reading
-   * the body cancel the reader when the consumer walks away, which aborts the
-   * underlying request.
+   * The timeout only guards connection setup: once the first bytes arrive the
+   * answer may legitimately take minutes to finish, so it is cleared rather
+   * than cutting a healthy stream short. The controller itself outlives the
+   * timeout - `signal` is how a caller cancels a stream that is still healthy
+   * but no longer wanted, which is what stops the token meter when the client
+   * has hung up.
    */
   private async openStream(
     requestBody: Record<string, unknown>,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<ReadableStream<Uint8Array>> {
+    if (signal?.aborted) {
+      throw new StreamAbortedError();
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    signal?.addEventListener('abort', () => controller.abort(), { once: true });
 
     try {
       const response = await fetch(this.apiUrl, {
@@ -566,6 +608,7 @@ export class AnthropicService {
     message: string,
     sessionId: string = randomUUID(),
     systemPrompt?: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -596,13 +639,14 @@ export class AnthropicService {
         // model's maximum and is only allowed because this path streams.
         max_tokens: 128000,
         messages: formattedMessages,
+        ...this.reasoningFields(),
       };
 
       if (systemPrompt) {
         requestBody.system = systemPrompt;
       }
 
-      const body = await this.openStream(requestBody, 300000);
+      const body = await this.openStream(requestBody, 300000, signal);
 
       const usage = { input_tokens: 0, output_tokens: 0 };
       let content = '';
@@ -619,6 +663,13 @@ export class AnthropicService {
             if (event.delta?.type === 'text_delta' && event.delta.text) {
               content += event.delta.text;
               yield { type: 'text', text: event.delta.text };
+            } else if (
+              event.delta?.type === 'thinking_delta' &&
+              event.delta.thinking
+            ) {
+              // Reasoning, not answer: forwarded for the client to render as
+              // it likes, and deliberately kept out of `content`
+              yield { type: 'thinking', text: event.delta.thinking };
             }
             break;
           case 'message_delta':
@@ -648,7 +699,11 @@ export class AnthropicService {
         responseData: {
           response_length: responseContent.length,
           model: this.model,
+          effort: this.effort ?? 'default',
           input_tokens: usage.input_tokens,
+          // Reasoning is billed as output but never reaches the client, so
+          // `output_tokens` far above what `response_length` accounts for is
+          // reasoning spend - that gap is what an effort change moves
           output_tokens: usage.output_tokens,
           total_cost: cost.total_cost,
           timestamp: new Date().toISOString(),
@@ -663,6 +718,15 @@ export class AnthropicService {
         cost,
       };
     } catch (error) {
+      if (this.wasAborted(error, signal)) {
+        // Nobody is listening any more - end the generator quietly, and leave
+        // the partial answer out of history
+        this.logger.log(
+          `Anthropic stream [${requestId}] cancelled: client disconnected`,
+        );
+        return;
+      }
+
       this.logger.error({
         message: `Error streaming message with Anthropic [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -679,6 +743,21 @@ export class AnthropicService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Whether a failed stream was cancelled by us rather than genuinely broken.
+   *
+   * `fetch` reports a cancelled request as a generic `AbortError`, which is
+   * indistinguishable from the setup timeout firing - so the caller's signal
+   * is what actually decides, and the sentinel covers the case where we never
+   * got as far as issuing the request.
+   */
+  private wasAborted(error: unknown, signal?: AbortSignal): boolean {
+    if (error instanceof StreamAbortedError) {
+      return true;
+    }
+    return Boolean(signal?.aborted);
   }
 
   /**
@@ -699,8 +778,9 @@ export class AnthropicService {
       searches: number;
       streamedSegment: string;
     },
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
-    const body = await this.openStream(requestBody, 600000);
+    const body = await this.openStream(requestBody, 600000, signal);
 
     // Accumulated `input_json_delta` fragments, keyed by content block index
     const partialJson = new Map<number, string>();
@@ -719,7 +799,11 @@ export class AnthropicService {
         case 'content_block_start': {
           const block = { ...(event.content_block ?? {}) };
           turn.blocks[event.index] = block;
-          if (block.type !== 'text' && turn.streamedSegment) {
+          if (
+            block.type !== 'text' &&
+            block.type !== 'thinking' &&
+            turn.streamedSegment
+          ) {
             // A tool call interrupts the answer: what came before it was
             // preamble, so tell the client to drop it.
             turn.streamedSegment = '';
@@ -736,6 +820,18 @@ export class AnthropicService {
             block.text = (block.text ?? '') + event.delta.text;
             turn.streamedSegment += event.delta.text;
             yield { type: 'text', text: event.delta.text };
+          } else if (
+            event.delta?.type === 'thinking_delta' &&
+            event.delta.thinking
+          ) {
+            // Accumulated onto the block as well as forwarded: a paused turn
+            // is continued by replaying the assistant message verbatim, and a
+            // thinking block replayed without its text is rejected
+            block.thinking = (block.thinking ?? '') + event.delta.thinking;
+            yield { type: 'thinking', text: event.delta.thinking };
+          } else if (event.delta?.type === 'signature_delta') {
+            // The signature authenticates the replayed thinking block
+            block.signature = (block.signature ?? '') + event.delta.signature;
           } else if (event.delta?.type === 'input_json_delta') {
             partialJson.set(
               event.index,
@@ -799,6 +895,7 @@ export class AnthropicService {
     message: string,
     sessionId: string = randomUUID(),
     systemPrompt?: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -840,6 +937,7 @@ export class AnthropicService {
           max_tokens: 128000,
           messages: currentMessages,
           tools,
+          ...this.reasoningFields(),
         };
         if (systemPrompt) {
           requestBody.system = systemPrompt;
@@ -855,7 +953,7 @@ export class AnthropicService {
         streamedSegment: '',
       };
 
-      yield* this.streamWebSearchTurn(buildBody(messages), turn);
+      yield* this.streamWebSearchTurn(buildBody(messages), turn, signal);
 
       let hops = 0;
       while (
@@ -881,7 +979,7 @@ export class AnthropicService {
           },
         ];
 
-        yield* this.streamWebSearchTurn(buildBody(messages), turn);
+        yield* this.streamWebSearchTurn(buildBody(messages), turn, signal);
       }
 
       // Keep only the last contiguous run of text blocks: earlier runs are
@@ -892,6 +990,11 @@ export class AnthropicService {
       for (const block of turn.blocks) {
         if (block.type === 'text' && block.text) {
           currentSegment += block.text;
+        } else if (block.type === 'thinking') {
+          // Thinking does not end a run - it is not preamble, it is reasoning
+          // that happens to sit between text blocks. This has to agree with
+          // the `reset` rule above or the streamed text and `content` diverge.
+          continue;
         } else if (currentSegment) {
           lastSegment = currentSegment;
           currentSegment = '';
@@ -939,6 +1042,13 @@ export class AnthropicService {
         cost,
       };
     } catch (error) {
+      if (this.wasAborted(error, signal)) {
+        this.logger.log(
+          `Anthropic web search stream [${requestId}] cancelled: client disconnected`,
+        );
+        return;
+      }
+
       this.logger.error({
         message: `Error streaming message with Anthropic web search [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',

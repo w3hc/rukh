@@ -7,7 +7,7 @@ import {
   AIMessage,
   SystemMessage,
 } from '@langchain/core/messages';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { ModelStreamEvent, StreamAbortedError } from '../types/llm-stream';
 
 interface CostInfo {
   input_cost: number;
@@ -430,6 +430,7 @@ export class MistralService {
     message: string,
     sessionId: string = randomUUID(),
     systemPrompt?: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<ModelStreamEvent> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -449,7 +450,13 @@ export class MistralService {
 
       let content = '';
 
-      const stream = await this.model.stream(langChainMessages);
+      if (signal?.aborted) {
+        throw new StreamAbortedError();
+      }
+
+      // LangChain forwards the signal to the underlying request, so an
+      // abandoned stream stops rather than running to completion unread
+      const stream = await this.model.stream(langChainMessages, { signal });
       for await (const chunk of stream) {
         const text = this.chunkToText(chunk?.content);
         if (text) {
@@ -501,6 +508,13 @@ export class MistralService {
         cost,
       };
     } catch (error) {
+      if (error instanceof StreamAbortedError || signal?.aborted) {
+        this.logger.log(
+          `Mistral stream [${requestId}] cancelled: client disconnected`,
+        );
+        return;
+      }
+
       this.logger.error({
         message: `Error streaming message with Mistral [${requestId}]`,
         error: error instanceof Error ? error.message : 'Unknown error',
