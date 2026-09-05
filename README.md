@@ -90,8 +90,6 @@ Response body:
 }
 ```
 
-Streaming responses are documented in [docs/STREAMING.md](docs/STREAMING.md).
-
 ## License
 
 [LGPL-3.0](LICENSE)
