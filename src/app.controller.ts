@@ -70,7 +70,7 @@ export class AppController {
         },
         model: {
           type: 'string',
-          example: 'mistral',
+          example: 'anthropic',
         },
         sessionId: {
           type: 'string',
