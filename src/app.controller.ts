@@ -56,7 +56,8 @@ export class AppController {
   @Post('ask')
   @Throttle({ ask: RATE_LIMITS.ASK_ENDPOINT })
   @ApiOperation({
-    summary: 'Send a message for processing with optional markdown file upload',
+    summary:
+      'Send a message for processing with an optional markdown or CSV file upload',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -120,7 +121,8 @@ export class AppController {
       },
       WithFile: {
         summary: 'With File',
-        description: 'Includes a markdown file upload',
+        description:
+          'Includes a markdown (.md) or CSV (.csv) file upload, up to 5 MB. The file is decoded (UTF-8, falling back to windows-1252 for Excel exports) and appended to the system prompt as data, fenced so that instructions inside it cannot change the answer.',
         value: {
           message: 'Analyze this document for me',
           model: 'anthropic',
