@@ -32,7 +32,7 @@ export class MistralService {
   private readonly maxRetries: number = 1;
 
   // Cost per 1K tokens in USD, per model - https://mistral.ai/pricing/api/
-  // (verified 2026-08-31). Rates vary a lot between the models this service
+  // (verified 2026-09-11). Rates vary a lot between the models this service
   // actually calls, so they can't share a single flat rate.
   private readonly MODEL_RATES: Record<
     string,

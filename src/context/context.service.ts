@@ -389,6 +389,7 @@ export class ContextService {
       description: string;
       creatorAddress?: string;
       creatorName?: string;
+      model?: string;
     }[]
   > {
     try {
@@ -403,6 +404,7 @@ export class ContextService {
         description: string;
         creatorAddress?: string;
         creatorName?: string;
+        model?: string;
       }[] = [];
 
       for (const folderName of contextFolders) {
@@ -421,6 +423,7 @@ export class ContextService {
               creatorAddress: index.creatorAddress,
             }),
             ...(index.creatorName && { creatorName: index.creatorName }),
+            ...(index.model && { model: index.model }),
           });
         }
       }

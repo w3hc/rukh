@@ -39,11 +39,11 @@ export class CostTracker implements OnModuleInit {
   private readonly dbPath: string;
   private data: CostDatabase;
 
-  // Cost per 1K tokens in USD, per model. Rates verified 2026-08-31 against
+  // Cost per 1K tokens in USD, per model. Rates verified 2026-09-11 against
   // https://mistral.ai/pricing/api, https://developers.openai.com/api/docs/pricing
   // and https://platform.claude.com/docs/en/about-claude/pricing
   private readonly COST_RATES = {
-    // Mistral rates - https://mistral.ai/pricing/api (verified 2026-08-31)
+    // Mistral rates - https://mistral.ai/pricing/api (verified 2026-09-11)
     'mistral-small-latest': {
       inputCost: 0.00015, // $0.15 per million tokens = $0.00015 per 1K tokens
       outputCost: 0.0006, // $0.60 per million tokens = $0.0006 per 1K tokens
@@ -67,7 +67,7 @@ export class CostTracker implements OnModuleInit {
       outputCost: 0.00004, // $0.04 per million tokens = $0.00004 per 1K tokens
     },
     // OpenAI rates - https://developers.openai.com/api/docs/pricing
-    // (verified 2026-08-31). gpt-4o is the model OpenAIService calls.
+    // (verified 2026-09-11). gpt-4o is the model OpenAIService calls.
     'gpt-4o': {
       inputCost: 0.0025, // $2.50 per million tokens = $0.0025 per 1K tokens
       outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens
