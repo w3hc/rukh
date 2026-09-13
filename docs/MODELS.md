@@ -10,7 +10,7 @@ Rukh supports multiple LLM providers with automatic fallback capabilities. When 
 | Anthropic | `anthropic` | `claude-sonnet-5` | $2/M tokens | $10/M tokens |
 | OpenAI | `openai` | `gpt-4o` | $2.50/M tokens | $10/M tokens |
 
-*Rates verified 2026-09-05 against each provider's official pricing page. They mirror the tables in `MistralService`, `AnthropicService`, `OpenAIService` and `CostTrackingService` — update all of them together.*
+*Rates verified 2026-09-11 against each provider's official pricing page. They mirror the tables in `MistralService`, `AnthropicService`, `OpenAIService` and `CostTrackingService` — update all of them together.*
 
 ## Detailed Information
 
