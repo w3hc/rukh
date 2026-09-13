@@ -115,6 +115,7 @@ export class ContextController {
           description: { type: 'string' },
           creatorAddress: { type: 'string' },
           creatorName: { type: 'string' },
+          model: { type: 'string' },
         },
       },
     },
