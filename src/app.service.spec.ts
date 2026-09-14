@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
@@ -108,6 +109,12 @@ describe('AppService - Model Fallback', () => {
             buildContextWithSelectedFiles: jest
               .fn()
               .mockResolvedValue('Mock RAG context'),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
           },
         },
       ],
