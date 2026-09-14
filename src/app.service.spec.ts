@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { OpenAIService } from './openai/openai.service';
+import { DeepSeekService } from './deepseek/deepseek.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { ContextService } from './context/context.service';
 import { SubsService } from './subs/subs.service';
@@ -16,6 +17,7 @@ describe('AppService - Model Fallback', () => {
   let mistralService: MistralService;
   let anthropicService: AnthropicService;
   let openaiService: OpenAIService;
+  let deepseekService: DeepSeekService;
   let costTracker: CostTracker;
   let loggerErrorSpy: jest.SpyInstance;
 
@@ -54,6 +56,17 @@ describe('AppService - Model Fallback', () => {
         },
         {
           provide: OpenAIService,
+          useValue: {
+            processMessage: jest.fn(),
+            streamMessage: jest.fn(),
+            getConversationHistory: jest.fn().mockResolvedValue({
+              history: [],
+              isFirstMessage: true,
+            }),
+          },
+        },
+        {
+          provide: DeepSeekService,
           useValue: {
             processMessage: jest.fn(),
             streamMessage: jest.fn(),
@@ -124,6 +137,7 @@ describe('AppService - Model Fallback', () => {
     mistralService = module.get<MistralService>(MistralService);
     anthropicService = module.get<AnthropicService>(AnthropicService);
     openaiService = module.get<OpenAIService>(OpenAIService);
+    deepseekService = module.get<DeepSeekService>(DeepSeekService);
     costTracker = module.get<CostTracker>(CostTracker);
 
     // Mock loadContextInformation for simplicity
@@ -181,6 +195,24 @@ describe('AppService - Model Fallback', () => {
     expect(anthropicService.processMessage).not.toHaveBeenCalled();
     expect(result.output).toBe('Response from Mistral');
     expect(result.model).toBe('mistral-small-latest');
+  });
+
+  it('should use DeepSeek when specified', async () => {
+    (deepseekService.processMessage as jest.Mock).mockResolvedValue({
+      content: 'Response from DeepSeek',
+      sessionId: 'test-session-id',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+
+    const result = await service.ask({
+      message: 'Test message',
+      model: 'deepseek',
+    });
+
+    expect(deepseekService.processMessage).toHaveBeenCalledTimes(1);
+    expect(anthropicService.processMessage).not.toHaveBeenCalled();
+    expect(result.output).toBe('Response from DeepSeek');
+    expect(result.model).toBe('deepseek-v4-flash');
   });
 
   it('should fall back to Mistral if Anthropic fails', async () => {

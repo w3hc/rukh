@@ -20,17 +20,27 @@ export class AskDto {
 
   @ApiProperty({
     description:
-      'The model to use for processing. Use "mistral" for Mistral AI, "anthropic" for Anthropic Claude, "anthropic-web-search" for Anthropic Claude with server-side web search, "openai" for OpenAI GPT-4o. Defaults to "anthropic" when omitted or empty. A context can pin its own model, which takes precedence over this field.',
+      'The model to use for processing. Use "mistral" for Mistral AI, "anthropic" for Anthropic Claude, "anthropic-web-search" for Anthropic Claude with server-side web search, "openai" for OpenAI GPT-4o, "deepseek" for DeepSeek. Defaults to "anthropic" when omitted or empty. A context can pin its own model, which takes precedence over this field.',
     example: 'anthropic',
     required: false,
     default: 'anthropic',
-    enum: ['mistral', 'anthropic', 'anthropic-web-search', 'openai', ''],
+    enum: [
+      'mistral',
+      'anthropic',
+      'anthropic-web-search',
+      'openai',
+      'deepseek',
+      '',
+    ],
   })
   @IsOptional()
-  @IsIn(['mistral', 'anthropic', 'anthropic-web-search', 'openai', ''], {
-    message:
-      'Model must be "mistral", "anthropic", "anthropic-web-search", "openai", or empty',
-  })
+  @IsIn(
+    ['mistral', 'anthropic', 'anthropic-web-search', 'openai', 'deepseek', ''],
+    {
+      message:
+        'Model must be "mistral", "anthropic", "anthropic-web-search", "openai", "deepseek", or empty',
+    },
+  )
   model?: string;
 
   @ApiProperty({

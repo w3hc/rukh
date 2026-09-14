@@ -5,12 +5,14 @@ import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { OpenAIService } from './openai/openai.service';
+import { DeepSeekService } from './deepseek/deepseek.service';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './throttler.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ContextModule } from './context/context.module';
 import { AnthropicModule } from './anthropic/anthropic.module';
 import { OpenAIModule } from './openai/openai.module';
+import { DeepSeekModule } from './deepseek/deepseek.module';
 import { CostTracker } from './memory/cost-tracking.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
@@ -55,6 +57,7 @@ import { ObserveModule, isObserveEnabled } from './observe';
     ContextModule,
     AnthropicModule,
     OpenAIModule,
+    DeepSeekModule,
     WebReaderModule,
     RagModule,
   ],
@@ -64,6 +67,7 @@ import { ObserveModule, isObserveEnabled } from './observe';
     MistralService,
     AnthropicService,
     OpenAIService,
+    DeepSeekService,
     CostTracker,
     SubsService,
     {

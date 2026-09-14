@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
 import { AnthropicService } from './anthropic/anthropic.service';
 import { OpenAIService } from './openai/openai.service';
+import { DeepSeekService } from './deepseek/deepseek.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
@@ -29,6 +30,7 @@ export class AppService {
     private readonly mistralService: MistralService,
     private readonly anthropicService: AnthropicService,
     private readonly openaiService: OpenAIService,
+    private readonly deepseekService: DeepSeekService,
     private readonly costTracker: CostTracker,
     private readonly subsService: SubsService,
     private readonly contextService: ContextService,
@@ -607,12 +609,13 @@ export class AppService {
       'mistral',
       'anthropic',
       'openai',
+      'deepseek',
       'anthropic-web-search',
     ];
 
     // Models eligible as fallbacks: anthropic-web-search is excluded because
     // it incurs per-search fees and should only run when explicitly requested
-    const fallbackModels = ['mistral', 'anthropic', 'openai'];
+    const fallbackModels = ['mistral', 'anthropic', 'openai', 'deepseek'];
 
     const contextName = askDto.context || 'rukh';
 
@@ -914,6 +917,8 @@ export class AppService {
         return 'claude-sonnet-5';
       case 'openai':
         return 'gpt-4o';
+      case 'deepseek':
+        return 'deepseek-v4-flash';
       default:
         return model;
     }
@@ -1073,6 +1078,14 @@ export class AppService {
               );
               break;
 
+            case 'deepseek':
+              response = await this.deepseekService.processMessage(
+                userMessage,
+                usedSessionId,
+                effective,
+              );
+              break;
+
             default:
               this.logger.warn(`Unsupported model: ${currentModel}, skipping`);
               continue;
@@ -1198,6 +1211,14 @@ export class AppService {
         return;
       case 'openai':
         yield* this.openaiService.streamMessage(
+          message,
+          sessionId,
+          effective,
+          signal,
+        );
+        return;
+      case 'deepseek':
+        yield* this.deepseekService.streamMessage(
           message,
           sessionId,
           effective,
