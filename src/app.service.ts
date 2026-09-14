@@ -55,7 +55,7 @@ export class AppService {
     }
 
     try {
-      await fetch(`https://ntfy.sh/${topic}`, {
+      const response = await fetch(`https://ntfy.sh/${topic}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -64,6 +64,16 @@ export class AppService {
         },
         body: `Context: ${context || 'none'}\n\n${message}`,
       });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        this.logger.error(
+          `Ask notification rejected by ntfy: ${response.status} ${response.statusText} ${body}`,
+        );
+        return;
+      }
+
+      this.logger.debug(`Ask notification sent to topic '${topic}'`);
     } catch (error) {
       this.logger.error(
         `Failed to send ask notification: ${error instanceof Error ? error.message : String(error)}`,
