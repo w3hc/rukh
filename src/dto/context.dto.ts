@@ -16,6 +16,7 @@ export const CONTEXT_MODELS = [
   'mistral',
   'anthropic',
   'openai',
+  'deepseek',
   'anthropic-web-search',
 ] as const;
 

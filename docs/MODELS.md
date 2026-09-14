@@ -9,8 +9,9 @@ Rukh supports multiple LLM providers with automatic fallback capabilities. When 
 | Mistral AI | `mistral` | `mistral-small-latest` | $0.15/M tokens | $0.60/M tokens |
 | Anthropic | `anthropic` | `claude-sonnet-5` | $2/M tokens | $10/M tokens |
 | OpenAI | `openai` | `gpt-4o` | $2.50/M tokens | $10/M tokens |
+| DeepSeek | `deepseek` | `deepseek-v4-flash` | $0.30/M tokens | $1.20/M tokens |
 
-*Rates verified 2026-09-11 against each provider's official pricing page. They mirror the tables in `MistralService`, `AnthropicService`, `OpenAIService` and `CostTrackingService` — update all of them together.*
+*Rates verified 2026-09-11 against each provider's official pricing page. They mirror the tables in `MistralService`, `AnthropicService`, `OpenAIService`, `DeepSeekService` and `CostTrackingService` — update all of them together.*
 
 ## Detailed Information
 
@@ -129,6 +130,33 @@ Set the `OPENAI_API_KEY` environment variable in your `.env` file.
 
 ---
 
+### DeepSeek
+
+**Model**: `deepseek-v4-flash` (legacy alias, still accepted, routed to and
+billed at the current `deepseek-flash` price)
+
+**Parameter value**: `deepseek`
+
+**Pricing** (standard/peak rate; DeepSeek halves these off-peak, but Rukh
+bills at the standard rate):
+- Input: $0.30 per million tokens (cache miss)
+- Output: $1.20 per million tokens
+- Cache read: $0.006 per million tokens (98% cheaper than a cache miss)
+
+**Configuration**:
+Set the `DEEPSEEK_API_KEY` environment variable in your `.env` file.
+
+**Features**:
+- Cheapest provider per token of the four
+- OpenAI-compatible API, so it shares `OpenAIService`'s request/response shape
+- No output ceiling set - `DeepSeekService` leaves `max_tokens` unset
+
+**Use cases**:
+- High-volume applications where cost is the primary concern
+- General chat and Q&A
+
+---
+
 ## RAG File Selection Model
 
 When using two-step RAG (Retrieval-Augmented Generation), Rukh uses a lightweight model for intelligent file selection before generating the final response.
@@ -197,7 +225,7 @@ When an explicit `context` has more than one resource, Rukh uses an intelligent 
               │        STEP 2: RESPONSE GENERATION           │
               │                                              │
               │  Model: User's choice (mistral/anthropic/    │
-              │         openai)                              │
+              │         openai/deepseek)                     │
               │  Input: User query + Selected files only     │
               │  Output: Final response                      │
               │  Cost: Reduced due to smaller context        │
@@ -245,7 +273,7 @@ When an explicit `context` has more than one resource, Rukh uses an intelligent 
 
 6. **Generate Response**
    - Sends user query + focused context to main model
-   - Uses the model specified by user (`mistral`, `anthropic`, or `openai`)
+   - Uses the model specified by user (`mistral`, `anthropic`, `openai`, or `deepseek`)
    - Returns response with usage metrics
 
 7. **Return Combined Costs**
@@ -423,6 +451,18 @@ curl -X 'POST' \
   -H 'Content-Type: multipart/form-data' \
   -F 'message=Help me write a story' \
   -F 'model=openai' \
+  -F 'context=rukh'
+```
+
+### Using DeepSeek
+
+```bash
+curl -X 'POST' \
+  'https://rukh.w3hc.org/ask' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'message=What is Rukh?' \
+  -F 'model=deepseek' \
   -F 'context=rukh'
 ```
 
