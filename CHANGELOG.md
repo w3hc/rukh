@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Empty `KEY=` lines count as unset, and defaults live in the schema
 
 ### Changed
+- **AppService split**: the 1,270-line `AppService` is gone, replaced by focused services in `src/ask/`, with no change in behavior
+  - `ContextLoaderService` loads a context (two-step RAG or every file), reads its `model` override and records each query in `index.json`
+  - `UploadService` decodes and fences uploaded `.md`/`.csv` files; `prompt-fencing.ts` holds both fences
+  - `AskPreparationService` picks the models and builds the prompt; `AskResultService` tracks usage and assembles the response
+  - `AskService` and `AskStreamService` run the fallback loops for `ask` and its streaming variant
+  - Removed the unused boot-time context cache, `processContextData` and `checkUrlRelevance`
 - **Fallback chain**: built from the registered providers, and skips those without an API key, so an unconfigured OpenAI or DeepSeek no longer fails on every fallback
 - **Mistral wiring**: `MistralService` has its own `MistralModule`, so the app and `RagModule` share one instance instead of each creating its own
 - **Root route**: `GET /` redirects to the Swagger UI at `/api` instead of serving a w3hc-branded page

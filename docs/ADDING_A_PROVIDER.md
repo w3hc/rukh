@@ -1,6 +1,6 @@
 # Adding a Provider
 
-Every model Rukh can route a request to is an `LlmProvider` ([src/providers/llm-provider.ts](../src/providers/llm-provider.ts)). `AppService` never names a provider: it asks the `ProviderRegistry` for the one matching the request's `model`, and builds the fallback chain from whatever is registered. Adding a provider means writing one class and adding it to one list.
+Every model Rukh can route a request to is an `LlmProvider` ([src/providers/llm-provider.ts](../src/providers/llm-provider.ts)). The ask services never name a provider: they ask the `ProviderRegistry` for the one matching the request's `model`, and builds the fallback chain from whatever is registered. Adding a provider means writing one class and adding it to one list.
 
 ## The interface
 

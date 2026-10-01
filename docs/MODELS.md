@@ -165,7 +165,7 @@ When using two-step RAG (Retrieval-Augmented Generation), Rukh uses a lightweigh
 
 **Model**: `ministral-3b-latest` (hardcoded in `RagService`)
 
-**Activation**: Two-step RAG runs automatically per request — no configuration needed. It kicks in only when the caller explicitly passes a `context` and that context has more than one selectable resource (files + URLs); a context with zero or one resource always uses the legacy full-context method, since there's nothing to select between. The selection cap is hardcoded to 5 resources (`AppService.RAG_MAX_FILES`).
+**Activation**: Two-step RAG runs automatically per request — no configuration needed. It kicks in only when the caller explicitly passes a `context` and that context has more than one selectable resource (files + URLs); a context with zero or one resource always uses the legacy full-context method, since there's nothing to select between. The selection cap is hardcoded to 5 resources (`ContextLoaderService.RAG_MAX_FILES`).
 
 **Purpose**:
 Cost-effective file relevance scoring before full context generation. This reduces costs by only including relevant context files in the main prompt.
@@ -316,8 +316,8 @@ Total: $0.0451 (89% cost reduction!)
 
 Two-step RAG has no `.env` configuration — it's fully automatic and its parameters are hardcoded in the source:
 
-- **Activation** (`AppService.ask`): runs only when the caller passes an explicit `context` with more than one selectable resource.
-- **Selection cap** (`AppService.RAG_MAX_FILES`): 5 resources.
+- **Activation** (`ContextLoaderService.load`): runs only when the caller passes an explicit `context` with more than one selectable resource.
+- **Selection cap** (`ContextLoaderService.RAG_MAX_FILES`): 5 resources.
 - **Selection model** (`RagService.selectRelevantFiles`): `ministral-3b-latest`.
 - **Required files** (`RagService.REQUIRED_FILES`): `['instruction-file.md']`.
 
