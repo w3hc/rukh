@@ -445,6 +445,8 @@ Check the response:
   "rag": {
     "selectedFiles": [],
     "selectedUrls": ["https://github.com/ethereum/..."],
+    "totalFilesAvailable": 4,
+    "totalUrlsAvailable": 2,
     "selectionMethod": "rag-two-step"
   }
 }

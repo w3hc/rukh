@@ -51,7 +51,7 @@ export class GeminiService extends OpenAICompatibleService {
 
 A local model served by [Ollama](https://ollama.com) works the same way: point `apiUrl` at `http://localhost:11434/v1/chat/completions`, set `pricing` to zero, and override `isAvailable()` to return `true`, since Ollama needs no key.
 
-If the API reports more than prompt and completion tokens (cache hits, for instance), override `parseUsage()`, as `DeepSeekService` does. For an API that does not speak the OpenAI protocol, extend `BaseLlmService` instead and implement `processMessage()` and `streamMessage()` yourself, as `AnthropicService` and `MistralService` do.
+If the API reports more than prompt and completion tokens (cache hits, for instance), override `parseUsage()`, as `DeepSeekService` does: type the raw `usage` object as an interface extending `RawUsage` with the extra fields (see `DeepSeekUsage`). For an API that does not speak the OpenAI protocol, extend `BaseLlmService` instead and implement `processMessage()` and `streamMessage()` yourself, as `AnthropicService` and `MistralService` do.
 
 **2. Wrap it in a module** in `src/gemini/gemini.module.ts`:
 
