@@ -20,11 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Only fires when `NODE_ENV=prod`, and never blocks or fails the `ask` response
 - **Example context**: `data/examples/rukh` is committed and copied to `data/contexts/rukh` at boot when missing, so a fresh clone answers on the first `pnpm start`
   - Everything else in `data/` stays gitignored, including `data/contexts/` and runtime files (`chat-history.json`, `costs.json`), so the app never writes to a tracked file
+- **Optional notifier**: notifications go through a `Notifier` interface bound to the `NOTIFIER` token, with ntfy as the only implementation
+  - `NotificationsModule` loads only when `NTFY_ASK_TOKEN` is set; `AppService` no longer talks to ntfy itself
+- **Optional sponsorship module**: `SponsorshipModule` loads only when `SPONSOR_GITHUB_LOGIN` is set, and checks sponsorships of that account at `SPONSOR_MIN_MONTHLY_USD` (default 5) or more
+  - Boot fails if `SPONSOR_GITHUB_LOGIN` is set without `GITHUB_API_TOKEN`
+  - The username is sent as a GraphQL variable instead of being interpolated into the query
 - **Config validation at boot**: the environment is checked against a schema (`src/config/env.validation.ts`) before any provider starts
   - A missing `MISTRAL_API_KEY` or `ANTHROPIC_API_KEY`, a non-numeric port, SIWE or throttle value, an unknown `ANTHROPIC_EFFORT`, or only half of the Observe credentials stops the app with one message listing every problem
   - Empty `KEY=` lines count as unset, and defaults live in the schema
 
 ### Changed
+- **Root route**: `GET /` redirects to the Swagger UI at `/api` instead of serving a w3hc-branded page
+- **Version**: read from `package.json` for Swagger, NestJS Observe and the boot log, instead of a hardcoded `0.2.0`
 - **Config access**: every variable is read through `ConfigService`; `process.env` is no longer read directly
   - `src/config/siwe.config.ts` is removed, `SiweAuthGuard` reads the SIWE settings itself
   - NestJS Observe is registered through `ConditionalModule`, after validation
@@ -49,3 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Corrupted JSON files under concurrent writes**: context indexes, chat history, the JSON stores and cost data are written to a temp file and renamed over the original, so a shorter write can no longer leave the tail of a longer one behind
 - **Damaged context index**: `/ask` logs a warning and answers instead of failing when a context's `index.json` doesn't parse
 - **Flaky e2e tests**: `pnpm test:e2e` runs the test files one at a time, since they share `data/`
+
+### Removed
+- **`SubsService`**: replaced by the optional `SponsorshipModule`; it was injected into `AppService` but never called
+- **w3hc landing page**: the inline HTML returned by `GET /`, with its w3hc links and badge
