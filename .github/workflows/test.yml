@@ -31,8 +31,8 @@ jobs:
       - name: Run lint
         run: pnpm lint:check
 
-      - name: Audit production dependencies
-        run: pnpm audit --prod
+      - name: Audit dependencies
+        run: pnpm audit
 
   test:
     runs-on: ubuntu-latest

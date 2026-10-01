@@ -19,8 +19,7 @@
     "test:cov": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json --runInBand && NODE_OPTIONS=--experimental-vm-modules jest --coverage --config jest.config.ts",
     "test:debug": "node --experimental-vm-modules --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --config jest.config.ts",
     "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json --runInBand",
-    "test:concurrent": "NODE_OPTIONS=--experimental-vm-modules jest test/concurrent-requests.e2e-spec.ts --config ./test/jest-e2e.json",
-    "dance": "pnpm format && pnpm lint && pnpm build && pnpm test && pnpm test:e2e"
+    "test:concurrent": "NODE_OPTIONS=--experimental-vm-modules jest test/concurrent-requests.e2e-spec.ts --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@langchain/core": "^1.2.14",
@@ -85,7 +84,12 @@
       "minimatch": ">=9.0.0",
       "qs": ">=6.16.0",
       "body-parser": ">=2.3.0",
-      "underscore": ">=1.13.8"
+      "underscore": ">=1.13.8",
+      "fast-uri": "^3.1.7",
+      "browserslist": "^4.28.7",
+      "baseline-browser-mapping": "^2.11.0",
+      "@babel/core": "^7.29.6",
+      "minimatch@10": "^10.2.3"
     },
     "auditConfig": {
       "ignoreGhsas": ["GHSA-848j-6mx2-7j84"]

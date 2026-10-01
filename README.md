@@ -45,7 +45,7 @@ The code follows the same path: [src/app.controller.ts](src/app.controller.ts) â
 
 ## Install
 
-Requires Node 24.
+Requires Node 22 or 24.
 
 ```bash
 pnpm i
@@ -64,13 +64,6 @@ Optional modules load only when their variable is set:
 ## Test
 
 ```bash
-# format, lint, build, test, and test:e2e
-pnpm dance
-```
-
-Or separately: 
-
-```bash
 # unit tests
 pnpm test
 
@@ -79,6 +72,11 @@ pnpm test:e2e
 
 # test coverage
 pnpm test:cov
+
+# what CI checks before the tests
+pnpm format:check
+pnpm lint:check
+pnpm audit
 ```
 
 ## Run
