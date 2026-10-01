@@ -20,6 +20,10 @@ import { RagModule } from './rag/rag.module';
 import { ObserveModule, isObserveEnabled } from './observe';
 import { validate } from './config/env.validation';
 import { APP_VERSION } from './version';
+import {
+  NotificationsModule,
+  isNotificationsEnabled,
+} from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -40,6 +44,11 @@ import { APP_VERSION } from './version';
         }),
       }),
       (env) => isObserveEnabled((key) => env[key]),
+      { debug: false },
+    ),
+    ConditionalModule.registerWhen(
+      NotificationsModule,
+      (env) => isNotificationsEnabled((key) => env[key]),
       { debug: false },
     ),
     ThrottlerModule.forRootAsync({

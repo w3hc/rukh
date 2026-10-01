@@ -10,6 +10,7 @@ import { ContextService } from './context/context.service';
 import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
+import { NOTIFIER } from './notifications/notifier';
 import { Logger } from '@nestjs/common';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -23,6 +24,7 @@ describe('AppService - Model Fallback', () => {
   let deepseekService: DeepSeekService;
   let costTracker: CostTracker;
   let loggerErrorSpy: jest.SpyInstance;
+  const notifier = { notify: jest.fn().mockResolvedValue(undefined) };
 
   beforeEach(async () => {
     // Mock Logger to suppress error logs during tests
@@ -132,6 +134,10 @@ describe('AppService - Model Fallback', () => {
           useValue: {
             get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
           },
+        },
+        {
+          provide: NOTIFIER,
+          useValue: notifier,
         },
       ],
     }).compile();
@@ -398,6 +404,30 @@ describe('AppService - Model Fallback', () => {
       100, // input tokens
       50, // output tokens
     );
+  });
+
+  describe('notifications', () => {
+    beforeEach(() => {
+      (anthropicService.processMessage as jest.Mock).mockResolvedValue({
+        content: 'ok',
+        sessionId: 'test-session-id',
+      });
+    });
+
+    it('notifies when a new conversation starts', async () => {
+      await service.ask({ message: 'Hi', context: 'demo' });
+
+      expect(notifier.notify).toHaveBeenCalledWith(
+        'Rukh Ask',
+        'Context: demo\n\nHi',
+      );
+    });
+
+    it('stays quiet on a follow-up message', async () => {
+      await service.ask({ message: 'Hi', sessionId: 'existing' });
+
+      expect(notifier.notify).not.toHaveBeenCalled();
+    });
   });
 
   describe('context model override', () => {

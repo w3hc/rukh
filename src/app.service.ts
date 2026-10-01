@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
@@ -18,6 +18,7 @@ import { ContextService } from './context/context.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { writeFileAtomic } from './storage/write-file-atomic';
+import { NOTIFIER, Notifier } from './notifications/notifier';
 
 @Injectable()
 export class AppService {
@@ -38,55 +39,9 @@ export class AppService {
     private readonly webReaderService: WebReaderService,
     private readonly ragService: RagService,
     private readonly configService: ConfigService,
+    @Optional() @Inject(NOTIFIER) private readonly notifier?: Notifier,
   ) {
-    if (!this.configService.get<string>('NTFY_ASK_TOKEN')) {
-      this.logger.warn(
-        'NTFY_ASK_TOKEN not set - new conversation notifications will be disabled',
-      );
-    }
     this.loadContexts();
-  }
-
-  /**
-   * Notifies via ntfy.sh whenever a brand new conversation starts (no
-   * sessionId supplied by the caller). Gated on NTFY_ASK_TOKEN being set
-   * rather than NODE_ENV, so it stays silent unless explicitly configured
-   * but works the same locally as in production. Never blocks the caller.
-   */
-  private async notifyNewAsk(context: string, message: string): Promise<void> {
-    const token = this.configService.get<string>('NTFY_ASK_TOKEN', '');
-    const topic = this.configService.get<string>('NTFY_ASK_TOPIC', 'rukh');
-
-    if (!token) {
-      this.logger.debug('Skipping ask notification: NTFY_ASK_TOKEN is not set');
-      return;
-    }
-
-    try {
-      const response = await fetch(`https://ntfy.sh/${topic}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Title: 'Rukh Ask',
-          Tags: 'speech_balloon',
-        },
-        body: `Context: ${context || 'none'}\n\n${message}`,
-      });
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        this.logger.error(
-          `Ask notification rejected by ntfy: ${response.status} ${response.statusText} ${body}`,
-        );
-        return;
-      }
-
-      this.logger.debug(`Ask notification sent to topic '${topic}'`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to send ask notification: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
 
   private async loadContexts() {
@@ -626,11 +581,10 @@ export class AppService {
     const contextName = askDto.context || 'rukh';
 
     if (!askDto.sessionId) {
-      this.notifyNewAsk(contextName, askDto.message).catch((error) => {
-        this.logger.error(
-          `Ask notification failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
+      void this.notifier?.notify(
+        'Rukh Ask',
+        `Context: ${contextName || 'none'}\n\n${askDto.message}`,
+      );
     }
 
     // A context can force a specific model via a `model` key in its
