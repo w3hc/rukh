@@ -1,7 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ContextService } from './context.service';
 import { join } from 'path';
-import { mkdir, rm, readFile, writeFile, rename, stat } from 'fs/promises';
+import {
+  cp,
+  mkdir,
+  rm,
+  readFile,
+  readdir,
+  writeFile,
+  rename,
+  stat,
+} from 'fs/promises';
 import { existsSync } from 'fs';
 import { Logger, UnauthorizedException } from '@nestjs/common';
 
@@ -58,6 +67,51 @@ describe('ContextService', () => {
 
   afterEach(() => {
     loggerErrorSpy.mockRestore();
+  });
+
+  describe('seedExampleContexts', () => {
+    const examplesPath = join(process.cwd(), 'data', 'examples');
+    const dir = (name: string) => ({ name, isDirectory: () => true });
+
+    beforeEach(() => {
+      jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+      (readdir as jest.Mock).mockResolvedValue([
+        dir('rukh'),
+        { name: 'README.md', isDirectory: () => false },
+      ]);
+    });
+
+    it('copies an example that is not in data/contexts yet', async () => {
+      (existsSync as jest.Mock).mockImplementation(
+        (path) => path === examplesPath,
+      );
+
+      await service.seedExampleContexts();
+
+      expect(cp).toHaveBeenCalledTimes(1);
+      expect(cp).toHaveBeenCalledWith(
+        join(examplesPath, 'rukh'),
+        join(testContextsPath, 'rukh'),
+        { recursive: true },
+      );
+    });
+
+    it('leaves an existing context untouched', async () => {
+      (existsSync as jest.Mock).mockReturnValue(true);
+
+      await service.seedExampleContexts();
+
+      expect(cp).not.toHaveBeenCalled();
+    });
+
+    it('does nothing without an examples folder', async () => {
+      (existsSync as jest.Mock).mockReturnValue(false);
+
+      await service.seedExampleContexts();
+
+      expect(readdir).not.toHaveBeenCalled();
+      expect(cp).not.toHaveBeenCalled();
+    });
   });
 
   describe('createContext', () => {

@@ -1,18 +1,54 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { mkdir, rm, writeFile, readFile, stat, readdir } from 'fs/promises';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { cp, mkdir, rm, writeFile, readFile, stat, readdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { writeFileAtomic } from '../storage/write-file-atomic';
 import { ContextFile, ContextIndex, ContextLink } from '../dto/context.dto';
 
 @Injectable()
-export class ContextService {
+export class ContextService implements OnModuleInit {
   private readonly logger = new Logger(ContextService.name);
   private readonly contextsPath: string;
+  private readonly examplesPath: string;
   private writeQueue: Map<string, Promise<void>> = new Map();
 
   constructor() {
     this.contextsPath = join(process.cwd(), 'data', 'contexts');
+    this.examplesPath = join(process.cwd(), 'data', 'examples');
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.seedExampleContexts();
+  }
+
+  /**
+   * Copy each tracked example into data/contexts/ when missing, so the app
+   * only ever writes to untracked files
+   */
+  async seedExampleContexts(): Promise<void> {
+    if (!existsSync(this.examplesPath)) {
+      return;
+    }
+
+    const entries = await readdir(this.examplesPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const target = join(this.contextsPath, entry.name);
+      if (existsSync(target)) {
+        continue;
+      }
+      await cp(join(this.examplesPath, entry.name), target, {
+        recursive: true,
+      });
+      this.logger.log(`Seeded example context: ${entry.name}`);
+    }
   }
 
   /**
