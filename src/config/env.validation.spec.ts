@@ -16,6 +16,7 @@ describe('validate', () => {
     expect(env.THROTTLE_WEB_LIMIT).toBe(200);
     expect(env.NTFY_ASK_TOPIC).toBe('rukh');
     expect(env.OBSERVE_SERVICE_ID).toBe('rukh');
+    expect(env.SPONSOR_MIN_MONTHLY_USD).toBe(5);
   });
 
   it('converts numeric strings', () => {
@@ -58,6 +59,7 @@ describe('validate', () => {
     ['THROTTLE_ASK_LIMIT', 'many'],
     ['ANTHROPIC_EFFORT', 'extreme'],
     ['OBSERVE_DEBUG', 'yes'],
+    ['SPONSOR_MIN_MONTHLY_USD', '-5'],
   ])('rejects %s=%s', (key, value) => {
     expect(() => validate({ ...required, [key]: value })).toThrow(
       new RegExp(`- ${key}:`),
@@ -68,5 +70,11 @@ describe('validate', () => {
     expect(() => validate({ ...required, OBSERVE_APP_KEY: 'key' })).toThrow(
       /set both to enable NestJS Observe/,
     );
+  });
+
+  it('rejects a sponsored login without a GitHub token', () => {
+    expect(() =>
+      validate({ ...required, SPONSOR_GITHUB_LOGIN: 'acme' }),
+    ).toThrow(/GITHUB_API_TOKEN: required/);
   });
 });

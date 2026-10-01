@@ -12,7 +12,6 @@ import { AskStreamEvent } from './dto/ask-stream.dto';
 import { ModelStreamEvent } from './types/llm-stream';
 import { readFile, readdir, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
-import { SubsService } from './subs/subs.service';
 import { existsSync } from 'fs';
 import { ContextService } from './context/context.service';
 import { WebReaderService } from './web/web-reader.service';
@@ -34,7 +33,6 @@ export class AppService {
     private readonly openaiService: OpenAIService,
     private readonly deepseekService: DeepSeekService,
     private readonly costTracker: CostTracker,
-    private readonly subsService: SubsService,
     private readonly contextService: ContextService,
     private readonly webReaderService: WebReaderService,
     private readonly ragService: RagService,

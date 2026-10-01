@@ -14,7 +14,6 @@ import { AnthropicModule } from './anthropic/anthropic.module';
 import { OpenAIModule } from './openai/openai.module';
 import { DeepSeekModule } from './deepseek/deepseek.module';
 import { CostTracker } from './memory/cost-tracking.service';
-import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
 import { ObserveModule, isObserveEnabled } from './observe';
@@ -24,6 +23,10 @@ import {
   NotificationsModule,
   isNotificationsEnabled,
 } from './notifications/notifications.module';
+import {
+  SponsorshipModule,
+  isSponsorshipEnabled,
+} from './sponsorship/sponsorship.module';
 
 @Module({
   imports: [
@@ -44,6 +47,11 @@ import {
         }),
       }),
       (env) => isObserveEnabled((key) => env[key]),
+      { debug: false },
+    ),
+    ConditionalModule.registerWhen(
+      SponsorshipModule,
+      (env) => isSponsorshipEnabled((key) => env[key]),
       { debug: false },
     ),
     ConditionalModule.registerWhen(
@@ -81,7 +89,6 @@ import {
     OpenAIService,
     DeepSeekService,
     CostTracker,
-    SubsService,
     {
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,

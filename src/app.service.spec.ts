@@ -7,7 +7,6 @@ import { OpenAIService } from './openai/openai.service';
 import { DeepSeekService } from './deepseek/deepseek.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { ContextService } from './context/context.service';
-import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { NOTIFIER } from './notifications/notifier';
@@ -94,12 +93,6 @@ describe('AppService - Model Fallback', () => {
               .fn()
               .mockResolvedValue({ content: '', files: [] }),
             recordQuery: jest.fn().mockResolvedValue(undefined),
-          },
-        },
-        {
-          provide: SubsService,
-          useValue: {
-            isSubscribed: jest.fn().mockResolvedValue(true),
           },
         },
         {

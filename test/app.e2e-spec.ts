@@ -9,7 +9,6 @@ import { createSiweMessage, generateSiweNonce } from 'w3pk';
 import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
-import { SubsService } from '../src/subs/subs.service';
 import { WebReaderService } from '../src/web/web-reader.service';
 
 // Set global timeout for all tests
@@ -115,10 +114,6 @@ describe('App (e2e)', () => {
     generateUsageReport: jest.fn().mockResolvedValue({}),
   };
 
-  const mockSubsService = {
-    isSubscribed: jest.fn().mockResolvedValue(true),
-  };
-
   const mockWebReaderService = {
     extractForLLM: jest.fn().mockImplementation((url: string) => {
       return Promise.resolve({
@@ -179,8 +174,6 @@ describe('App (e2e)', () => {
       .useValue(mockAnthropicService)
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
-      .overrideProvider(SubsService)
-      .useValue(mockSubsService)
       .overrideProvider(WebReaderService)
       .useValue(mockWebReaderService)
       .compile();
