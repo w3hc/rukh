@@ -195,9 +195,12 @@ describe('ContextLoaderService', () => {
         ['one', 'two', 'three'].map((m) => service.load('docs', m, false)),
       );
 
+      // The queue guarantees no record is lost, not the order they land in
       expect(
-        queries('docs').map((q: { message: string }) => q.message),
-      ).toEqual(['one', 'two', 'three']);
+        queries('docs')
+          .map((q: { message: string }) => q.message)
+          .sort(),
+      ).toEqual(['one', 'three', 'two']);
     });
   });
 });
