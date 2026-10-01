@@ -57,9 +57,13 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Misc
 NOTES.md
-data/chat-history.json
 test/test.md
 test/test.txt
-data
 contracts/node_modules
 docs/private
+
+# Data: only the example context is tracked
+data/*
+!data/contexts/
+data/contexts/*
+!data/contexts/rukh/

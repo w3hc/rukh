@@ -1,0 +1,16 @@
+{
+  "name": "rukh",
+  "description": "The rukh (roc), legendary bird of prey of Middle Eastern mythology",
+  "numberOfFiles": 1,
+  "totalSize": 7,
+  "files": [
+    {
+      "name": "rukh-definition.md",
+      "description": "Definition, etymology, origins and accounts of the rukh",
+      "size": 7
+    }
+  ],
+  "links": [],
+  "queries": [],
+  "creatorAddress": "0xe8c7A82B3AeA7239F8857b5Aa280b52e6E2B60Cd"
+}
