@@ -105,7 +105,7 @@ export class CostTracker implements OnModuleInit {
     // DeepSeek rates - https://api-docs.deepseek.com/quick_start/pricing
     // (verified 2026-09-11), standard (peak) rate. `deepseek-v4-flash` is a
     // legacy alias, still accepted, routed to and billed at the current
-    // `deepseek-flash` price. `DeepSeekService.COST_RATES` also breaks this
+    // `deepseek-flash` price. `DeepSeekService.pricing` also breaks this
     // out by cache hit/miss; this table only needs the blended input rate.
     'deepseek-v4-flash': {
       inputCost: 0.0003, // $0.30 per million tokens = $0.0003 per 1K tokens

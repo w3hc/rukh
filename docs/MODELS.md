@@ -11,7 +11,9 @@ Rukh supports multiple LLM providers with automatic fallback capabilities. When 
 | OpenAI | `openai` | `gpt-4o` | $2.50/M tokens | $10/M tokens |
 | DeepSeek | `deepseek` | `deepseek-v4-flash` | $0.30/M tokens | $1.20/M tokens |
 
-*Rates verified 2026-09-11 against each provider's official pricing page. They mirror the tables in `MistralService`, `AnthropicService`, `OpenAIService`, `DeepSeekService` and `CostTrackingService` — update all of them together.*
+*Rates verified 2026-09-11 against each provider's official pricing page. They mirror the `pricing` of `MistralService`, `AnthropicService`, `OpenAIService` and `DeepSeekService`, and the table in `CostTracker` — update all of them together.*
+
+To add a provider, see [ADDING_A_PROVIDER.md](ADDING_A_PROVIDER.md).
 
 ## Detailed Information
 
@@ -148,7 +150,7 @@ Set the `DEEPSEEK_API_KEY` environment variable in your `.env` file.
 
 **Features**:
 - Cheapest provider per token of the four
-- OpenAI-compatible API, so it shares `OpenAIService`'s request/response shape
+- OpenAI-compatible API: `DeepSeekService` and `OpenAIService` both extend `OpenAICompatibleService`, and DeepSeek only adds its cache-hit accounting
 - No output ceiling set - `DeepSeekService` leaves `max_tokens` unset
 
 **Use cases**:
@@ -406,11 +408,12 @@ The RAG system is designed for future improvements:
 
 ## Automatic Fallback
 
-Rukh implements an automatic fallback mechanism. When you specify a model and it fails for any reason, the system will automatically try the other available models in sequence:
+Rukh implements an automatic fallback mechanism. When you specify a model and it fails for any reason, the system tries the other providers in sequence:
 
-1. Your specified model (e.g., `mistral`)
-2. Next available model (e.g., `anthropic`)
-3. Final fallback model (e.g., `openai`)
+1. Your specified model (e.g., `deepseek`)
+2. Every other registered provider whose API key is set, in registration order: `mistral`, `anthropic`, `openai`, `deepseek`
+
+The chain is built by `ProviderRegistry.fallbackChain()` from the providers registered in [src/providers/providers.module.ts](../src/providers/providers.module.ts). A provider without its API key (OpenAI or DeepSeek when `OPENAI_API_KEY` or `DEEPSEEK_API_KEY` is unset) is skipped instead of failing on every request. `anthropic-web-search` is never used as a fallback, since each search is billed on top of tokens.
 
 This ensures high availability even if one provider experiences issues.
 
