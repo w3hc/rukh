@@ -10,13 +10,14 @@ import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { AskStreamEvent } from './dto/ask-stream.dto';
 import { ModelStreamEvent } from './types/llm-stream';
-import { readFile, readdir, writeFile, mkdir, stat } from 'fs/promises';
+import { readFile, readdir, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { SubsService } from './subs/subs.service';
 import { existsSync } from 'fs';
 import { ContextService } from './context/context.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
+import { writeFileAtomic } from './storage/write-file-atomic';
 
 @Injectable()
 export class AppService {
@@ -383,7 +384,7 @@ export class AppService {
           });
 
           // Write back the updated index
-          await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+          await writeFileAtomic(indexPath, JSON.stringify(index, null, 2));
           return; // Success
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
