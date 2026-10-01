@@ -1,14 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { REDIRECT_METADATA } from '@nestjs/common/constants';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { AskService } from './ask/ask.service';
+import { AskStreamService } from './ask/ask-stream.service';
 import { MistralService } from './mistral/mistral.service';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 
 describe('AppController', () => {
   let appController: AppController;
-  let appService: AppService;
+  let askService: AskService;
+  let askStreamService: AskStreamService;
 
   const mockFile = {
     fieldname: 'file',
@@ -36,7 +38,7 @@ describe('AppController', () => {
       controllers: [AppController],
       providers: [
         {
-          provide: AppService,
+          provide: AskStreamService,
           useValue: {
             askStream: jest.fn().mockImplementation(async function* () {
               yield { type: 'chunk', text: 'AI ' };
@@ -50,6 +52,11 @@ describe('AppController', () => {
                 },
               };
             }),
+          },
+        },
+        {
+          provide: AskService,
+          useValue: {
             ask: jest.fn().mockImplementation(async (askDto) => ({
               output: askDto.model === 'mistral' ? 'AI response' : undefined,
               model:
@@ -81,7 +88,8 @@ describe('AppController', () => {
     }).compile();
 
     appController = app.get<AppController>(AppController);
-    appService = app.get<AppService>(AppService);
+    askService = app.get<AskService>(AskService);
+    askStreamService = app.get<AskStreamService>(AskStreamService);
   });
 
   describe('root', () => {
@@ -163,8 +171,8 @@ describe('AppController', () => {
       );
 
       expect(result).toBeUndefined();
-      expect(appService.askStream).toHaveBeenCalled();
-      expect(appService.ask).not.toHaveBeenCalled();
+      expect(askStreamService.askStream).toHaveBeenCalled();
+      expect(askService.ask).not.toHaveBeenCalled();
 
       expect(res.setHeader).toHaveBeenCalledWith(
         'Content-Type',
@@ -180,7 +188,7 @@ describe('AppController', () => {
     });
 
     it('should report a mid-stream failure as an error event', async () => {
-      (appService.askStream as jest.Mock).mockImplementationOnce(
+      (askStreamService.askStream as jest.Mock).mockImplementationOnce(
         async function* () {
           yield { type: 'chunk', text: 'partial' };
           throw new Error('provider exploded');
@@ -205,7 +213,7 @@ describe('AppController', () => {
     });
 
     it('should write thinking as its own event, apart from the answer', async () => {
-      (appService.askStream as jest.Mock).mockImplementationOnce(
+      (askStreamService.askStream as jest.Mock).mockImplementationOnce(
         async function* () {
           yield { type: 'thinking', text: 'weighing options' };
           yield { type: 'chunk', text: 'Answer' };
@@ -245,7 +253,7 @@ describe('AppController', () => {
       } as unknown as Response;
 
       let seenSignal: AbortSignal | undefined;
-      (appService.askStream as jest.Mock).mockImplementationOnce(
+      (askStreamService.askStream as jest.Mock).mockImplementationOnce(
         async function* (
           _dto: unknown,
           _file: unknown,
@@ -276,7 +284,7 @@ describe('AppController', () => {
         mockRes,
       );
 
-      expect(appService.askStream).not.toHaveBeenCalled();
+      expect(askStreamService.askStream).not.toHaveBeenCalled();
       expect(result).toEqual({
         output: 'AI response',
         model: 'mistral-small-latest',
@@ -297,7 +305,7 @@ describe('AppController', () => {
         mockFile,
       );
 
-      const askFunction = appService.ask as jest.Mock;
+      const askFunction = askService.ask as jest.Mock;
       expect(askFunction).toHaveBeenCalled();
 
       expect(result).toEqual({
@@ -319,7 +327,7 @@ describe('AppController', () => {
         mockFile,
       );
 
-      const askFunction = appService.ask as jest.Mock;
+      const askFunction = askService.ask as jest.Mock;
       const call = askFunction.mock.calls[0];
 
       expect(call[0]).toEqual({
@@ -347,7 +355,7 @@ describe('AppController', () => {
         undefined,
       );
 
-      const askFunction = appService.ask as jest.Mock;
+      const askFunction = askService.ask as jest.Mock;
       expect(askFunction).toHaveBeenCalled();
 
       expect(result).toEqual({

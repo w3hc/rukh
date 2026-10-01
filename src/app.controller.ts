@@ -19,7 +19,8 @@ import {
   ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
-import { AppService } from './app.service';
+import { AskService } from './ask/ask.service';
+import { AskStreamService } from './ask/ask-stream.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
 import { FileValidator } from './validators/file.validator';
@@ -37,7 +38,10 @@ const HEARTBEAT_INTERVAL_MS = 15000;
 @Controller()
 @SkipThrottle()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly askService: AskService,
+    private readonly askStreamService: AskStreamService,
+  ) {}
 
   @Get()
   @Redirect('/api')
@@ -175,7 +179,7 @@ export class AppController {
     file?: Express.Multer['File'],
   ): Promise<AskResponseDto | void> {
     if (!askDto.stream) {
-      return this.appService.ask(askDto, file);
+      return this.askService.ask(askDto, file);
     }
 
     return this.streamAsk(askDto, res, file);
@@ -232,7 +236,7 @@ export class AppController {
     heartbeat.unref?.();
 
     try {
-      for await (const event of this.appService.askStream(
+      for await (const event of this.askStreamService.askStream(
         askDto,
         file,
         abort.signal,

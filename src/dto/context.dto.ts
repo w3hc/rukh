@@ -10,8 +10,8 @@ import {
   IsIn,
 } from 'class-validator';
 
-// Models the `ask` endpoint accepts; kept in sync with AppService's
-// availableModels list
+// Models the `ask` endpoint accepts; kept in sync with the provider keys
+// registered in ProviderRegistry
 export const CONTEXT_MODELS = [
   'mistral',
   'anthropic',

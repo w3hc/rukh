@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './throttler.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -10,6 +9,12 @@ import { CostTracker } from './memory/cost-tracking.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
 import { ProvidersModule } from './providers/providers.module';
+import { AskService } from './ask/ask.service';
+import { AskStreamService } from './ask/ask-stream.service';
+import { AskPreparationService } from './ask/ask-preparation.service';
+import { AskResultService } from './ask/ask-result.service';
+import { ContextLoaderService } from './ask/context-loader.service';
+import { UploadService } from './ask/upload.service';
 import { ObserveModule, isObserveEnabled } from './observe';
 import { validate } from './config/env.validation';
 import { APP_VERSION } from './version';
@@ -75,7 +80,12 @@ import {
   ],
   controllers: [AppController],
   providers: [
-    AppService,
+    AskService,
+    AskStreamService,
+    AskPreparationService,
+    AskResultService,
+    ContextLoaderService,
+    UploadService,
     CostTracker,
     {
       provide: APP_GUARD,
