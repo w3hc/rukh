@@ -238,14 +238,11 @@ describe('App (e2e)', () => {
 
   describe('Root Endpoint', () => {
     describe('/ (GET)', () => {
-      it('should return HTML welcome page', () => {
+      it('should redirect to the Swagger UI', () => {
         return request(app.getHttpServer())
           .get('/')
-          .expect(200)
-          .expect((res) => {
-            expect(res.text).toContain('<!DOCTYPE html>');
-            expect(res.text).toContain('Welcome to Rukh');
-          });
+          .expect(302)
+          .expect('Location', '/api');
       });
     });
   });

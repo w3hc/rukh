@@ -3,7 +3,7 @@ import {
   Get,
   Post,
   Body,
-  Header,
+  Redirect,
   Res,
   UseInterceptors,
   UploadedFile,
@@ -16,6 +16,7 @@ import {
   ApiResponse,
   ApiBody,
   ApiConsumes,
+  ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
@@ -39,19 +40,9 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  @Header('Content-Type', 'text/html')
-  @ApiOperation({ summary: 'Get hello message' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns a hello message',
-    schema: {
-      type: 'string',
-      example: 'Hello World!',
-    },
-  })
-  getHello(): string {
-    return this.appService.getHello();
-  }
+  @Redirect('/api')
+  @ApiExcludeEndpoint()
+  root(): void {}
 
   @Post('ask')
   @Throttle({ ask: RATE_LIMITS.ASK_ENDPOINT })
