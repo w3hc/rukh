@@ -15,8 +15,8 @@ jest.mock('child_process', () => ({
 
 describe('WebReaderService', () => {
   let service: WebReaderService;
-  let mockBrowser: any;
-  let mockPage: any;
+  let mockBrowser: Record<string, jest.Mock>;
+  let mockPage: Record<string, jest.Mock>;
   let loggerErrorSpy: jest.SpyInstance;
 
   const mockTavilyApiKey = 'test-tavily-key';

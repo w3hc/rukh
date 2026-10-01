@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AnthropicService } from './anthropic.service';
 import { ConfigService } from '@nestjs/config';
 import { HttpException, Logger } from '@nestjs/common';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { FinalStreamEvent, ModelStreamEvent } from '../types/llm-stream';
 
 /** Serializes objects as an SSE body the service can read back. */
 const sseBody = (events: Record<string, unknown>[]) =>
@@ -164,7 +164,7 @@ describe('AnthropicService', () => {
         { type: 'text', text: ' world' },
       ]);
 
-      const final = events[events.length - 1] as any;
+      const final = events[events.length - 1] as FinalStreamEvent;
       expect(final.type).toBe('final');
       expect(final.content).toBe('Hello world');
       expect(final.usage).toEqual({ input_tokens: 12, output_tokens: 7 });
@@ -239,7 +239,7 @@ describe('AnthropicService', () => {
       ]);
 
       // Reasoning is not the answer: it must not leak into the saved content
-      const final = events[events.length - 1] as any;
+      const final = events[events.length - 1] as FinalStreamEvent;
       expect(final.content).toBe('Answer');
 
       const body = JSON.parse(
@@ -363,7 +363,7 @@ describe('AnthropicService', () => {
         'final',
       ]);
 
-      const final = events[events.length - 1] as any;
+      const final = events[events.length - 1] as FinalStreamEvent;
       // The preamble is dropped, matching the non-streaming path
       expect(final.content).toBe('The answer.');
       expect(final.cost.web_search_cost).toBeCloseTo(0.02, 6);
@@ -435,7 +435,7 @@ describe('AnthropicService', () => {
         'final',
       ]);
 
-      const final = events[events.length - 1] as any;
+      const final = events[events.length - 1] as FinalStreamEvent;
       expect(final.content).toBe('Done.');
       // Usage is summed across the paused turn and its continuation
       expect(final.usage).toEqual({ input_tokens: 30, output_tokens: 13 });

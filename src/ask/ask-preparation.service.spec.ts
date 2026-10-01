@@ -69,7 +69,7 @@ describe('AskPreparationService', () => {
     it('defaults to mistral for an unknown model', async () => {
       const { modelsToTry } = await service.prepare({
         message: 'hi',
-        model: 'not-a-real-model' as any,
+        model: 'not-a-real-model',
       });
 
       expect(modelsToTry[0]).toBe('mistral');
