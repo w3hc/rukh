@@ -30,12 +30,6 @@ const PROVIDERS = [
     },
     ProviderRegistry,
   ],
-  exports: [
-    ProviderRegistry,
-    MistralModule,
-    AnthropicModule,
-    OpenAIModule,
-    DeepSeekModule,
-  ],
+  exports: [ProviderRegistry],
 })
 export class ProvidersModule {}

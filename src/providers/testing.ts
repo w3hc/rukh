@@ -7,11 +7,11 @@ import { LlmProvider } from './llm-provider';
 export function asLlmProvider<T extends Record<string, any>>(
   key: string,
   mock: T,
-  { fallbackEligible = true } = {},
+  { label = key, fallbackEligible = true } = {},
 ): T & LlmProvider {
   return Object.assign(mock, {
     key,
-    label: key,
+    label,
     pricing: { inputCost: 0, outputCost: 0 },
     fallbackEligible,
     isAvailable: () => true,

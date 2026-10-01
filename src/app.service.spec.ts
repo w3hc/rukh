@@ -10,6 +10,9 @@ import { ContextService } from './context/context.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { NOTIFIER } from './notifications/notifier';
+import { LLM_PROVIDERS } from './providers/llm-provider';
+import { ProviderRegistry } from './providers/provider-registry.service';
+import { asLlmProvider } from './providers/testing';
 import { Logger } from '@nestjs/common';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -80,6 +83,41 @@ describe('AppService - Model Fallback', () => {
             }),
           },
         },
+        {
+          provide: LLM_PROVIDERS,
+          useFactory: (mistral, anthropic, openai, deepseek) => [
+            asLlmProvider('mistral', mistral, {
+              label: 'mistral-small-latest',
+            }),
+            asLlmProvider('anthropic', anthropic, {
+              label: 'claude-sonnet-5',
+            }),
+            asLlmProvider('openai', openai, { label: 'gpt-4o' }),
+            asLlmProvider('deepseek', deepseek, {
+              label: 'deepseek-v4-flash',
+            }),
+            {
+              ...asLlmProvider(
+                'anthropic-web-search',
+                {},
+                {
+                  label: 'claude-sonnet-5',
+                  fallbackEligible: false,
+                },
+              ),
+              ask: (...args) => anthropic.processMessageWithWebSearch(...args),
+              stream: (...args) =>
+                anthropic.streamMessageWithWebSearch(...args),
+            },
+          ],
+          inject: [
+            MistralService,
+            AnthropicService,
+            OpenAIService,
+            DeepSeekService,
+          ],
+        },
+        ProviderRegistry,
         {
           provide: CostTracker,
           useValue: {

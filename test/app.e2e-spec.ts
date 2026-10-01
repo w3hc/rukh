@@ -170,9 +170,17 @@ describe('App (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(MistralService)
-      .useValue(asLlmProvider('mistral', mockMistralService))
+      .useValue(
+        asLlmProvider('mistral', mockMistralService, {
+          label: 'mistral-small-latest',
+        }),
+      )
       .overrideProvider(AnthropicService)
-      .useValue(asLlmProvider('anthropic', mockAnthropicService))
+      .useValue(
+        asLlmProvider('anthropic', mockAnthropicService, {
+          label: 'claude-sonnet-5',
+        }),
+      )
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
       .overrideProvider(WebReaderService)

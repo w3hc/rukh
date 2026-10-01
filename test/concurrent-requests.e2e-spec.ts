@@ -75,11 +75,19 @@ describe('Concurrent Requests (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(MistralService)
-      .useValue(asLlmProvider('mistral', mockMistralService))
+      .useValue(
+        asLlmProvider('mistral', mockMistralService, {
+          label: 'mistral-small-latest',
+        }),
+      )
       .overrideProvider(AnthropicService)
-      .useValue(asLlmProvider('anthropic', mockAnthropicService))
+      .useValue(
+        asLlmProvider('anthropic', mockAnthropicService, {
+          label: 'claude-sonnet-5',
+        }),
+      )
       .overrideProvider(OpenAIService)
-      .useValue(asLlmProvider('openai', mockOpenAIService))
+      .useValue(asLlmProvider('openai', mockOpenAIService, { label: 'gpt-4o' }))
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
       .compile();
