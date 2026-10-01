@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ContextService } from './context.service';
 import { join } from 'path';
-import { mkdir, rm, readFile, writeFile } from 'fs/promises';
+import { mkdir, rm, readFile, writeFile, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { Logger, UnauthorizedException } from '@nestjs/common';
 
@@ -91,11 +91,11 @@ describe('ContextService', () => {
         queries: [],
       };
 
-      expect(writeFile).toHaveBeenCalledWith(
-        join(contextPath, 'index.json'),
-        JSON.stringify(expectedIndex, null, 2),
-        'utf-8',
-      );
+      const indexPath = join(contextPath, 'index.json');
+      const [tmpPath, written] = (writeFile as jest.Mock).mock.calls[0];
+      expect(tmpPath).toMatch(new RegExp(`^${indexPath}\\..*\\.tmp$`));
+      expect(written).toBe(JSON.stringify(expectedIndex, null, 2));
+      expect(rename).toHaveBeenCalledWith(tmpPath, indexPath);
       expect(loggerErrorSpy).not.toHaveBeenCalled();
     });
 

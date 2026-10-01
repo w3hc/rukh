@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { mkdir, rm, writeFile, readFile, stat, readdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { writeFileAtomic } from '../storage/write-file-atomic';
 import { ContextFile, ContextIndex, ContextLink } from '../dto/context.dto';
 
 @Injectable()
@@ -56,7 +57,7 @@ export class ContextService {
     // Queue writes to prevent concurrent modification of the same file
     const writeOperation = async () => {
       try {
-        await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+        await writeFileAtomic(indexPath, JSON.stringify(index, null, 2));
       } catch (error) {
         this.logger.error(
           `Failed to write context index: ${error instanceof Error ? error.message : String(error)}`,
