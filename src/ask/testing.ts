@@ -12,6 +12,7 @@ import { asLlmProvider } from '../providers/testing';
 import { AskPreparationService } from './ask-preparation.service';
 import { AskResultService } from './ask-result.service';
 import { AskService } from './ask.service';
+import { AskStreamService } from './ask-stream.service';
 import { ContextLoaderService } from './context-loader.service';
 import { UploadService } from './upload.service';
 
@@ -35,6 +36,7 @@ export async function createAskTestingModule() {
   const module = await Test.createTestingModule({
     providers: [
       AskService,
+      AskStreamService,
       AskPreparationService,
       AskResultService,
       ContextLoaderService,
@@ -117,6 +119,7 @@ export async function createAskTestingModule() {
 
   return {
     askService: module.get(AskService),
+    askStreamService: module.get(AskStreamService),
     contextLoader,
     mistralService: module.get(MistralService),
     anthropicService: module.get(AnthropicService),
