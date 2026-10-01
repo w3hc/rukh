@@ -17,6 +17,39 @@ interface AnthropicMessage {
   content: string | Array<Record<string, unknown>>;
 }
 
+/** A content block as streamed back, kept loose so it can be replayed verbatim. */
+interface AnthropicContentBlock {
+  type?: string;
+  text?: string;
+  thinking?: string;
+  signature?: string;
+  input?: unknown;
+  citations?: unknown[];
+  [field: string]: unknown;
+}
+
+/** One SSE payload from the streaming Messages API, as far as it is read. */
+interface AnthropicStreamEvent {
+  type: string;
+  index: number;
+  message?: { usage?: { input_tokens?: number } };
+  content_block?: AnthropicContentBlock;
+  delta?: {
+    type?: string;
+    text?: string;
+    thinking?: string;
+    signature?: string;
+    partial_json?: string;
+    citation?: unknown;
+    stop_reason?: string;
+  };
+  usage?: {
+    output_tokens?: number;
+    server_tool_use?: { web_search_requests?: number };
+  };
+  error?: unknown;
+}
+
 interface AnthropicResponse {
   id: string;
   content: Array<{
@@ -185,7 +218,7 @@ export class AnthropicService extends BaseLlmService {
 
       try {
         // Build request body with system prompt as a top-level parameter (not as a message)
-        const requestBody: any = {
+        const requestBody: Record<string, unknown> = {
           model: this.model,
           max_tokens: 64000,
           messages: formattedMessages,
@@ -351,7 +384,7 @@ export class AnthropicService extends BaseLlmService {
         const timeoutId = setTimeout(() => controller.abort(), 600000);
 
         try {
-          const requestBody: any = {
+          const requestBody: Record<string, unknown> = {
             model: this.model,
             max_tokens: 64000,
             messages: currentMessages,
@@ -556,7 +589,7 @@ export class AnthropicService extends BaseLlmService {
   }
 
   /** Parses one SSE payload, tolerating the keep-alive lines the API sends. */
-  private parseStreamEvent(data: string): any | null {
+  private parseStreamEvent(data: string): AnthropicStreamEvent | null {
     if (!data || data === '[DONE]') {
       return null;
     }
@@ -742,7 +775,7 @@ export class AnthropicService extends BaseLlmService {
   private async *streamWebSearchTurn(
     requestBody: Record<string, unknown>,
     turn: {
-      blocks: Array<Record<string, any>>;
+      blocks: AnthropicContentBlock[];
       stopReason?: string;
       usage: { input_tokens: number; output_tokens: number };
       searches: number;
@@ -916,7 +949,7 @@ export class AnthropicService extends BaseLlmService {
       };
 
       const turn = {
-        blocks: [] as Array<Record<string, any>>,
+        blocks: [] as AnthropicContentBlock[],
         stopReason: undefined as string | undefined,
         usage: { input_tokens: 0, output_tokens: 0 },
         searches: 0,

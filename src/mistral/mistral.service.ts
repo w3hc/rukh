@@ -404,7 +404,7 @@ export class MistralService extends BaseLlmService {
     }
     if (Array.isArray(content)) {
       return content
-        .map((part: any) =>
+        .map((part: string | { text?: string }) =>
           typeof part === 'string' ? part : (part?.text ?? ''),
         )
         .join('');

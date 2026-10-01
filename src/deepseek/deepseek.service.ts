@@ -3,7 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import {
   OpenAICompatibleService,
   ParsedUsage,
+  RawUsage,
 } from '../providers/openai-compatible.service';
+
+interface DeepSeekUsage extends RawUsage {
+  prompt_cache_miss_tokens?: number;
+  prompt_cache_hit_tokens?: number;
+}
 
 @Injectable()
 export class DeepSeekService extends OpenAICompatibleService {
@@ -42,7 +48,7 @@ export class DeepSeekService extends OpenAICompatibleService {
   }
 
   /** DeepSeek splits the prompt into cache misses and cache hits. */
-  protected parseUsage(raw: any): ParsedUsage {
+  protected parseUsage(raw?: DeepSeekUsage): ParsedUsage {
     const miss = raw?.prompt_cache_miss_tokens ?? 0;
     const hit = raw?.prompt_cache_hit_tokens ?? 0;
     const usage = {
