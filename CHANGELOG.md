@@ -15,5 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable via `NTFY_ASK_TOKEN` and `NTFY_ASK_TOPIC` environment variables
   - Only fires when `NODE_ENV=prod`, and never blocks or fails the `ask` response
 
+### Changed
+- **Dependencies**: NestJS 12 (`@nestjs/*`, `@nestjs/config` 12, `@nestjs/observe` 0.3), plus minor/patch bumps (langchain, puppeteer-core, throttler, multer, eslint, jest, prettier, `@types/node` 26)
+  - NestJS 12 is ESM-only: Jest scripts run with `--experimental-vm-modules`, and node_modules are no longer transformed
+  - TypeScript stays on 6: `ts-jest` and `@nestjs/cli` don't support TypeScript 7 yet
+- **Node 24**: CI runs on Node 24 with a frozen lockfile
+
 ### Fixed
 - Ask-call notifications now log and skip on an ntfy delivery failure instead of silently swallowing it
