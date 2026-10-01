@@ -84,6 +84,50 @@ pnpm start
 
 The Swagger UI should be available at http://localhost:3000/api
 
+## Create your first context
+
+`data/` is gitignored, so a fresh fork starts with no context. A context is just a folder: write it by hand, and Rukh picks it up on the next request, no restart needed.
+
+1. Create the folder and two markdown files:
+
+   ```bash
+   mkdir -p data/contexts/my-product
+   printf "# Pricing\n\nThe Pro plan costs 12 EUR/month and includes 5 seats.\n" > data/contexts/my-product/pricing.md
+   printf "# Support\n\nSupport answers within 24 hours, Monday to Friday.\n" > data/contexts/my-product/support.md
+   ```
+
+2. Describe them in `data/contexts/my-product/index.json`. The RAG step only sees these descriptions when it picks which files to send to the model, so make them specific:
+
+   ```json
+   {
+     "name": "my-product",
+     "description": "Pricing and support policy of My Product",
+     "creatorAddress": "0xYourEthereumAddress",
+     "numberOfFiles": 2,
+     "totalSize": 2,
+     "files": [
+       { "name": "pricing.md", "description": "Plans, prices and seat counts", "size": 1 },
+       { "name": "support.md", "description": "Support hours and response times", "size": 1 }
+     ],
+     "links": [],
+     "queries": []
+   }
+   ```
+
+   `size` is in KB. `creatorAddress` is the Ethereum address allowed to manage the context through the API. Add `"model": "mistral"` to pin the context to one provider.
+
+3. Ask it something:
+
+   ```bash
+   curl 'http://localhost:3000/ask' \
+     -F 'message=How much is the Pro plan?' \
+     -F 'context=my-product'
+   ```
+
+   The `rag` block of the response shows `pricing.md` in `selectedFiles`: only that file went to the model.
+
+To manage contexts over HTTP instead (`POST /context`, `POST /context/upload`, links, deletion), sign each request with SIWE as `creatorAddress`. The full reference, including URLs as context sources and the `index.json` schema, is in [docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md).
+
 ## Example
 
 Simple request: 
