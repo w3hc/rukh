@@ -18,7 +18,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
 
     if (exception instanceof HttpException) {
@@ -28,7 +28,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
       } else if (typeof exceptionResponse === 'object') {
-        const responseObj = exceptionResponse as any;
+        // Validation errors carry one message per failed constraint
+        const responseObj = exceptionResponse as {
+          message?: string | string[];
+          error?: string;
+        };
         message = responseObj.message || exception.message;
         error = responseObj.error || error;
       }

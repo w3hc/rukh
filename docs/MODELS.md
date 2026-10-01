@@ -368,7 +368,9 @@ When RAG is enabled, responses include additional metadata:
   },
   "rag": {
     "selectedFiles": ["intro.md", "api.md", "examples.md"],
+    "selectedUrls": [],
     "totalFilesAvailable": 50,
+    "totalUrlsAvailable": 0,
     "selectionMethod": "rag-two-step",
     "selectionCost": {
       "input_cost": 0.00008,

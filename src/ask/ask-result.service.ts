@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AskDto } from '../dto/ask.dto';
 import { AskResponseDto } from '../dto/ask-response.dto';
+import { RagMetadataDto } from '../dto/rag-metadata.dto';
 import { CostTracker } from '../memory/cost-tracking.service';
 import { ProviderRegistry } from '../providers/provider-registry.service';
+import { StreamCost } from '../types/llm-stream';
 
 /**
  * What the streaming and non-streaming paths both do once a model has
@@ -55,8 +57,8 @@ export class AskResultService {
   /** Attaches the combined cost and the RAG metadata, when there are any. */
   complete(
     response: AskResponseDto,
-    cost: any,
-    ragMetadata: any,
+    cost: StreamCost | undefined,
+    ragMetadata: RagMetadataDto | undefined,
   ): AskResponseDto {
     const combined = this.combineCost(cost, ragMetadata);
     if (combined) {
@@ -74,7 +76,10 @@ export class AskResultService {
   }
 
   /** Adds the RAG selection cost onto the generation cost, when both exist. */
-  private combineCost(cost: any, ragMetadata: any): any {
+  private combineCost(
+    cost: StreamCost | undefined,
+    ragMetadata: RagMetadataDto | undefined,
+  ): StreamCost | undefined {
     if (!cost) {
       return undefined;
     }
@@ -86,7 +91,7 @@ export class AskResultService {
     }
 
     const selection = ragMetadata.selectionCost;
-    const combinedCost = {
+    const combinedCost: StreamCost = {
       ...cost,
       input_cost: Number((cost.input_cost + selection.input_cost).toFixed(6)),
       output_cost: Number(

@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { AskDto } from '../dto/ask.dto';
 import { AskStreamEvent } from '../dto/ask-stream.dto';
 import { ProviderRegistry } from '../providers/provider-registry.service';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { ModelStreamEvent, StreamCost } from '../types/llm-stream';
 import { AskPreparationService, PreparedAsk } from './ask-preparation.service';
 import { AskResultService } from './ask-result.service';
 
@@ -67,7 +67,7 @@ export class AskStreamService {
       let fullOutput = '';
       let emitted = false;
       let usage = { input_tokens: 0, output_tokens: 0 };
-      let cost: any = undefined;
+      let cost: StreamCost | undefined = undefined;
       let completed = false;
 
       try {

@@ -62,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Adds the missing `NTFY_ASK_TOPIC`
   - Flags `THROTTLE_ASK_LIMIT` and `THROTTLE_WEB_LIMIT` as currently overridden by `rate-limit.config.ts`
   - Empty values instead of `'88888'` placeholders; settings with a default are commented out
+- **Stricter types**: `@typescript-eslint/no-explicit-any` is now `warn`, and `src/` has no `any` left
+  - Cost, usage and RAG metadata use `StreamCost` and `RagMetadataDto`, which now documents `selectedUrls` and `totalUrlsAvailable`
+  - Provider responses and stream events (Anthropic, OpenAI-compatible, DeepSeek, Mistral) have their own types
+  - Specs and mocks use typed provider mocks (`ProviderMock`, `AnthropicMock`) instead of `any`
 
 ### Fixed
 - Ask-call notifications now log and skip on an ntfy delivery failure instead of silently swallowing it
@@ -71,5 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flaky e2e tests**: `pnpm test:e2e` runs the test files one at a time, since they share `data/`
 
 ### Removed
+- **Legacy ESLint config**: `.eslintrc.js`, superseded by `eslint.config.mjs`
+- **Unused `@mistralai/mistralai` mock** under `src/__mocks__/`, which no Jest config mapped
 - **`SubsService`**: replaced by the optional `SponsorshipModule`; it was injected into `AppService` but never called
 - **w3hc landing page**: the inline HTML returned by `GET /`, with its w3hc links and badge

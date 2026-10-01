@@ -3,6 +3,7 @@ import { ChatMistralAI } from '@langchain/mistralai';
 import { MistralService } from './mistral.service';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { FinalStreamEvent } from '../types/llm-stream';
 
 // Mock the ChatMistralAI
 jest.mock('@langchain/mistralai', () => {
@@ -271,7 +272,7 @@ describe('MistralService', () => {
         { type: 'text', text: 'from Mistral' },
       ]);
 
-      const final = events[events.length - 1] as any;
+      const final = events[events.length - 1] as FinalStreamEvent;
       expect(final.type).toBe('final');
       expect(final.content).toBe('Mocked response from Mistral');
       expect(final.sessionId).toBe('stream-session-id');

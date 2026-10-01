@@ -4,10 +4,11 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { RagService } from '../rag/rag.service';
 import { writeFileAtomic } from '../storage/write-file-atomic';
+import { RagMetadataDto } from '../dto/rag-metadata.dto';
 
 export interface LoadedContext {
   systemPrompt: string;
-  ragMetadata?: any;
+  ragMetadata?: RagMetadataDto;
 }
 
 /**

@@ -5,7 +5,7 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default [
   {
-    ignores: ['dist/', 'node_modules/', '.eslintrc.js', 'eslint.config.mjs'],
+    ignores: ['dist/', 'node_modules/', 'eslint.config.mjs'],
   },
   {
     files: ['**/*.ts'],
@@ -30,7 +30,7 @@ export default [
       '@typescript-eslint/interface-name-prefix': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
       'prettier/prettier': 'error',
     },
   },

@@ -26,6 +26,13 @@ const providerMock = (extra: Record<string, jest.Mock> = {}) => ({
   ...extra,
 });
 
+export type ProviderMock = ReturnType<typeof providerMock>;
+
+export type AnthropicMock = ProviderMock & {
+  processMessageWithWebSearch: jest.Mock;
+  streamMessageWithWebSearch: jest.Mock;
+};
+
 /**
  * The ask pipeline wired for real, with the model providers, RAG, cost
  * tracking and notifications mocked out.
@@ -121,11 +128,13 @@ export async function createAskTestingModule() {
     askService: module.get(AskService),
     askStreamService: module.get(AskStreamService),
     contextLoader,
-    mistralService: module.get(MistralService),
-    anthropicService: module.get(AnthropicService),
-    openaiService: module.get(OpenAIService),
-    deepseekService: module.get(DeepSeekService),
-    costTracker: module.get(CostTracker),
+    mistralService: module.get(MistralService) as unknown as ProviderMock,
+    anthropicService: module.get(AnthropicService) as unknown as AnthropicMock,
+    openaiService: module.get(OpenAIService) as unknown as ProviderMock,
+    deepseekService: module.get(DeepSeekService) as unknown as ProviderMock,
+    costTracker: module.get(CostTracker) as unknown as {
+      trackUsageWithTokens: jest.Mock;
+    },
     notifier,
   };
 }

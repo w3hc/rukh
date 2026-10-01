@@ -4,15 +4,15 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { AskService } from './ask.service';
 import { ContextLoaderService } from './context-loader.service';
-import { createAskTestingModule } from './testing';
+import { AnthropicMock, createAskTestingModule, ProviderMock } from './testing';
 
 describe('AskService', () => {
   let service: AskService;
   let contextLoader: ContextLoaderService;
-  let mistralService: any;
-  let anthropicService: any;
-  let deepseekService: any;
-  let costTracker: any;
+  let mistralService: ProviderMock;
+  let anthropicService: AnthropicMock;
+  let deepseekService: ProviderMock;
+  let costTracker: { trackUsageWithTokens: jest.Mock };
   let notifier: { notify: jest.Mock };
 
   beforeEach(async () => {
@@ -214,7 +214,7 @@ describe('AskService', () => {
 
     const result = await service.ask({
       message: 'Test message',
-      model: 'invalid-model-name' as any,
+      model: 'invalid-model-name',
     });
 
     expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
@@ -265,6 +265,7 @@ describe('AskService', () => {
       ragMetadata: {
         selectedFiles: ['a.md'],
         totalFilesAvailable: 2,
+        selectionMethod: 'rag-two-step',
         selectionCost: { input_cost: 0.1, output_cost: 0.2, total_cost: 0.3 },
       },
     });

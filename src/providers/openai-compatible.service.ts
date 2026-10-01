@@ -15,6 +15,22 @@ interface ChatMessage {
   content: string;
 }
 
+/** The `usage` object of a completion, or of the last stream chunk. */
+export interface RawUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+}
+
+interface ChatCompletion {
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: RawUsage;
+}
+
+interface ChatCompletionChunk {
+  choices?: Array<{ delta?: { content?: string } }>;
+  usage?: RawUsage;
+}
+
 export interface ParsedUsage {
   usage: StreamUsage;
   cache: CacheTokens;
@@ -32,7 +48,7 @@ export abstract class OpenAICompatibleService extends BaseLlmService {
   protected abstract readonly apiUrl: string;
   protected abstract readonly model: string;
 
-  protected parseUsage(raw: any): ParsedUsage {
+  protected parseUsage(raw?: RawUsage): ParsedUsage {
     return {
       usage: {
         input_tokens: raw?.prompt_tokens ?? 0,
@@ -178,7 +194,7 @@ export abstract class OpenAICompatibleService extends BaseLlmService {
       } finally {
         clearTimeout(timeoutId);
       }
-      const responseData: any = await response.json();
+      const responseData: ChatCompletion = await response.json();
 
       const content =
         responseData.choices?.[0]?.message?.content ||
@@ -279,7 +295,7 @@ export abstract class OpenAICompatibleService extends BaseLlmService {
       for await (const data of readSseData(body)) {
         if (!data || data === '[DONE]') continue;
 
-        let chunk: any;
+        let chunk: ChatCompletionChunk;
         try {
           chunk = JSON.parse(data);
         } catch {

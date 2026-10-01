@@ -5,6 +5,8 @@ import { WebReaderService } from '../web/web-reader.service';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { ContextIndex, ContextLink } from '../dto/context.dto';
+import { StreamCost } from '../types/llm-stream';
 
 interface FileMetadata {
   name: string;
@@ -37,7 +39,7 @@ export class RagService {
     maxFiles: number = 5,
   ): Promise<{
     selectedFiles: string[];
-    selectionCost: any;
+    selectionCost: StreamCost | null;
     selectedUrls?: string[];
   }> {
     try {
@@ -55,7 +57,7 @@ export class RagService {
       }
 
       const indexData = await readFile(indexPath, 'utf-8');
-      const contextIndex = JSON.parse(indexData);
+      const contextIndex: ContextIndex = JSON.parse(indexData);
 
       if (!contextIndex.files || contextIndex.files.length === 0) {
         this.logger.warn(`No files found in context: ${contextName}`);
@@ -64,7 +66,7 @@ export class RagService {
 
       // Build resource metadata list (files + URLs)
       const fileMetadata: FileMetadata[] = contextIndex.files.map(
-        (file: any, index: number) => ({
+        (file, index) => ({
           name: file.name,
           description: file.description || 'No description',
           index: index + 1,
@@ -74,7 +76,7 @@ export class RagService {
 
       // Add URLs to the resource list
       const urlMetadata: FileMetadata[] = (contextIndex.links || []).map(
-        (link: any, index: number) => ({
+        (link, index) => ({
           name: link.title,
           description: link.description || link.url,
           index: fileMetadata.length + index + 1,
@@ -123,7 +125,7 @@ export class RagService {
       // Always include required files if they exist in the context
       for (const requiredFile of this.REQUIRED_FILES) {
         const fileExists = contextIndex.files.find(
-          (f: any) => f.name === requiredFile,
+          (f) => f.name === requiredFile,
         );
 
         if (fileExists && !selectedFiles.includes(requiredFile)) {
@@ -144,7 +146,7 @@ export class RagService {
       return {
         selectedFiles,
         selectedUrls,
-        selectionCost: response.cost,
+        selectionCost: response.cost ?? null,
       };
     } catch (error) {
       this.logger.error(
@@ -160,9 +162,9 @@ export class RagService {
         );
         const indexPath = join(contextPath, 'index.json');
         const indexData = await readFile(indexPath, 'utf-8');
-        const contextIndex = JSON.parse(indexData);
+        const contextIndex: ContextIndex = JSON.parse(indexData);
         return {
-          selectedFiles: contextIndex.files.map((f: any) => f.name),
+          selectedFiles: contextIndex.files.map((f) => f.name),
           selectionCost: null,
         };
       } catch (fallbackError) {
@@ -325,11 +327,11 @@ Your response:`;
         contextContent += `## Selected External Resources\n\n`;
 
         // Get link metadata from context index
-        let linkMetadata: any[] = [];
+        let linkMetadata: ContextLink[] = [];
         if (existsSync(indexPath)) {
           try {
             const indexData = await readFile(indexPath, 'utf-8');
-            const contextIndex = JSON.parse(indexData);
+            const contextIndex: ContextIndex = JSON.parse(indexData);
             linkMetadata = contextIndex.links || [];
           } catch (error) {
             this.logger.error(
@@ -343,7 +345,7 @@ Your response:`;
             this.logger.log(`Fetching content from URL: ${url}`);
 
             // Find link metadata
-            const link = linkMetadata.find((l: any) => l.url === url);
+            const link = linkMetadata.find((l) => l.url === url);
             const linkTitle = link?.title || url;
 
             // Use WebReaderService to extract content from the URL

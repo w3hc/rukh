@@ -1,23 +1,35 @@
 import { Logger } from '@nestjs/common';
 import { AskStreamService } from './ask-stream.service';
-import { createAskTestingModule } from './testing';
+import { AskResponseDto } from '../dto/ask-response.dto';
+import { AskStreamEvent } from '../dto/ask-stream.dto';
+import { AnthropicMock, createAskTestingModule, ProviderMock } from './testing';
+
+/** Every event field at once, so assertions can read them without narrowing. */
+type CollectedEvent = { type: AskStreamEvent['type'] } & Partial<{
+  text: string;
+  response: AskResponseDto;
+  message: string;
+}>;
 
 describe('AskStreamService', () => {
   let service: AskStreamService;
-  let mistralService: any;
-  let anthropicService: any;
-  let openaiService: any;
-  let costTracker: any;
+  let mistralService: ProviderMock;
+  let anthropicService: AnthropicMock;
+  let openaiService: ProviderMock;
+  let costTracker: { trackUsageWithTokens: jest.Mock };
 
-  const collect = async (stream: AsyncIterable<any>) => {
-    const events = [];
+  const collect = async (stream: AsyncIterable<AskStreamEvent>) => {
+    const events: CollectedEvent[] = [];
     for await (const event of stream) {
       events.push(event);
     }
     return events;
   };
 
-  const modelStream = (texts: string[], overrides: any = {}) =>
+  const modelStream = (
+    texts: string[],
+    overrides: Record<string, unknown> = {},
+  ) =>
     async function* () {
       for (const text of texts) {
         yield { type: 'text', text };

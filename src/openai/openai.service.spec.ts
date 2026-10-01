@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OpenAIService } from './openai.service';
 import { ConfigService } from '@nestjs/config';
-import { ModelStreamEvent } from '../types/llm-stream';
+import { FinalStreamEvent, ModelStreamEvent } from '../types/llm-stream';
 
 /** Serializes chunks as an SSE body the service can read back. */
 const sseBody = (chunks: unknown[]) =>
@@ -124,7 +124,7 @@ describe('OpenAIService', () => {
         { type: 'text', text: ' there' },
       ]);
 
-      const final = events[events.length - 1] as any;
+      const final = events[events.length - 1] as FinalStreamEvent;
       expect(final.type).toBe('final');
       expect(final.content).toBe('Hello there');
       expect(final.usage).toEqual({ input_tokens: 11, output_tokens: 4 });
