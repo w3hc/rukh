@@ -305,17 +305,16 @@ export class WebReaderService {
         );
       }
 
-      const data = await response.json();
+      const data: { results?: SearchResult[]; answer?: string } =
+        await response.json();
       const responseTime = Date.now() - startTime;
 
-      const results: SearchResult[] = (data.results || []).map(
-        (result: any) => ({
-          title: result.title,
-          url: result.url,
-          content: result.content,
-          score: result.score,
-        }),
-      );
+      const results: SearchResult[] = (data.results || []).map((result) => ({
+        title: result.title,
+        url: result.url,
+        content: result.content,
+        score: result.score,
+      }));
 
       this.logger.log(
         `Search completed: ${results.length} results in ${responseTime}ms`,

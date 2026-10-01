@@ -28,7 +28,7 @@ export class UploadContextFileDto {
     format: 'binary',
     description: 'Markdown file to upload',
   })
-  file: any;
+  file: Express.Multer['File'];
 }
 
 export class DeleteFileDto {

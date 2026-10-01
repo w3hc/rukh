@@ -9,9 +9,9 @@ import { APP_VERSION } from './version';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = (await NestFactory.create(AppModule, {
+  const app = await NestFactory.create(AppModule, {
     instrument: ObserveInstrument,
-  })) as any;
+  });
 
   // Enable CORS for all origins
   app.enableCors({
