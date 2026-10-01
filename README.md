@@ -86,7 +86,7 @@ The Swagger UI should be available at http://localhost:3000/api
 
 ## Create your first context
 
-The repo ships one context, [data/contexts/rukh](data/contexts/rukh), so a fresh clone can answer on the first `pnpm start`. The rest of `data/` is gitignored. A context is just a folder: Rukh picks up changes on the next request, no restart needed.
+The repo ships one example context, [data/examples/rukh](data/examples/rukh). At boot, Rukh copies it to `data/contexts/rukh` if that folder doesn't exist yet, so a fresh clone can answer on the first `pnpm start`. The rest of `data/`, including `data/contexts/`, is gitignored, so your contexts and query logs never show up in `git status`. A context is just a folder: Rukh picks up changes on the next request, no restart needed.
 
 1. Ask it something:
 
@@ -98,7 +98,7 @@ The repo ships one context, [data/contexts/rukh](data/contexts/rukh), so a fresh
 
    The `rag` block of the response lists `rukh-definition.md` in `selectedFiles`: the files that went to the model.
 
-2. Look at [data/contexts/rukh/index.json](data/contexts/rukh/index.json). It describes each markdown file of the folder. The RAG step only sees these descriptions when it picks which files to send to the model, so make them specific:
+2. Look at `data/contexts/rukh/index.json` (copied from [data/examples/rukh/index.json](data/examples/rukh/index.json)). It describes each markdown file of the folder. The RAG step only sees these descriptions when it picks which files to send to the model, so make them specific:
 
    ```json
    {
@@ -119,7 +119,7 @@ The repo ships one context, [data/contexts/rukh](data/contexts/rukh), so a fresh
    }
    ```
 
-   `size` is in KB. `creatorAddress` is the Ethereum address allowed to manage the context through the API: set your own. Add `"model": "mistral"` to pin the context to one provider. Each `/ask` appends to `queries`; to keep that out of `git status`, run `git update-index --skip-worktree data/contexts/rukh/index.json`.
+   `size` is in KB. `creatorAddress` is the Ethereum address allowed to manage the context through the API: set your own. Add `"model": "mistral"` to pin the context to one provider. Each `/ask` appends to `queries`.
 
 3. Make your own: copy the folder, replace the markdown files, and update `index.json` to match.
 

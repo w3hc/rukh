@@ -1,7 +1,8 @@
 import { BaseMemory } from '@langchain/core/memory';
-import { writeFile, readFile, mkdir } from 'fs/promises';
+import { readFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { writeFileAtomic } from '../storage/write-file-atomic';
 
 interface MemoryEntry {
   messages: {
@@ -39,7 +40,7 @@ class JsonStore {
 
   async write<T>(data: T): Promise<void> {
     await this.ensureDataDir();
-    await writeFile(this.filePath, JSON.stringify(data, null, 2));
+    await writeFileAtomic(this.filePath, JSON.stringify(data, null, 2));
   }
 }
 

@@ -11,6 +11,9 @@ import { SubsService } from './subs/subs.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { Logger } from '@nestjs/common';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 describe('AppService - Model Fallback', () => {
   let service: AppService;
@@ -489,6 +492,41 @@ describe('AppService - Model Fallback', () => {
 
       expect(mistralService.processMessage).toHaveBeenCalledTimes(1);
       expect(result.model).toBe('mistral-small-latest');
+    });
+  });
+
+  describe('damaged context index', () => {
+    let cwd: string;
+
+    beforeEach(() => {
+      cwd = mkdtempSync(join(tmpdir(), 'app-service-'));
+      const contextPath = join(cwd, 'data', 'contexts', 'broken');
+      mkdirSync(contextPath, { recursive: true });
+      // What a truncated overwrite used to leave behind: valid JSON, then
+      // the tail of a longer previous version
+      writeFileSync(join(contextPath, 'index.json'), '{"files":[]}\n  ]\n}');
+      jest.spyOn(process, 'cwd').mockReturnValue(cwd);
+    });
+
+    afterEach(() => {
+      jest.mocked(process.cwd).mockRestore();
+      rmSync(cwd, { recursive: true, force: true });
+    });
+
+    it('still answers the request', async () => {
+      (anthropicService.processMessage as jest.Mock).mockResolvedValue({
+        content: 'Response from Anthropic',
+        sessionId: 'test-session-id',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      });
+
+      const result = await service.ask({
+        message: 'Test message',
+        context: 'broken',
+      });
+
+      expect(anthropicService.processMessage).toHaveBeenCalledTimes(1);
+      expect(result.output).toBe('Response from Anthropic');
     });
   });
 

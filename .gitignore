@@ -62,8 +62,6 @@ test/test.txt
 contracts/node_modules
 docs/private
 
-# Data: only the example context is tracked
+# Data: only the examples are tracked; they are copied into data/contexts/ at boot
 data/*
-!data/contexts/
-data/contexts/*
-!data/contexts/rukh/
+!data/examples/

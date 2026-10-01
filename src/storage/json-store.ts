@@ -1,5 +1,6 @@
-import { writeFile, readFile } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { join } from 'path';
+import { writeFileAtomic } from './write-file-atomic';
 
 export class JsonStore {
   private filePath: string;
@@ -18,6 +19,6 @@ export class JsonStore {
   }
 
   async write<T>(data: T): Promise<void> {
-    await writeFile(this.filePath, JSON.stringify(data, null, 2));
+    await writeFileAtomic(this.filePath, JSON.stringify(data, null, 2));
   }
 }
