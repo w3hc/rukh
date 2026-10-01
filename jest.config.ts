@@ -11,7 +11,9 @@ const config: Config.InitialOptions = {
   coverageDirectory: '../coverage',
   coverageProvider: 'v8',
   testEnvironment: 'node',
-  transformIgnorePatterns: ['node_modules/(?!(.*uuid|puppeteer-core))'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(\\.pnpm/)?(uuid|puppeteer-core)[@/])',
+  ],
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/$1',
     '^@langchain/mistralai$': '<rootDir>/__mocks__/@langchain/mistralai.ts',
