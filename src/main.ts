@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { ObserveInstrument, isObserveEnabled } from './observe';
+import { APP_VERSION } from './version';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -37,7 +38,7 @@ async function bootstrap() {
     .setDescription(
       'Nest.js-based AI agent starter kit. \n\nGitHub repo: https://github.com/w3hc/rukh',
     )
-    .setVersion('0.2.0')
+    .setVersion(APP_VERSION)
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -47,7 +48,7 @@ async function bootstrap() {
   const port = configService.get<number>('PORT');
   await app.listen(port);
 
-  logger.log(`Rukh API version: 0.2.0`);
+  logger.log(`Rukh API version: ${APP_VERSION}`);
   logger.log(
     `Environment: ${configService.get<string>('NODE_ENV') || 'unset'}`,
   );

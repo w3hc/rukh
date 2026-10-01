@@ -19,6 +19,7 @@ import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
 import { ObserveModule, isObserveEnabled } from './observe';
 import { validate } from './config/env.validation';
+import { APP_VERSION } from './version';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { validate } from './config/env.validation';
           appKey: config.getOrThrow<string>('OBSERVE_APP_KEY'),
           appSecret: config.getOrThrow<string>('OBSERVE_APP_SECRET'),
           serviceId: config.get<string>('OBSERVE_SERVICE_ID'),
-          serviceVersion: '0.2.0',
+          serviceVersion: APP_VERSION,
           debug: config.get<string>('OBSERVE_DEBUG') === 'true',
         }),
       }),
