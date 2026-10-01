@@ -1,7 +1,7 @@
 import { AskResponseDto } from './ask-response.dto';
 
 /**
- * What `AppService.askStream()` emits, one event per SSE frame.
+ * What `AskStreamService.askStream()` emits, one event per SSE frame.
  *
  * `done` carries exactly the `AskResponseDto` the non-streaming call would
  * have returned, so a client can ignore the incremental events entirely and

@@ -18,7 +18,7 @@ export interface LlmResponse {
 /**
  * One model a request can be routed to.
  *
- * `AppService` never names a provider: it looks one up by `key` in the
+ * The ask services never name a provider: they look one up by `key` in the
  * {@link ProviderRegistry}, so adding a provider means implementing this
  * interface and registering the class under {@link LLM_PROVIDERS}.
  */

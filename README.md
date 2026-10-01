@@ -41,7 +41,7 @@ flowchart LR
 4. The first provider in line answers. If it fails, the next one takes over, as JSON or as server-sent events.
 5. The response carries token usage and cost, with the RAG selection cost added on.
 
-The code follows the same path: [src/app.controller.ts](src/app.controller.ts) → [src/app.service.ts](src/app.service.ts) (`prepareAsk`) → [src/rag/rag.service.ts](src/rag/rag.service.ts) → the provider picked from the registry ([src/providers/](src/providers/): [src/anthropic/](src/anthropic/), [src/mistral/](src/mistral/), [src/openai/](src/openai/), [src/deepseek/](src/deepseek/)) → [src/memory/cost-tracking.service.ts](src/memory/cost-tracking.service.ts).
+The code follows the same path: [src/app.controller.ts](src/app.controller.ts) → [src/ask/](src/ask/) (`AskPreparationService`, then `AskService` or `AskStreamService`) → [src/rag/rag.service.ts](src/rag/rag.service.ts) → the provider picked from the registry ([src/providers/](src/providers/): [src/anthropic/](src/anthropic/), [src/mistral/](src/mistral/), [src/openai/](src/openai/), [src/deepseek/](src/deepseek/)) → [src/memory/cost-tracking.service.ts](src/memory/cost-tracking.service.ts).
 
 ## Install
 

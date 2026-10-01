@@ -272,8 +272,8 @@ Complete schema for `index.json`:
 
 Two-step RAG is automatic and has no `.env` settings — it activates whenever a request passes an explicit `context` with more than one resource (files + URLs). Its parameters are hardcoded:
 
-- Activation logic: `AppService.ask`
-- Max resources selected: `AppService.RAG_MAX_FILES` (5)
+- Activation logic: `ContextLoaderService.load`
+- Max resources selected: `ContextLoaderService.RAG_MAX_FILES` (5)
 - Always-included files: `RagService.REQUIRED_FILES` (`['instruction-file.md']`)
 
 ### Query Tracking
@@ -461,7 +461,7 @@ Check the response:
 
 ### High Costs
 
-1. Reduce the selection cap by editing `AppService.RAG_MAX_FILES` in code
+1. Reduce the selection cap by editing `ContextLoaderService.RAG_MAX_FILES` in code
 2. Improve file/URL descriptions for better selection
 3. Split large files into smaller, focused files
 4. Monitor the `rag.selectionCost` in responses
