@@ -15,7 +15,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.ts",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch --config jest.config.ts",
     "test:cov": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json && NODE_OPTIONS=--experimental-vm-modules jest --coverage --config jest.config.ts",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --config jest.config.ts",
+    "test:debug": "node --experimental-vm-modules --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --config jest.config.ts",
     "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json",
     "test:concurrent": "NODE_OPTIONS=--experimental-vm-modules jest test/concurrent-requests.e2e-spec.ts --config ./test/jest-e2e.json",
     "dance": "pnpm format && pnpm lint && pnpm build && pnpm test && pnpm test:e2e"
@@ -48,7 +48,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.3.0",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.6.3",
     "@types/supertest": "^7.2.1",
     "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.71.0",
