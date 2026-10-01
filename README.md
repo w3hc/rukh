@@ -45,7 +45,7 @@ The code follows the same path: [src/app.controller.ts](src/app.controller.ts) â
 
 ## Install
 
-Requires Node 22 or 24.
+Requires Node 24 or later.
 
 ```bash
 pnpm i
