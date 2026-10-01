@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Includes the `context` value and the message text
   - Configurable via `NTFY_ASK_TOKEN` and `NTFY_ASK_TOPIC` environment variables
   - Only fires when `NODE_ENV=prod`, and never blocks or fails the `ask` response
-- **Example context**: `data/contexts/rukh` is now committed, so a fresh clone answers on the first `pnpm start`
-  - The rest of `data/` stays gitignored, including runtime files (`chat-history.json`, `costs.json`)
+- **Example context**: `data/examples/rukh` is committed and copied to `data/contexts/rukh` at boot when missing, so a fresh clone answers on the first `pnpm start`
+  - Everything else in `data/` stays gitignored, including `data/contexts/` and runtime files (`chat-history.json`, `costs.json`), so the app never writes to a tracked file
 - **Config validation at boot**: the environment is checked against a schema (`src/config/env.validation.ts`) before any provider starts
   - A missing `MISTRAL_API_KEY` or `ANTHROPIC_API_KEY`, a non-numeric port, SIWE or throttle value, an unknown `ANTHROPIC_EFFORT`, or only half of the Observe credentials stops the app with one message listing every problem
   - Empty `KEY=` lines count as unset, and defaults live in the schema
@@ -41,3 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ask-call notifications now log and skip on an ntfy delivery failure instead of silently swallowing it
+- **Dirty working tree after `/ask`**: logging a query no longer modifies a tracked file, so the deploy script stops refusing to deploy
+- **Corrupted JSON files under concurrent writes**: context indexes, chat history, the JSON stores and cost data are written to a temp file and renamed over the original, so a shorter write can no longer leave the tail of a longer one behind
+- **Damaged context index**: `/ask` logs a warning and answers instead of failing when a context's `index.json` doesn't parse
+- **Flaky e2e tests**: `pnpm test:e2e` runs the test files one at a time, since they share `data/`
