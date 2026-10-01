@@ -17,7 +17,7 @@ Where a plain provider SDK gives you one model and a raw completion, and LangCha
 - **File-based contexts + RAG**: a context is a folder of markdown files and URLs under `data/contexts/`. A cheap first pass picks the files relevant to the question, and only those reach the model. See [docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md).
 - **Per-call cost tracking**: every response carries its token usage and its cost in USD, RAG selection included.
 - **SIWE auth**: managing contexts (create, upload, delete) requires a [Sign-In with Ethereum](https://login.xyz) signature from the context's creator.
-- **Rate limiting**: per-IP limits on `/ask` and `/web-reader`, configurable through env vars.
+- **Rate limiting**: per-IP limits on `/ask` (50/hour) and `/web-reader` (20/minute), set in [src/config/rate-limit.config.ts](src/config/rate-limit.config.ts).
 - **Sessions**: pass back the `sessionId` to keep the conversation going.
 
 ## Architecture
@@ -49,7 +49,12 @@ Requires Node 24.
 
 ```bash
 pnpm i
+cp .env.template .env
 ```
+
+## Configure
+
+Only `MISTRAL_API_KEY` and `ANTHROPIC_API_KEY` are required; every variable is documented in [.env.template](.env.template).
 
 ## Test
 
