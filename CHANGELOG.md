@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Empty `KEY=` lines count as unset, and defaults live in the schema
 
 ### Changed
+- **CI checks**: a green check now means the code is formatted, lint-clean, free of known vulnerabilities, and builds and passes tests on Node 24 and 26
+  - New `pnpm format:check` and `pnpm lint:check` scripts fail instead of fixing; `pnpm format` and `pnpm lint` still fix locally
+  - A `checks` job runs both, plus a full `pnpm audit`; the `test` job runs build, unit and e2e tests on a Node 24/26 matrix, with current `actions/checkout`, `actions/setup-node` and `pnpm/action-setup` releases
+  - `pnpm.overrides` raised for `js-yaml`, `brace-expansion`, `qs`, `body-parser` and `underscore`, and added for `fast-uri`, `browserslist`, `baseline-browser-mapping`, `@babel/core` and `minimatch@10`; the `elliptic` advisory (no patched release, reached through `w3pk`'s ethers v5) is ignored in `pnpm.auditConfig`
 - **AppService split**: the 1,270-line `AppService` is gone, replaced by focused services in `src/ask/`, with no change in behavior
   - `ContextLoaderService` loads a context (two-step RAG or every file), reads its `model` override and records each query in `index.json`
   - `UploadService` decodes and fences uploaded `.md`/`.csv` files; `prompt-fencing.ts` holds both fences
@@ -75,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flaky e2e tests**: `pnpm test:e2e` runs the test files one at a time, since they share `data/`
 
 ### Removed
+- **`pnpm dance`**: run `pnpm format:check`, `pnpm lint:check`, `pnpm build`, `pnpm test` and `pnpm test:e2e` instead
 - **Legacy ESLint config**: `.eslintrc.js`, superseded by `eslint.config.mjs`
 - **Unused `@mistralai/mistralai` mock** under `src/__mocks__/`, which no Jest config mapped
 - **`SubsService`**: replaced by the optional `SponsorshipModule`; it was injected into `AppService` but never called
