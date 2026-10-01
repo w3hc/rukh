@@ -79,10 +79,16 @@
       "form-data": ">=4.0.1",
       "base-x": ">=3.0.11",
       "undici": ">=5.29.0",
-      "js-yaml": ">=4.1.0",
-      "brace-expansion": ">=2.0.2",
+      "js-yaml": ">=4.3.2",
+      "brace-expansion": ">=5.0.12",
       "tmp": ">=0.2.3",
-      "minimatch": ">=9.0.0"
+      "minimatch": ">=9.0.0",
+      "qs": ">=6.16.0",
+      "body-parser": ">=2.3.0",
+      "underscore": ">=1.13.8"
+    },
+    "auditConfig": {
+      "ignoreGhsas": ["GHSA-848j-6mx2-7j84"]
     }
   },
   "packageManager": "pnpm@10.23.0+sha1.b4a44ab0dc2adf2e36371d11d8eb0dc78ffc976c"
