@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { writeFileAtomic } from '../storage/write-file-atomic';
 
-interface CostDatabase {
+export interface CostDatabase {
   requests: {
     timestamp: string;
     inputCost: number;
@@ -347,7 +347,7 @@ export class CostTracker implements OnModuleInit {
   }
 
   // Simple report that returns the exact format requested
-  async generateUsageReport(): Promise<any> {
+  async generateUsageReport(): Promise<CostDatabase> {
     // Return a direct reference to our data structure
     return this.data;
   }

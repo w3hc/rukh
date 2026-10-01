@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { AskDto } from '../dto/ask.dto';
 import { AskResponseDto } from '../dto/ask-response.dto';
 import { ProviderRegistry } from '../providers/provider-registry.service';
+import { StreamCost } from '../types/llm-stream';
 import { AskPreparationService } from './ask-preparation.service';
 import { AskResultService } from './ask-result.service';
 
@@ -30,7 +31,7 @@ export class AskService {
       input_tokens: 0,
       output_tokens: 0,
     };
-    let cost: any = undefined;
+    let cost: StreamCost | undefined = undefined;
 
     try {
       const prepared = await this.preparation.prepare(askDto, file);

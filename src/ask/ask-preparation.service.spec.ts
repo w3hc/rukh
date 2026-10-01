@@ -92,12 +92,20 @@ describe('AskPreparationService', () => {
     it('passes the RAG metadata through', async () => {
       contextLoader.load.mockResolvedValue({
         systemPrompt: 'RAG prompt',
-        ragMetadata: { selectedFiles: ['a.md'] },
+        ragMetadata: {
+          selectedFiles: ['a.md'],
+          totalFilesAvailable: 1,
+          selectionMethod: 'rag-two-step',
+        },
       });
 
       const { ragMetadata } = await service.prepare({ message: 'hi' });
 
-      expect(ragMetadata).toEqual({ selectedFiles: ['a.md'] });
+      expect(ragMetadata).toEqual({
+        selectedFiles: ['a.md'],
+        totalFilesAvailable: 1,
+        selectionMethod: 'rag-two-step',
+      });
     });
   });
 

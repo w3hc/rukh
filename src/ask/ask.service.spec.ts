@@ -265,6 +265,7 @@ describe('AskService', () => {
       ragMetadata: {
         selectedFiles: ['a.md'],
         totalFilesAvailable: 2,
+        selectionMethod: 'rag-two-step',
         selectionCost: { input_cost: 0.1, output_cost: 0.2, total_cost: 0.3 },
       },
     });

@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { AskDto } from '../dto/ask.dto';
+import { RagMetadataDto } from '../dto/rag-metadata.dto';
 import { ProviderRegistry } from '../providers/provider-registry.service';
 import { NOTIFIER, Notifier } from '../notifications/notifier';
 import { ContextLoaderService } from './context-loader.service';
@@ -23,7 +24,7 @@ export interface PreparedAsk {
    * user's own pasted data, from the second message onwards.
    */
   systemPrompt?: string;
-  ragMetadata: any;
+  ragMetadata?: RagMetadataDto;
   /** System prompt and user turn together, for cost tracking. */
   fullInput: string;
   /** The user turn as sent: fenced whenever there is a system prompt. */
