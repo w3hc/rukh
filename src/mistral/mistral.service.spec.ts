@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ChatMistralAI } from '@langchain/mistralai';
 import { MistralService } from './mistral.service';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 // Mock the ChatMistralAI
 jest.mock('@langchain/mistralai', () => {
@@ -56,21 +57,21 @@ jest.mock('../memory/custom-memory', () => {
   };
 });
 
+const configWithKey = (key: string | undefined) =>
+  ({ get: jest.fn(() => key) }) as unknown as ConfigService;
+
 describe('MistralService', () => {
   let service: MistralService;
 
   beforeEach(async () => {
-    process.env.MISTRAL_API_KEY = 'test-api-key';
-
     const module: TestingModule = await Test.createTestingModule({
-      providers: [MistralService],
+      providers: [
+        MistralService,
+        { provide: ConfigService, useValue: configWithKey('test-api-key') },
+      ],
     }).compile();
 
     service = module.get<MistralService>(MistralService);
-  });
-
-  afterEach(() => {
-    delete process.env.MISTRAL_API_KEY;
   });
 
   it('should be defined', () => {
@@ -78,14 +79,12 @@ describe('MistralService', () => {
   });
 
   it('should throw error if MISTRAL_API_KEY is not set', () => {
-    delete process.env.MISTRAL_API_KEY;
-
     // Suppress the expected error log
     const loggerErrorSpy = jest
       .spyOn(Logger.prototype, 'error')
       .mockImplementation();
 
-    expect(() => new MistralService()).toThrow(
+    expect(() => new MistralService(configWithKey(undefined))).toThrow(
       'MISTRAL_API_KEY environment variable is not set',
     );
 
@@ -118,7 +117,7 @@ describe('MistralService', () => {
       .spyOn(Logger.prototype, 'error')
       .mockImplementation();
 
-    const rateLimited = new MistralService();
+    const rateLimited = new MistralService(configWithKey('test-api-key'));
 
     await expect(
       (async () => {
