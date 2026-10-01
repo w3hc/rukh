@@ -675,10 +675,16 @@ export class AppService {
       let totalFiles = 0;
       let totalUrls = 0;
       if (existsSync(indexPath)) {
-        const indexData = await readFile(indexPath, 'utf-8');
-        const contextIndex = JSON.parse(indexData);
-        totalFiles = contextIndex.files?.length || 0;
-        totalUrls = contextIndex.links?.length || 0;
+        try {
+          const indexData = await readFile(indexPath, 'utf-8');
+          const contextIndex = JSON.parse(indexData);
+          totalFiles = contextIndex.files?.length || 0;
+          totalUrls = contextIndex.links?.length || 0;
+        } catch (error) {
+          this.logger.warn(
+            `Failed to read index for context ${contextName}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
       const totalResources = totalFiles + totalUrls;
 
