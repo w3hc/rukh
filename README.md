@@ -1,10 +1,24 @@
 # Rukh
 
-Modular AI framework with RAG system supporting multiple LLMs and personalized contexts.
+[![Test](https://github.com/w3hc/rukh/actions/workflows/test.yml/badge.svg)](https://github.com/w3hc/rukh/actions/workflows/test.yml)
+[![License: LGPL-3.0](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE)
+
+A [NestJS](https://nestjs.com) starter kit for shipping your own AI agent as an API. Drop markdown files in a folder, and Rukh answers questions about them through whichever LLM is up, telling you what each answer cost.
+
+Where a plain provider SDK gives you one model and a raw completion, and LangChain gives you building blocks to assemble, Rukh is a running service you fork and make your own: one `/ask` endpoint, already wired to four providers, contexts, RAG, auth and rate limits.
 
 - API: **[rukh.w3hc.org](http://rukh.w3hc.org)**
-
 - UI: **[rukh.it](https://www.rukh.it/)** (source: [rukh-ui](https://github.com/w3hc/rukh-ui))
+
+## Features
+
+- **Multi-provider with fallback**: Mistral, Anthropic, OpenAI and DeepSeek behind one `model` parameter. If the chosen provider fails, the next one takes over. See [docs/MODELS.md](docs/MODELS.md).
+- **Streaming**: `stream=true` returns server-sent events, with fallback up to the first byte. See [docs/STREAMING.md](docs/STREAMING.md).
+- **File-based contexts + RAG**: a context is a folder of markdown files and URLs under `data/contexts/`. A cheap first pass picks the files relevant to the question, and only those reach the model. See [docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md).
+- **Per-call cost tracking**: every response carries its token usage and its cost in USD, RAG selection included.
+- **SIWE auth**: managing contexts (create, upload, delete) requires a [Sign-In with Ethereum](https://login.xyz) signature from the context's creator.
+- **Rate limiting**: per-IP limits on `/ask` and `/web-reader`, configurable through env vars.
+- **Sessions**: pass back the `sessionId` to keep the conversation going.
 
 ## Install
 
