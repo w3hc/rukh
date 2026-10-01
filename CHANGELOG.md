@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Contributing guide and security policy**: `CONTRIBUTING.md` covers setup, the checks CI runs and commit conventions; `SECURITY.md` explains how to report a vulnerability through GitHub private vulnerability reporting
 - **Provider registry**: every model is an `LlmProvider` (`key`, `label`, `pricing`, `fallbackEligible`, `isAvailable`, `ask`, `stream`) registered under the `LLM_PROVIDERS` token, and `AppService` looks it up through `ProviderRegistry` instead of switching on the model name
   - `ProvidersModule` lists the providers in fallback order; adding one is a class plus a line there. See `docs/ADDING_A_PROVIDER.md`
   - `BaseLlmService` holds the memory, cost, request ID and API key logic the four services duplicated
@@ -79,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flaky e2e tests**: `pnpm test:e2e` runs the test files one at a time, since they share `data/`
 
 ### Removed
+- **README walkthrough**: the "Create your first context" and "Example" sections; contexts are documented in `docs/CONTEXT_MANAGEMENT.md`
 - **`pnpm dance`**: run `pnpm format:check`, `pnpm lint:check`, `pnpm build`, `pnpm test` and `pnpm test:e2e` instead
 - **Legacy ESLint config**: `.eslintrc.js`, superseded by `eslint.config.mjs`
 - **Unused `@mistralai/mistralai` mock** under `src/__mocks__/`, which no Jest config mapped
