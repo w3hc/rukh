@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - NestJS 12 is ESM-only: Jest scripts run with `--experimental-vm-modules`, and node_modules are no longer transformed
   - TypeScript stays on 6: `ts-jest` and `@nestjs/cli` don't support TypeScript 7 yet
 - **Node 24**: CI runs on Node 24 with a frozen lockfile
+- **README**: rewritten for developers forking Rukh
+  - Pitch, feature list, CI and license badges
+  - Architecture diagram of the `/ask` flow (rate limit → model resolution → context/RAG → provider fallback → cost tracking)
+  - "Create your first context" walkthrough
+- **`.env.template`**: grouped into commented sections, each variable marked required or optional with its default
+  - Adds the missing `NTFY_ASK_TOPIC`
+  - Flags `THROTTLE_ASK_LIMIT` and `THROTTLE_WEB_LIMIT` as currently overridden by `rate-limit.config.ts`
 
 ### Fixed
 - Ask-call notifications now log and skip on an ntfy delivery failure instead of silently swallowing it
