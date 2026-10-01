@@ -8,6 +8,8 @@ Modular AI framework with RAG system supporting multiple LLMs and personalized c
 
 ## Install
 
+Requires Node 24.
+
 ```bash
 pnpm i
 ```

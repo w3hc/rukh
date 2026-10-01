@@ -60,10 +60,7 @@ export interface FinalStreamEvent {
 }
 
 export type ModelStreamEvent =
-  | TextStreamEvent
-  | ThinkingStreamEvent
-  | ResetStreamEvent
-  | FinalStreamEvent;
+  TextStreamEvent | ThinkingStreamEvent | ResetStreamEvent | FinalStreamEvent;
 
 /**
  * Thrown when a stream is cancelled because the client went away.
