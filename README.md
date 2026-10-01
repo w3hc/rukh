@@ -20,6 +20,29 @@ Where a plain provider SDK gives you one model and a raw completion, and LangCha
 - **Rate limiting**: per-IP limits on `/ask` and `/web-reader`, configurable through env vars.
 - **Sessions**: pass back the `sessionId` to keep the conversation going.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    client([Client]) -->|POST /ask| guard[Rate limiter]
+    guard --> prepare[Resolve model<br/>and fallback order]
+    prepare --> ctx[Load context<br/>data/contexts/name]
+    ctx --> rag{Two-step RAG<br/>ministral-3b picks<br/>relevant files + URLs}
+    rag --> prompt[Build system prompt]
+    prompt --> provider[Provider<br/>Mistral · Anthropic · OpenAI · DeepSeek]
+    provider -->|fails| provider
+    provider --> cost[Cost tracking<br/>generation + RAG selection]
+    cost -->|JSON or SSE| client
+```
+
+1. `/ask` goes through the per-IP rate limiter.
+2. Rukh picks the model: the context's `model` override if its `index.json` sets one, then the request's `model`, then `anthropic`. The other providers line up behind it as fallbacks.
+3. It loads the context (`rukh` by default). When the context has files or URLs to choose from, a cheap `ministral-3b` call selects the relevant ones, and only those go into the system prompt.
+4. The first provider in line answers. If it fails, the next one takes over, as JSON or as server-sent events.
+5. The response carries token usage and cost, with the RAG selection cost added on.
+
+The code follows the same path: [src/app.controller.ts](src/app.controller.ts) → [src/app.service.ts](src/app.service.ts) (`prepareAsk`) → [src/rag/rag.service.ts](src/rag/rag.service.ts) → one of the provider services ([src/anthropic/](src/anthropic/), [src/mistral/](src/mistral/), [src/openai/](src/openai/), [src/deepseek/](src/deepseek/)) → [src/memory/cost-tracking.service.ts](src/memory/cost-tracking.service.ts).
+
 ## Install
 
 Requires Node 24.
