@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { MistralService } from './mistral/mistral.service';
@@ -12,12 +12,12 @@ import { AskStreamEvent } from './dto/ask-stream.dto';
 import { ModelStreamEvent } from './types/llm-stream';
 import { readFile, readdir, mkdir, stat } from 'fs/promises';
 import { join } from 'path';
-import { SubsService } from './subs/subs.service';
 import { existsSync } from 'fs';
 import { ContextService } from './context/context.service';
 import { WebReaderService } from './web/web-reader.service';
 import { RagService } from './rag/rag.service';
 import { writeFileAtomic } from './storage/write-file-atomic';
+import { NOTIFIER, Notifier } from './notifications/notifier';
 
 @Injectable()
 export class AppService {
@@ -33,60 +33,13 @@ export class AppService {
     private readonly openaiService: OpenAIService,
     private readonly deepseekService: DeepSeekService,
     private readonly costTracker: CostTracker,
-    private readonly subsService: SubsService,
     private readonly contextService: ContextService,
     private readonly webReaderService: WebReaderService,
     private readonly ragService: RagService,
     private readonly configService: ConfigService,
+    @Optional() @Inject(NOTIFIER) private readonly notifier?: Notifier,
   ) {
-    if (!this.configService.get<string>('NTFY_ASK_TOKEN')) {
-      this.logger.warn(
-        'NTFY_ASK_TOKEN not set - new conversation notifications will be disabled',
-      );
-    }
     this.loadContexts();
-  }
-
-  /**
-   * Notifies via ntfy.sh whenever a brand new conversation starts (no
-   * sessionId supplied by the caller). Gated on NTFY_ASK_TOKEN being set
-   * rather than NODE_ENV, so it stays silent unless explicitly configured
-   * but works the same locally as in production. Never blocks the caller.
-   */
-  private async notifyNewAsk(context: string, message: string): Promise<void> {
-    const token = this.configService.get<string>('NTFY_ASK_TOKEN', '');
-    const topic = this.configService.get<string>('NTFY_ASK_TOPIC', 'rukh');
-
-    if (!token) {
-      this.logger.debug('Skipping ask notification: NTFY_ASK_TOKEN is not set');
-      return;
-    }
-
-    try {
-      const response = await fetch(`https://ntfy.sh/${topic}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Title: 'Rukh Ask',
-          Tags: 'speech_balloon',
-        },
-        body: `Context: ${context || 'none'}\n\n${message}`,
-      });
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        this.logger.error(
-          `Ask notification rejected by ntfy: ${response.status} ${response.statusText} ${body}`,
-        );
-        return;
-      }
-
-      this.logger.debug(`Ask notification sent to topic '${topic}'`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to send ask notification: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
 
   private async loadContexts() {
@@ -626,11 +579,10 @@ export class AppService {
     const contextName = askDto.context || 'rukh';
 
     if (!askDto.sessionId) {
-      this.notifyNewAsk(contextName, askDto.message).catch((error) => {
-        this.logger.error(
-          `Ask notification failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
+      void this.notifier?.notify(
+        'Rukh Ask',
+        `Context: ${contextName || 'none'}\n\n${askDto.message}`,
+      );
     }
 
     // A context can force a specific model via a `model` key in its
@@ -1430,104 +1382,5 @@ export class AppService {
         ? `All models failed. Last error: ${lastError.message}`
         : 'All models failed',
     };
-  }
-
-  getHello(): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Rukh</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background-color: #1a1a1a;
-            color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-
-        .container {
-            text-align: center;
-            padding: 2rem;
-            max-width: 800px;
-        }
-
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            background: linear-gradient(45deg, #3490dc, #6574cd);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-
-        p {
-            font-size: 1.2rem;
-            line-height: 1.6;
-            color: #a0aec0;
-            margin: 1rem 0;
-        }
-
-        .tech-links {
-            margin: 1rem 0;
-            font-size: 1.2rem;
-            line-height: 1.6;
-            color: #a0aec0;
-        }
-
-        .tech-links a {
-            background: linear-gradient(45deg, #3490dc, #6574cd);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            text-decoration: none;
-            transition: opacity 0.2s;
-        }
-
-        .tech-links a:hover {
-            opacity: 0.8;
-        }
-
-        .links {
-            margin-top: 2rem;
-        }
-
-        .button {
-            display: inline-block;
-            padding: 0.8rem 1.6rem;
-            margin: 0.5rem;
-            background: linear-gradient(45deg, #3490dc, #6574cd);
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: transform 0.2s;
-        }
-
-        .button:hover {
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Rukh</h1>
-        <p>Modular AI framework allowing personalized contexts and support for multiple LLMs</p>
-        <div class="links">
-            <a href="/api" class="button">Swagger UI</a>
-            <a href="https://github.com/w3hc/rukh" target="_blank" rel="noopener noreferrer" class="button">GitHub Repo</a>
-        </div>
-        <br />
-        <br />
-        <img src="https://bafkreid5xwxz4bed67bxb2wjmwsec4uhlcjviwy7pkzwoyu5oesjd3sp64.ipfs.w3s.link" alt="built-with-ethereum-w3hc" width="150"/>
-    </div>
-</body>
-</html>`;
   }
 }

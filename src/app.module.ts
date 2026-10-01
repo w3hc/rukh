@@ -14,11 +14,19 @@ import { AnthropicModule } from './anthropic/anthropic.module';
 import { OpenAIModule } from './openai/openai.module';
 import { DeepSeekModule } from './deepseek/deepseek.module';
 import { CostTracker } from './memory/cost-tracking.service';
-import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
 import { ObserveModule, isObserveEnabled } from './observe';
 import { validate } from './config/env.validation';
+import { APP_VERSION } from './version';
+import {
+  NotificationsModule,
+  isNotificationsEnabled,
+} from './notifications/notifications.module';
+import {
+  SponsorshipModule,
+  isSponsorshipEnabled,
+} from './sponsorship/sponsorship.module';
 
 @Module({
   imports: [
@@ -34,11 +42,21 @@ import { validate } from './config/env.validation';
           appKey: config.getOrThrow<string>('OBSERVE_APP_KEY'),
           appSecret: config.getOrThrow<string>('OBSERVE_APP_SECRET'),
           serviceId: config.get<string>('OBSERVE_SERVICE_ID'),
-          serviceVersion: '0.2.0',
+          serviceVersion: APP_VERSION,
           debug: config.get<string>('OBSERVE_DEBUG') === 'true',
         }),
       }),
       (env) => isObserveEnabled((key) => env[key]),
+      { debug: false },
+    ),
+    ConditionalModule.registerWhen(
+      SponsorshipModule,
+      (env) => isSponsorshipEnabled((key) => env[key]),
+      { debug: false },
+    ),
+    ConditionalModule.registerWhen(
+      NotificationsModule,
+      (env) => isNotificationsEnabled((key) => env[key]),
       { debug: false },
     ),
     ThrottlerModule.forRootAsync({
@@ -71,7 +89,6 @@ import { validate } from './config/env.validation';
     OpenAIService,
     DeepSeekService,
     CostTracker,
-    SubsService,
     {
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,

@@ -6,7 +6,6 @@ import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { OpenAIService } from '../src/openai/openai.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
-import { SubsService } from '../src/subs/subs.service';
 
 // Set timeout for concurrent tests
 jest.setTimeout(30000);
@@ -65,10 +64,6 @@ describe('Concurrent Requests (e2e)', () => {
     }),
   };
 
-  const mockSubsService = {
-    isSubscribed: jest.fn().mockResolvedValue(true),
-  };
-
   beforeAll(async () => {
     // Mock Logger to suppress error logs during tests
     loggerErrorSpy = jest
@@ -86,8 +81,6 @@ describe('Concurrent Requests (e2e)', () => {
       .useValue(mockOpenAIService)
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
-      .overrideProvider(SubsService)
-      .useValue(mockSubsService)
       .compile();
 
     app = moduleFixture.createNestApplication();

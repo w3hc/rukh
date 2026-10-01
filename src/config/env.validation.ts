@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Min,
   validateSync,
 } from 'class-validator';
 
@@ -63,6 +64,14 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   GITHUB_API_TOKEN?: string;
+
+  @IsOptional()
+  @IsString()
+  SPONSOR_GITHUB_LOGIN?: string;
+
+  @IsInt()
+  @Min(0)
+  SPONSOR_MIN_MONTHLY_USD: number = 5;
 
   @IsOptional()
   @IsString()
@@ -125,6 +134,12 @@ export function validate(
   if (!!env.OBSERVE_APP_KEY !== !!env.OBSERVE_APP_SECRET) {
     problems.push(
       'OBSERVE_APP_KEY, OBSERVE_APP_SECRET: set both to enable NestJS Observe, or neither',
+    );
+  }
+
+  if (env.SPONSOR_GITHUB_LOGIN && !env.GITHUB_API_TOKEN) {
+    problems.push(
+      'GITHUB_API_TOKEN: required to check sponsorships of SPONSOR_GITHUB_LOGIN',
     );
   }
 

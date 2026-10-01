@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { REDIRECT_METADATA } from '@nestjs/common/constants';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
@@ -37,19 +38,6 @@ describe('AppController', () => {
         {
           provide: AppService,
           useValue: {
-            getHello: () => {
-              return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Welcome to Rukh</title>
-</head>
-<body>
-    <div class="container">
-        <h1>Welcome to Rukh</h1>
-    </div>
-</body>
-</html>`;
-            },
             askStream: jest.fn().mockImplementation(async function* () {
               yield { type: 'chunk', text: 'AI ' };
               yield { type: 'chunk', text: 'response' };
@@ -97,11 +85,11 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return HTML content', () => {
-      const result = appController.getHello();
-      expect(result).toContain('<!DOCTYPE html>');
-      expect(result).toContain('Welcome to Rukh');
-      expect(result).toContain('</html>');
+    it('should redirect to the Swagger UI', () => {
+      expect(appController.root()).toBeUndefined();
+      expect(
+        Reflect.getMetadata(REDIRECT_METADATA, AppController.prototype.root),
+      ).toEqual({ url: '/api', statusCode: undefined });
     });
   });
 

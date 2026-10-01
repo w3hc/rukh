@@ -56,6 +56,11 @@ cp .env.template .env
 
 Only `MISTRAL_API_KEY` and `ANTHROPIC_API_KEY` are required; every variable is documented in [.env.template](.env.template).
 
+Optional modules load only when their variable is set:
+
+- **Notifications** (`NTFY_ASK_TOKEN`): a push to [ntfy.sh](https://ntfy.sh) when a new conversation starts. To notify somewhere else, bind your own `Notifier` to the `NOTIFIER` token in [src/notifications/notifications.module.ts](src/notifications/notifications.module.ts).
+- **Sponsorship check** (`SPONSOR_GITHUB_LOGIN`): `SponsorshipService.isSponsor()` tells whether a GitHub user sponsors that account with at least `SPONSOR_MIN_MONTHLY_USD` a month. It needs `GITHUB_API_TOKEN` and isn't wired to any route.
+
 ## Test
 
 ```bash
@@ -82,7 +87,7 @@ pnpm test:cov
 pnpm start
 ```
 
-The Swagger UI should be available at http://localhost:3000/api
+The Swagger UI should be available at http://localhost:3000/api, and http://localhost:3000 redirects to it.
 
 ### With Docker (optional)
 
