@@ -18,11 +18,13 @@ import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
 import { ObserveModule, isObserveEnabled } from './observe';
+import { validate } from './config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate,
     }),
     // Evaluated after ConfigModule.forRoot has loaded .env into process.env
     ...(isObserveEnabled()
