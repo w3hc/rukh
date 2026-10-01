@@ -16,8 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Only fires when `NODE_ENV=prod`, and never blocks or fails the `ask` response
 - **Example context**: `data/contexts/rukh` is now committed, so a fresh clone answers on the first `pnpm start`
   - The rest of `data/` stays gitignored, including runtime files (`chat-history.json`, `costs.json`)
+- **Config validation at boot**: the environment is checked against a schema (`src/config/env.validation.ts`) before any provider starts
+  - A missing `MISTRAL_API_KEY` or `ANTHROPIC_API_KEY`, a non-numeric port, SIWE or throttle value, an unknown `ANTHROPIC_EFFORT`, or only half of the Observe credentials stops the app with one message listing every problem
+  - Empty `KEY=` lines count as unset, and defaults live in the schema
 
 ### Changed
+- **Config access**: every variable is read through `ConfigService`; `process.env` is no longer read directly
+  - `src/config/siwe.config.ts` is removed, `SiweAuthGuard` reads the SIWE settings itself
+  - NestJS Observe is registered through `ConditionalModule`, after validation
+  - An invalid `ANTHROPIC_EFFORT` now fails at boot instead of being ignored with a warning
+  - Each optional feature logs once at boot when its key is missing, including ntfy
 - **Dependencies**: NestJS 12 (`@nestjs/*`, `@nestjs/config` 12, `@nestjs/observe` 0.3), plus minor/patch bumps (langchain, puppeteer-core, throttler, multer, eslint, jest, prettier, `@types/node` 26)
   - NestJS 12 is ESM-only: Jest scripts run with `--experimental-vm-modules`, and node_modules are no longer transformed
   - TypeScript stays on 6: `ts-jest` and `@nestjs/cli` don't support TypeScript 7 yet

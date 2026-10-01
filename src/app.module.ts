@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MistralService } from './mistral/mistral.service';
@@ -18,38 +18,40 @@ import { SubsService } from './subs/subs.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
 import { ObserveModule, isObserveEnabled } from './observe';
+import { validate } from './config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate,
     }),
-    // Evaluated after ConfigModule.forRoot has loaded .env into process.env
-    ...(isObserveEnabled()
-      ? [
-          ObserveModule.forRootAsync({
-            inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-              appKey: config.getOrThrow<string>('OBSERVE_APP_KEY'),
-              appSecret: config.getOrThrow<string>('OBSERVE_APP_SECRET'),
-              serviceId: config.get<string>('OBSERVE_SERVICE_ID') ?? 'rukh',
-              serviceVersion: '0.2.0',
-              debug: config.get<string>('OBSERVE_DEBUG') === 'true',
-            }),
-          }),
-        ]
-      : []),
+    // Evaluated once ConfigModule has loaded and validated the environment
+    ConditionalModule.registerWhen(
+      ObserveModule.forRootAsync({
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          appKey: config.getOrThrow<string>('OBSERVE_APP_KEY'),
+          appSecret: config.getOrThrow<string>('OBSERVE_APP_SECRET'),
+          serviceId: config.get<string>('OBSERVE_SERVICE_ID'),
+          serviceVersion: '0.2.0',
+          debug: config.get<string>('OBSERVE_DEBUG') === 'true',
+        }),
+      }),
+      (env) => isObserveEnabled((key) => env[key]),
+      { debug: false },
+    ),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
         {
           ttl: 3600000,
-          limit: Number(config.get<string>('THROTTLE_ASK_LIMIT') ?? 1000),
+          limit: config.get<number>('THROTTLE_ASK_LIMIT'),
           name: 'ask',
         },
         {
           ttl: 60000,
-          limit: Number(config.get<string>('THROTTLE_WEB_LIMIT') ?? 200),
+          limit: config.get<number>('THROTTLE_WEB_LIMIT'),
           name: 'web',
         },
       ],

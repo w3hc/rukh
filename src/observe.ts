@@ -12,10 +12,12 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
  * test suite: the agent runs a detached worker thread that would otherwise
  * outlive Jest and report test traffic to the dashboard.
  */
-export function isObserveEnabled(): boolean {
+export function isObserveEnabled(
+  get: (key: string) => string | undefined,
+): boolean {
   return (
-    process.env.NODE_ENV !== 'test' &&
-    !!process.env.OBSERVE_APP_KEY &&
-    !!process.env.OBSERVE_APP_SECRET
+    get('NODE_ENV') !== 'test' &&
+    !!get('OBSERVE_APP_KEY') &&
+    !!get('OBSERVE_APP_SECRET')
   );
 }

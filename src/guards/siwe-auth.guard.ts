@@ -5,9 +5,9 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { validateSiweMessage, verifySiweSignature } from 'w3pk';
-import { SIWE_CONFIG } from '../config/siwe.config';
 
 export interface SiweRequest extends Request {
   siweAddress?: string;
@@ -21,6 +21,26 @@ export interface SiweRequest extends Request {
  */
 @Injectable()
 export class SiweAuthGuard implements CanActivate {
+  // Clock skew tolerated between the signer's clock and this server's.
+  private readonly CLOCK_SKEW_SECONDS = 60;
+  private readonly chainId: number;
+  // How long a signed message stays acceptable after being issued.
+  private readonly maxAgeSeconds: number;
+  // Allow-list of frontend domains. Unset = no domain check (the API itself
+  // has no single fixed frontend, so this is opt-in).
+  private readonly allowedDomains?: string[];
+
+  constructor(configService: ConfigService) {
+    this.chainId = configService.get<number>('SIWE_CHAIN_ID', 1);
+    this.maxAgeSeconds = configService.get<number>('SIWE_MAX_AGE_SECONDS', 300);
+    const domains = configService
+      .get<string>('SIWE_ALLOWED_DOMAINS')
+      ?.split(',')
+      .map((d) => d.trim())
+      .filter(Boolean);
+    this.allowedDomains = domains?.length ? domains : undefined;
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<SiweRequest>();
     const rawMessage = request.headers['x-siwe-message'];
@@ -44,7 +64,7 @@ export class SiweAuthGuard implements CanActivate {
 
     const validation = validateSiweMessage(message, {
       checkExpiration: true,
-      chainId: SIWE_CONFIG.CHAIN_ID,
+      chainId: this.chainId,
     });
 
     if (!validation.valid || !validation.parsed) {
@@ -55,10 +75,7 @@ export class SiweAuthGuard implements CanActivate {
 
     const parsed = validation.parsed;
 
-    if (
-      SIWE_CONFIG.ALLOWED_DOMAINS &&
-      !SIWE_CONFIG.ALLOWED_DOMAINS.includes(parsed.domain)
-    ) {
+    if (this.allowedDomains && !this.allowedDomains.includes(parsed.domain)) {
       throw new UnauthorizedException('Unrecognized SIWE domain');
     }
 
@@ -78,13 +95,13 @@ export class SiweAuthGuard implements CanActivate {
       );
     }
 
-    if (issuedAtMs > nowMs + SIWE_CONFIG.CLOCK_SKEW_SECONDS * 1000) {
+    if (issuedAtMs > nowMs + this.CLOCK_SKEW_SECONDS * 1000) {
       throw new UnauthorizedException('SIWE message issued in the future');
     }
 
     if (
       expiresAtMs - issuedAtMs >
-      SIWE_CONFIG.MAX_AGE_SECONDS * 1000 + SIWE_CONFIG.CLOCK_SKEW_SECONDS * 1000
+      this.maxAgeSeconds * 1000 + this.CLOCK_SKEW_SECONDS * 1000
     ) {
       throw new UnauthorizedException('SIWE message validity window too long');
     }

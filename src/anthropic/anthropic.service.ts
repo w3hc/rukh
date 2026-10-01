@@ -58,8 +58,8 @@ export class AnthropicService {
   private readonly WEB_FETCH_MAX_USES = 8;
   // Long server-tool turns may pause; cap the continuation loop defensively
   private readonly MAX_CONTINUATIONS = 5;
-  // Optional ANTHROPIC_EFFORT override; unset means the API's own default
-  private readonly EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+  // Optional ANTHROPIC_EFFORT override, checked at boot by the env schema;
+  // unset means the API's own default
   private readonly effort?: string;
 
   constructor(private configService: ConfigService) {
@@ -69,15 +69,8 @@ export class AnthropicService {
       throw new Error('ANTHROPIC_API_KEY environment variable is not set');
     }
 
-    const effort = this.configService.get<string>('ANTHROPIC_EFFORT');
-    if (effort && !this.EFFORT_LEVELS.includes(effort)) {
-      this.logger.warn(
-        `Ignoring ANTHROPIC_EFFORT='${effort}': expected one of ${this.EFFORT_LEVELS.join(', ')}`,
-      );
-      this.effort = undefined;
-    } else {
-      this.effort = effort || undefined;
-    }
+    this.effort =
+      this.configService.get<string>('ANTHROPIC_EFFORT') || undefined;
 
     this.logger.log(
       `AnthropicService initialized successfully (effort: ${this.effort ?? 'default'})`,

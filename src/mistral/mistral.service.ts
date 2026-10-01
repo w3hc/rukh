@@ -1,4 +1,5 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ChatMistralAI } from '@langchain/mistralai';
 import { CustomJsonMemory } from '../memory/custom-memory';
 import { randomUUID } from 'crypto';
@@ -58,8 +59,8 @@ export class MistralService {
     },
   };
 
-  constructor() {
-    this.apiKey = process.env.MISTRAL_API_KEY;
+  constructor(private configService: ConfigService) {
+    this.apiKey = this.configService.get<string>('MISTRAL_API_KEY');
     if (!this.apiKey) {
       this.logger.error('MISTRAL_API_KEY environment variable is not set');
       throw new Error('MISTRAL_API_KEY environment variable is not set');

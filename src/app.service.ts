@@ -38,6 +38,11 @@ export class AppService {
     private readonly ragService: RagService,
     private readonly configService: ConfigService,
   ) {
+    if (!this.configService.get<string>('NTFY_ASK_TOKEN')) {
+      this.logger.warn(
+        'NTFY_ASK_TOKEN not set - new conversation notifications will be disabled',
+      );
+    }
     this.loadContexts();
   }
 

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { ObserveInstrument, isObserveEnabled } from './observe';
@@ -42,15 +43,18 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  const port = process.env.PORT || 3000;
+  const configService: ConfigService = app.get(ConfigService);
+  const port = configService.get<number>('PORT');
   await app.listen(port);
 
   logger.log(`Rukh API version: 0.2.0`);
-  logger.log(`Environment: ${process.env.NODE_ENV || 'unset'}`);
+  logger.log(
+    `Environment: ${configService.get<string>('NODE_ENV') || 'unset'}`,
+  );
   logger.log(`Server running on port: ${port}`);
   logger.log(`Swagger docs available at: http://localhost:${port}/api`);
   logger.log(
-    `NestJS Observe: ${isObserveEnabled() ? 'enabled' : 'disabled (missing OBSERVE_APP_KEY/OBSERVE_APP_SECRET)'}`,
+    `NestJS Observe: ${isObserveEnabled((key) => configService.get<string>(key)) ? 'enabled' : 'disabled (missing OBSERVE_APP_KEY/OBSERVE_APP_SECRET)'}`,
   );
   logger.log(`See the Rukh fly! ❤️`);
 }
