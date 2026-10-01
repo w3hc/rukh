@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { writeFileAtomic } from '../storage/write-file-atomic';
 
 interface CostDatabase {
   requests: {
@@ -194,7 +195,7 @@ export class CostTracker implements OnModuleInit {
 
       const dataStr = JSON.stringify(this.data, null, 2);
       this.logger.debug(`Writing data to ${this.dbPath}`);
-      await fs.writeFile(this.dbPath, dataStr);
+      await writeFileAtomic(this.dbPath, dataStr);
       this.logger.debug('Successfully saved costs data');
     } catch (error) {
       this.logger.error('Failed to save costs data:', error);

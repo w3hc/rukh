@@ -3,14 +3,18 @@ import { CostTracker } from './cost-tracking.service';
 import { Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { writeFileAtomic } from '../storage/write-file-atomic';
 
 jest.mock('fs', () => ({
   promises: {
     access: jest.fn(),
     readFile: jest.fn(),
-    writeFile: jest.fn(),
     mkdir: jest.fn(),
   },
+}));
+
+jest.mock('../storage/write-file-atomic', () => ({
+  writeFileAtomic: jest.fn(),
 }));
 
 describe('CostTracker', () => {
@@ -125,27 +129,32 @@ describe('CostTracker', () => {
       (fs.access as jest.Mock)
         .mockResolvedValueOnce(undefined) // data dir exists
         .mockRejectedValueOnce(new Error('File not found')); // file doesn't exist
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (writeFileAtomic as jest.Mock).mockResolvedValue(undefined);
 
       await service.loadData();
 
-      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writeFileAtomic).toHaveBeenCalled();
     });
   });
 
   describe('saveData', () => {
     it('should save data to file', async () => {
       (fs.access as jest.Mock).mockResolvedValue(undefined);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (writeFileAtomic as jest.Mock).mockResolvedValue(undefined);
 
       await service.saveData();
 
-      expect(fs.writeFile).toHaveBeenCalledWith(mockDbPath, expect.any(String));
+      expect(writeFileAtomic).toHaveBeenCalledWith(
+        mockDbPath,
+        expect.any(String),
+      );
     });
 
     it('should handle save errors', async () => {
       (fs.access as jest.Mock).mockResolvedValue(undefined);
-      (fs.writeFile as jest.Mock).mockRejectedValue(new Error('Write error'));
+      (writeFileAtomic as jest.Mock).mockRejectedValue(
+        new Error('Write error'),
+      );
 
       await service.saveData();
 
@@ -167,7 +176,7 @@ describe('CostTracker', () => {
   describe('trackUsageWithTokens', () => {
     beforeEach(() => {
       (fs.access as jest.Mock).mockResolvedValue(undefined);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (writeFileAtomic as jest.Mock).mockResolvedValue(undefined);
     });
 
     it('should track usage with provided tokens', async () => {
@@ -182,7 +191,7 @@ describe('CostTracker', () => {
         50,
       );
 
-      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writeFileAtomic).toHaveBeenCalled();
     });
 
     it('should estimate tokens if not provided', async () => {
@@ -197,7 +206,7 @@ describe('CostTracker', () => {
         0,
       );
 
-      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writeFileAtomic).toHaveBeenCalled();
     });
 
     it('should use default rates for unknown model', async () => {
@@ -212,11 +221,13 @@ describe('CostTracker', () => {
         50,
       );
 
-      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writeFileAtomic).toHaveBeenCalled();
     });
 
     it('should handle tracking errors', async () => {
-      (fs.writeFile as jest.Mock).mockRejectedValue(new Error('Write error'));
+      (writeFileAtomic as jest.Mock).mockRejectedValue(
+        new Error('Write error'),
+      );
 
       await service.trackUsageWithTokens(
         'user1',
@@ -237,7 +248,7 @@ describe('CostTracker', () => {
   describe('trackUsage', () => {
     beforeEach(() => {
       (fs.access as jest.Mock).mockResolvedValue(undefined);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (writeFileAtomic as jest.Mock).mockResolvedValue(undefined);
     });
 
     it('should track usage with legacy method', async () => {
@@ -250,7 +261,7 @@ describe('CostTracker', () => {
         'output text',
       );
 
-      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writeFileAtomic).toHaveBeenCalled();
     });
   });
 
