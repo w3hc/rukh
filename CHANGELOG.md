@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docker setup** (optional): `docker compose up --build` runs Rukh in a container; `pnpm i && pnpm start` stays the default path
+  - Multi-stage `Dockerfile` on Node 24, non-root `node` user, only `dist` and production dependencies, plus Chromium for `/web-reader`
+  - `docker-compose.yml` reads `.env` and mounts `data/` from the host
+  - `.dockerignore` keeps `.env*`, `node_modules` and runtime `data/` files out of the build context
 - **DeepSeek model support**: `model=deepseek` (`deepseek-v4-flash`), at full parity with Mistral/Anthropic/OpenAI — non-streaming and SSE streaming, included in the automatic fallback chain, with cost tracking
   - Configurable via the `DEEPSEEK_API_KEY` environment variable
 - **Ask-call notifications**: Sends an ntfy.sh push notification whenever a brand new conversation starts on `ask` (first message of a session, i.e. no `sessionId` was supplied)

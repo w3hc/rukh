@@ -84,6 +84,16 @@ pnpm start
 
 The Swagger UI should be available at http://localhost:3000/api
 
+### With Docker (optional)
+
+Docker is never required: the steps above are the default path. If you'd rather run Rukh in a container, create `.env` as in [Install](#install), then:
+
+```bash
+docker compose up --build
+```
+
+The image builds with Node 24, runs as the non-root `node` user, and ships Chromium so `/web-reader` works. `data/` is mounted from the host, so your contexts, chat history and costs survive rebuilds. `PORT` in `.env` sets the host port; the container always listens on 3000.
+
 ## Create your first context
 
 The repo ships one example context, [data/examples/rukh](data/examples/rukh). At boot, Rukh copies it to `data/contexts/rukh` if that folder doesn't exist yet, so a fresh clone can answer on the first `pnpm start`. The rest of `data/`, including `data/contexts/`, is gitignored, so your contexts and query logs never show up in `git status`. A context is just a folder: Rukh picks up changes on the next request, no restart needed.
