@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Provider registry**: every model is an `LlmProvider` (`key`, `label`, `pricing`, `fallbackEligible`, `isAvailable`, `ask`, `stream`) registered under the `LLM_PROVIDERS` token, and `AppService` looks it up through `ProviderRegistry` instead of switching on the model name
+  - `ProvidersModule` lists the providers in fallback order; adding one is a class plus a line there. See `docs/ADDING_A_PROVIDER.md`
+  - `BaseLlmService` holds the memory, cost, request ID and API key logic the four services duplicated
+  - `OpenAICompatibleService` holds the whole chat completions path; `OpenAIService` and `DeepSeekService` are thin subclasses
+  - `anthropic-web-search` is its own provider, `AnthropicWebSearchProvider`, wrapping `AnthropicService`
 - **Docker setup** (optional): `docker compose up --build` runs Rukh in a container; `pnpm i && pnpm start` stays the default path
   - Multi-stage `Dockerfile` on Node 24, non-root `node` user, only `dist` and production dependencies, plus Chromium for `/web-reader`
   - `docker-compose.yml` reads `.env` and mounts `data/` from the host
@@ -30,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Empty `KEY=` lines count as unset, and defaults live in the schema
 
 ### Changed
+- **Fallback chain**: built from the registered providers, and skips those without an API key, so an unconfigured OpenAI or DeepSeek no longer fails on every fallback
+- **Mistral wiring**: `MistralService` has its own `MistralModule`, so the app and `RagModule` share one instance instead of each creating its own
 - **Root route**: `GET /` redirects to the Swagger UI at `/api` instead of serving a w3hc-branded page
 - **Version**: read from `package.json` for Swagger, NestJS Observe and the boot log, instead of a hardcoded `0.2.0`
 - **Config access**: every variable is read through `ConfigService`; `process.env` is no longer read directly

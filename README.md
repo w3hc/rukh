@@ -12,7 +12,7 @@ Where a plain provider SDK gives you one model and a raw completion, and LangCha
 
 ## Features
 
-- **Multi-provider with fallback**: Mistral, Anthropic, OpenAI and DeepSeek behind one `model` parameter. If the chosen provider fails, the next one takes over. See [docs/MODELS.md](docs/MODELS.md).
+- **Multi-provider with fallback**: Mistral, Anthropic, OpenAI and DeepSeek behind one `model` parameter. If the chosen provider fails, the next one takes over. Providers register in one place, so adding one (Gemini, a local Ollama model) is one class: see [docs/ADDING_A_PROVIDER.md](docs/ADDING_A_PROVIDER.md). Models are listed in [docs/MODELS.md](docs/MODELS.md).
 - **Streaming**: `stream=true` returns server-sent events, with fallback up to the first byte. See [docs/STREAMING.md](docs/STREAMING.md).
 - **File-based contexts + RAG**: a context is a folder of markdown files and URLs under `data/contexts/`. A cheap first pass picks the files relevant to the question, and only those reach the model. See [docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md).
 - **Per-call cost tracking**: every response carries its token usage and its cost in USD, RAG selection included.
@@ -41,7 +41,7 @@ flowchart LR
 4. The first provider in line answers. If it fails, the next one takes over, as JSON or as server-sent events.
 5. The response carries token usage and cost, with the RAG selection cost added on.
 
-The code follows the same path: [src/app.controller.ts](src/app.controller.ts) → [src/app.service.ts](src/app.service.ts) (`prepareAsk`) → [src/rag/rag.service.ts](src/rag/rag.service.ts) → one of the provider services ([src/anthropic/](src/anthropic/), [src/mistral/](src/mistral/), [src/openai/](src/openai/), [src/deepseek/](src/deepseek/)) → [src/memory/cost-tracking.service.ts](src/memory/cost-tracking.service.ts).
+The code follows the same path: [src/app.controller.ts](src/app.controller.ts) → [src/app.service.ts](src/app.service.ts) (`prepareAsk`) → [src/rag/rag.service.ts](src/rag/rag.service.ts) → the provider picked from the registry ([src/providers/](src/providers/): [src/anthropic/](src/anthropic/), [src/mistral/](src/mistral/), [src/openai/](src/openai/), [src/deepseek/](src/deepseek/)) → [src/memory/cost-tracking.service.ts](src/memory/cost-tracking.service.ts).
 
 ## Install
 

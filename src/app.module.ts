@@ -2,20 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { MistralService } from './mistral/mistral.service';
-import { AnthropicService } from './anthropic/anthropic.service';
-import { OpenAIService } from './openai/openai.service';
-import { DeepSeekService } from './deepseek/deepseek.service';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './throttler.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ContextModule } from './context/context.module';
-import { AnthropicModule } from './anthropic/anthropic.module';
-import { OpenAIModule } from './openai/openai.module';
-import { DeepSeekModule } from './deepseek/deepseek.module';
 import { CostTracker } from './memory/cost-tracking.service';
 import { WebReaderModule } from './web/web-reader.module';
 import { RagModule } from './rag/rag.module';
+import { ProvidersModule } from './providers/providers.module';
 import { ObserveModule, isObserveEnabled } from './observe';
 import { validate } from './config/env.validation';
 import { APP_VERSION } from './version';
@@ -75,19 +69,13 @@ import {
       ],
     }),
     ContextModule,
-    AnthropicModule,
-    OpenAIModule,
-    DeepSeekModule,
+    ProvidersModule,
     WebReaderModule,
     RagModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    MistralService,
-    AnthropicService,
-    OpenAIService,
-    DeepSeekService,
     CostTracker,
     {
       provide: APP_GUARD,

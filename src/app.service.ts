@@ -1,10 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-import { MistralService } from './mistral/mistral.service';
-import { AnthropicService } from './anthropic/anthropic.service';
-import { OpenAIService } from './openai/openai.service';
-import { DeepSeekService } from './deepseek/deepseek.service';
+import { ProviderRegistry } from './providers/provider-registry.service';
 import { CostTracker } from './memory/cost-tracking.service';
 import { AskDto } from './dto/ask.dto';
 import { AskResponseDto } from './dto/ask-response.dto';
@@ -28,10 +25,7 @@ export class AppService {
   private writeQueue: Map<string, Promise<void>> = new Map();
 
   constructor(
-    private readonly mistralService: MistralService,
-    private readonly anthropicService: AnthropicService,
-    private readonly openaiService: OpenAIService,
-    private readonly deepseekService: DeepSeekService,
+    private readonly providers: ProviderRegistry,
     private readonly costTracker: CostTracker,
     private readonly contextService: ContextService,
     private readonly webReaderService: WebReaderService,
@@ -563,19 +557,6 @@ export class AppService {
   }> {
     const sessionId = askDto.sessionId || randomUUID();
 
-    // Define available models
-    const availableModels = [
-      'mistral',
-      'anthropic',
-      'openai',
-      'deepseek',
-      'anthropic-web-search',
-    ];
-
-    // Models eligible as fallbacks: anthropic-web-search is excluded because
-    // it incurs per-search fees and should only run when explicitly requested
-    const fallbackModels = ['mistral', 'anthropic', 'openai', 'deepseek'];
-
     const contextName = askDto.context || 'rukh';
 
     if (!askDto.sessionId) {
@@ -595,18 +576,14 @@ export class AppService {
     let selectedModel = contextModelOverride || askDto.model || 'anthropic';
 
     // Validate the model and prepare fallback sequence
-    if (!availableModels.includes(selectedModel)) {
+    if (!this.providers.has(selectedModel)) {
       this.logger.warn(
         `Invalid model specified: ${selectedModel}, defaulting to mistral`,
       );
       selectedModel = 'mistral';
     }
 
-    // Create a fallback sequence starting with the selected model
-    const modelsToTry = [
-      selectedModel,
-      ...fallbackModels.filter((m) => m !== selectedModel),
-    ];
+    const modelsToTry = this.providers.fallbackChain(selectedModel);
 
     this.logger.log(
       `Processing request with models in fallback sequence: ${modelsToTry.join(', ')}`,
@@ -873,19 +850,7 @@ export class AppService {
 
   /** The public model name reported back for each internal model key. */
   private modelLabel(model: string): string {
-    switch (model) {
-      case 'mistral':
-        return 'mistral-small-latest';
-      case 'anthropic':
-      case 'anthropic-web-search':
-        return 'claude-sonnet-5';
-      case 'openai':
-        return 'gpt-4o';
-      case 'deepseek':
-        return 'deepseek-v4-flash';
-      default:
-        return model;
-    }
+    return this.providers.get(model)?.label ?? model;
   }
 
   /**
@@ -1000,60 +965,18 @@ export class AppService {
             `Using ${effective ? 'system prompt' : 'no system prompt'} with ${currentModel}`,
           );
 
-          // Process the message with the current model
-          let response: {
-            content: string;
-            sessionId: string;
-            usage?: { input_tokens: number; output_tokens: number };
-            cost?: any;
-          };
-
-          switch (currentModel) {
-            case 'mistral':
-              response = await this.mistralService.processMessage(
-                userMessage, // Context travels in the system prompt, not here
-                usedSessionId,
-                effective,
-              );
-              break;
-
-            case 'anthropic':
-              response = await this.anthropicService.processMessage(
-                userMessage,
-                usedSessionId,
-                effective,
-              );
-              break;
-
-            case 'anthropic-web-search':
-              response =
-                await this.anthropicService.processMessageWithWebSearch(
-                  userMessage,
-                  usedSessionId,
-                  effective,
-                );
-              break;
-
-            case 'openai':
-              response = await this.openaiService.processMessage(
-                userMessage,
-                usedSessionId,
-                effective,
-              );
-              break;
-
-            case 'deepseek':
-              response = await this.deepseekService.processMessage(
-                userMessage,
-                usedSessionId,
-                effective,
-              );
-              break;
-
-            default:
-              this.logger.warn(`Unsupported model: ${currentModel}, skipping`);
-              continue;
+          const provider = this.providers.get(currentModel);
+          if (!provider) {
+            this.logger.warn(`Unsupported model: ${currentModel}, skipping`);
+            continue;
           }
+
+          // Context travels in the system prompt, not in the message
+          const response = await provider.ask(
+            userMessage,
+            usedSessionId,
+            effective,
+          );
 
           output = response.content;
           fullOutput = response.content;
@@ -1148,50 +1071,11 @@ export class AppService {
       `Using ${effective ? 'system prompt' : 'no system prompt'} with ${model} (streaming)`,
     );
 
-    switch (model) {
-      case 'mistral':
-        yield* this.mistralService.streamMessage(
-          message,
-          sessionId,
-          effective,
-          signal,
-        );
-        return;
-      case 'anthropic':
-        yield* this.anthropicService.streamMessage(
-          message,
-          sessionId,
-          effective,
-          signal,
-        );
-        return;
-      case 'anthropic-web-search':
-        yield* this.anthropicService.streamMessageWithWebSearch(
-          message,
-          sessionId,
-          effective,
-          signal,
-        );
-        return;
-      case 'openai':
-        yield* this.openaiService.streamMessage(
-          message,
-          sessionId,
-          effective,
-          signal,
-        );
-        return;
-      case 'deepseek':
-        yield* this.deepseekService.streamMessage(
-          message,
-          sessionId,
-          effective,
-          signal,
-        );
-        return;
-      default:
-        throw new Error(`Unsupported model: ${model}`);
+    const provider = this.providers.get(model);
+    if (!provider) {
+      throw new Error(`Unsupported model: ${model}`);
     }
+    yield* provider.stream(message, sessionId, effective, signal);
   }
 
   /**

@@ -10,6 +10,7 @@ import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
 import { WebReaderService } from '../src/web/web-reader.service';
+import { asLlmProvider } from '../src/providers/testing';
 
 // Set global timeout for all tests
 jest.setTimeout(60000);
@@ -169,9 +170,17 @@ describe('App (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(MistralService)
-      .useValue(mockMistralService)
+      .useValue(
+        asLlmProvider('mistral', mockMistralService, {
+          label: 'mistral-small-latest',
+        }),
+      )
       .overrideProvider(AnthropicService)
-      .useValue(mockAnthropicService)
+      .useValue(
+        asLlmProvider('anthropic', mockAnthropicService, {
+          label: 'claude-sonnet-5',
+        }),
+      )
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
       .overrideProvider(WebReaderService)

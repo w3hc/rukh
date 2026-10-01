@@ -8,19 +8,22 @@ import {
   AIMessage,
   SystemMessage,
 } from '@langchain/core/messages';
-import { ModelStreamEvent, StreamAbortedError } from '../types/llm-stream';
-
-interface CostInfo {
-  input_cost: number;
-  output_cost: number;
-  total_cost: number;
-}
+import {
+  ModelStreamEvent,
+  StreamAbortedError,
+  StreamCost,
+  StreamUsage,
+} from '../types/llm-stream';
+import { BaseLlmService } from '../providers/base-llm.service';
 
 @Injectable()
-export class MistralService {
-  private readonly apiKey: string;
+export class MistralService extends BaseLlmService {
+  readonly key = 'mistral';
+  readonly label = 'mistral-small-latest';
+  protected readonly displayName = 'Mistral';
+  protected readonly apiKey: string;
   private readonly model: ChatMistralAI;
-  private readonly logger = new Logger(MistralService.name);
+  protected readonly logger = new Logger(MistralService.name);
   private readonly modelName: string = 'mistral-small-latest';
 
   // LangChain's AsyncCaller defaults to 6 retries with randomised exponential
@@ -59,7 +62,10 @@ export class MistralService {
     },
   };
 
+  readonly pricing = this.MODEL_RATES[this.modelName];
+
   constructor(private configService: ConfigService) {
+    super();
     this.apiKey = this.configService.get<string>('MISTRAL_API_KEY');
     if (!this.apiKey) {
       this.logger.error('MISTRAL_API_KEY environment variable is not set');
@@ -82,34 +88,33 @@ export class MistralService {
     this.logger.log('MistralService initialized successfully');
   }
 
-  async getConversationHistory(sessionId: string) {
-    const memory = new CustomJsonMemory(sessionId);
-    const { history } = await memory.loadMemoryVariables();
-    return {
-      history,
-      isFirstMessage: history.length === 0,
-    };
+  private costFor(
+    usage: StreamUsage,
+    modelName: string = this.modelName,
+  ): StreamCost {
+    return this.calculateCost(
+      usage.input_tokens,
+      usage.output_tokens,
+      this.MODEL_RATES[modelName] ?? this.pricing,
+    );
   }
 
-  private calculateCost(
-    inputTokens: number,
-    outputTokens: number,
-    modelName: string = this.modelName,
-  ): CostInfo {
-    const rates =
-      this.MODEL_RATES[modelName] ?? this.MODEL_RATES[this.modelName];
-    const inputCost = Number(
-      ((inputTokens / 1000) * rates.inputCost).toFixed(6),
+  /**
+   * Mistral over LangChain reports no token counts, so estimate them:
+   * roughly 1 token per 4 characters.
+   */
+  private estimateUsage(
+    messages: { content: unknown }[],
+    responseContent: string,
+  ): StreamUsage {
+    const inputChars = messages.reduce(
+      (total, msg) =>
+        typeof msg.content === 'string' ? total + msg.content.length : total,
+      0,
     );
-    const outputCost = Number(
-      ((outputTokens / 1000) * rates.outputCost).toFixed(6),
-    );
-    const totalCost = Number((inputCost + outputCost).toFixed(6));
-
     return {
-      input_cost: inputCost,
-      output_cost: outputCost,
-      total_cost: totalCost,
+      input_tokens: Math.ceil(inputChars / 4),
+      output_tokens: Math.ceil(responseContent.length / 4),
     };
   }
 
@@ -162,11 +167,8 @@ export class MistralService {
   ): Promise<{
     content: string;
     sessionId: string;
-    usage: {
-      input_tokens: number;
-      output_tokens: number;
-    };
-    cost: CostInfo;
+    usage: StreamUsage;
+    cost: StreamCost;
   }> {
     const requestId = this.generateRequestId();
     const usedSessionId = sessionId || randomUUID();
@@ -204,25 +206,8 @@ export class MistralService {
       const response = await model.invoke(langChainMessages);
       const responseContent = response.content.toString();
 
-      // Estimate token usage
-      const allText = langChainMessages.reduce((total, msg) => {
-        if (typeof msg.content === 'string') {
-          return total + msg.content.length;
-        }
-        return total;
-      }, 0);
-
-      const usage = {
-        input_tokens: Math.ceil(allText / 4),
-        output_tokens: Math.ceil(responseContent.length / 4),
-      };
-
-      // Calculate cost
-      const cost = this.calculateCost(
-        usage.input_tokens,
-        usage.output_tokens,
-        modelName,
-      );
+      const usage = this.estimateUsage(langChainMessages, responseContent);
+      const cost = this.costFor(usage, modelName);
 
       this.logger.debug({
         message: `Mistral API response [${requestId}]`,
@@ -267,11 +252,8 @@ export class MistralService {
   ): Promise<{
     content: string;
     sessionId: string;
-    usage: {
-      input_tokens: number;
-      output_tokens: number;
-    };
-    cost: CostInfo;
+    usage: StreamUsage;
+    cost: StreamCost;
   }> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -358,22 +340,8 @@ export class MistralService {
       const response = await this.model.invoke(langChainMessages);
       const responseContent = response.content.toString();
 
-      // Estimate token usage based on all message content
-      const allText = langChainMessages.reduce((total, msg) => {
-        if (typeof msg.content === 'string') {
-          return total + msg.content.length;
-        }
-        return total;
-      }, 0);
-
-      const usage = {
-        // Roughly estimate: 1 token ≈ 4 characters
-        input_tokens: Math.ceil(allText / 4),
-        output_tokens: Math.ceil(responseContent.length / 4),
-      };
-
-      // Calculate cost based on estimated token usage
-      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+      const usage = this.estimateUsage(langChainMessages, responseContent);
+      const cost = this.costFor(usage);
 
       this.logger.debug({
         message: `Mistral API response [${requestId}]`,
@@ -491,21 +459,8 @@ export class MistralService {
 
       const responseContent = content || 'No text content in response';
 
-      // Mistral over LangChain reports no token counts, so estimate them the
-      // same way the non-streaming path does: roughly 1 token per 4 chars
-      const allText = langChainMessages.reduce((total, msg) => {
-        if (typeof msg.content === 'string') {
-          return total + msg.content.length;
-        }
-        return total;
-      }, 0);
-
-      const usage = {
-        input_tokens: Math.ceil(allText / 4),
-        output_tokens: Math.ceil(responseContent.length / 4),
-      };
-
-      const cost = this.calculateCost(usage.input_tokens, usage.output_tokens);
+      const usage = this.estimateUsage(langChainMessages, responseContent);
+      const cost = this.costFor(usage);
 
       await memory.saveContext(
         { input: message },
@@ -563,16 +518,6 @@ export class MistralService {
     }
   }
 
-  async deleteConversation(sessionId: string): Promise<boolean> {
-    const memory = new CustomJsonMemory(sessionId);
-    const { history } = await memory.loadMemoryVariables();
-    if (history.length > 0) {
-      await memory.saveContext({ input: '' }, { response: '' });
-      return true;
-    }
-    return false;
-  }
-
   /**
    * Mistral answers 429 both for a rate limit and for an exhausted quota. It
    * is worth naming in the logs rather than folding into the generic failure
@@ -582,9 +527,5 @@ export class MistralService {
   private isRateLimited(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return message.includes('429') || message.includes('rate_limited');
-  }
-
-  private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }

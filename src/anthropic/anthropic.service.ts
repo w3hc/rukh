@@ -2,8 +2,13 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { CustomJsonMemory } from '../memory/custom-memory';
-import { ModelStreamEvent, StreamAbortedError } from '../types/llm-stream';
+import {
+  ModelStreamEvent,
+  StreamAbortedError,
+  StreamCost,
+} from '../types/llm-stream';
 import { readSseData } from '../utils/sse';
+import { BaseLlmService } from '../providers/base-llm.service';
 
 interface AnthropicMessage {
   role: 'user' | 'assistant';
@@ -30,24 +35,20 @@ interface AnthropicResponse {
   };
 }
 
-interface CostInfo {
-  input_cost: number;
-  output_cost: number;
-  total_cost: number;
-  web_search_cost?: number;
-}
-
 @Injectable()
-export class AnthropicService {
-  private readonly apiKey: string;
-  private readonly logger = new Logger(AnthropicService.name);
+export class AnthropicService extends BaseLlmService {
+  readonly key = 'anthropic';
+  readonly label = 'claude-sonnet-5';
+  protected readonly displayName = 'Anthropic';
+  protected readonly apiKey: string;
+  protected readonly logger = new Logger(AnthropicService.name);
   private readonly model: string = 'claude-sonnet-5';
   private readonly apiUrl: string = 'https://api.anthropic.com/v1/messages';
   private readonly apiVersion: string = '2023-06-01';
 
   // Cost per 1K tokens in USD - Claude Sonnet 5 rates
   // https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-09-11)
-  private readonly COST_RATES = {
+  readonly pricing = {
     inputCost: 0.002, // $2 per million tokens = $0.002 per 1K tokens
     outputCost: 0.01, // $10 per million tokens = $0.01 per 1K tokens
   };
@@ -63,6 +64,7 @@ export class AnthropicService {
   private readonly effort?: string;
 
   constructor(private configService: ConfigService) {
+    super();
     this.apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     if (!this.apiKey) {
       this.logger.error('ANTHROPIC_API_KEY environment variable is not set');
@@ -97,31 +99,6 @@ export class AnthropicService {
     return fields;
   }
 
-  async getConversationHistory(sessionId: string) {
-    const memory = new CustomJsonMemory(sessionId);
-    const { history } = await memory.loadMemoryVariables();
-    return {
-      history,
-      isFirstMessage: history.length === 0,
-    };
-  }
-
-  private calculateCost(inputTokens: number, outputTokens: number): CostInfo {
-    const inputCost = Number(
-      ((inputTokens / 1000) * this.COST_RATES.inputCost).toFixed(6),
-    );
-    const outputCost = Number(
-      ((outputTokens / 1000) * this.COST_RATES.outputCost).toFixed(6),
-    );
-    const totalCost = Number((inputCost + outputCost).toFixed(6));
-
-    return {
-      input_cost: inputCost,
-      output_cost: outputCost,
-      total_cost: totalCost,
-    };
-  }
-
   async processMessage(
     message: string,
     sessionId: string = randomUUID(),
@@ -133,7 +110,7 @@ export class AnthropicService {
       input_tokens: number;
       output_tokens: number;
     };
-    cost: CostInfo;
+    cost: StreamCost;
   }> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -329,7 +306,7 @@ export class AnthropicService {
       input_tokens: number;
       output_tokens: number;
     };
-    cost: CostInfo;
+    cost: StreamCost;
   }> {
     const requestId = this.generateRequestId();
     const memory = new CustomJsonMemory(sessionId);
@@ -1058,19 +1035,5 @@ export class AnthropicService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-  }
-
-  async deleteConversation(sessionId: string): Promise<boolean> {
-    const memory = new CustomJsonMemory(sessionId);
-    const { history } = await memory.loadMemoryVariables();
-    if (history.length > 0) {
-      await memory.saveContext({ input: '' }, { response: '' });
-      return true;
-    }
-    return false;
-  }
-
-  private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
