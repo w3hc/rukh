@@ -6,6 +6,7 @@ import { MistralService } from '../src/mistral/mistral.service';
 import { AnthropicService } from '../src/anthropic/anthropic.service';
 import { OpenAIService } from '../src/openai/openai.service';
 import { CostTracker } from '../src/memory/cost-tracking.service';
+import { asLlmProvider } from '../src/providers/testing';
 
 // Set timeout for concurrent tests
 jest.setTimeout(30000);
@@ -74,11 +75,11 @@ describe('Concurrent Requests (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(MistralService)
-      .useValue(mockMistralService)
+      .useValue(asLlmProvider('mistral', mockMistralService))
       .overrideProvider(AnthropicService)
-      .useValue(mockAnthropicService)
+      .useValue(asLlmProvider('anthropic', mockAnthropicService))
       .overrideProvider(OpenAIService)
-      .useValue(mockOpenAIService)
+      .useValue(asLlmProvider('openai', mockOpenAIService))
       .overrideProvider(CostTracker)
       .useValue(mockCostTracker)
       .compile();
