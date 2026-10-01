@@ -56,11 +56,6 @@ cp .env.template .env
 
 Only `MISTRAL_API_KEY` and `ANTHROPIC_API_KEY` are required; every variable is documented in [.env.template](.env.template).
 
-Optional modules load only when their variable is set:
-
-- **Notifications** (`NTFY_ASK_TOKEN`): a push to [ntfy.sh](https://ntfy.sh) when a new conversation starts. To notify somewhere else, bind your own `Notifier` to the `NOTIFIER` token in [src/notifications/notifications.module.ts](src/notifications/notifications.module.ts).
-- **Sponsorship check** (`SPONSOR_GITHUB_LOGIN`): `SponsorshipService.isSponsor()` tells whether a GitHub user sponsors that account with at least `SPONSOR_MIN_MONTHLY_USD` a month. It needs `GITHUB_API_TOKEN` and isn't wired to any route.
-
 ## Test
 
 ```bash
@@ -97,100 +92,9 @@ docker compose up --build
 
 The image builds with Node 24, runs as the non-root `node` user, and ships Chromium so `/web-reader` works. `data/` is mounted from the host, so your contexts, chat history and costs survive rebuilds. `PORT` in `.env` sets the host port; the container always listens on 3000.
 
-## Create your first context
+## Contributing
 
-The repo ships one example context, [data/examples/rukh](data/examples/rukh). At boot, Rukh copies it to `data/contexts/rukh` if that folder doesn't exist yet, so a fresh clone can answer on the first `pnpm start`. The rest of `data/`, including `data/contexts/`, is gitignored, so your contexts and query logs never show up in `git status`. A context is just a folder: Rukh picks up changes on the next request, no restart needed.
-
-1. Ask it something:
-
-   ```bash
-   curl 'http://localhost:3000/ask' \
-     -F 'message=What is a Rukh?' \
-     -F 'context=rukh'
-   ```
-
-   The `rag` block of the response lists `rukh-definition.md` in `selectedFiles`: the files that went to the model.
-
-2. Look at `data/contexts/rukh/index.json` (copied from [data/examples/rukh/index.json](data/examples/rukh/index.json)). It describes each markdown file of the folder. The RAG step only sees these descriptions when it picks which files to send to the model, so make them specific:
-
-   ```json
-   {
-     "name": "rukh",
-     "description": "The rukh (roc), legendary bird of prey of Middle Eastern mythology",
-     "numberOfFiles": 1,
-     "totalSize": 7,
-     "files": [
-       {
-         "name": "rukh-definition.md",
-         "description": "Definition, etymology, origins and accounts of the rukh",
-         "size": 7
-       }
-     ],
-     "links": [],
-     "queries": [],
-     "creatorAddress": "0xe8c7A82B3AeA7239F8857b5Aa280b52e6E2B60Cd"
-   }
-   ```
-
-   `size` is in KB. `creatorAddress` is the Ethereum address allowed to manage the context through the API: set your own. Add `"model": "mistral"` to pin the context to one provider. Each `/ask` appends to `queries`.
-
-3. Make your own: copy the folder, replace the markdown files, and update `index.json` to match.
-
-   ```bash
-   cp -r data/contexts/rukh data/contexts/my-product
-   ```
-
-To manage contexts over HTTP instead (`POST /context`, `POST /context/upload`, links, deletion), sign each request with SIWE as `creatorAddress`. The full reference, including URLs as context sources and the `index.json` schema, is in [docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md).
-
-## Example
-
-Simple request: 
-
-```bash
-curl 'https://rukh.w3hc.org/ask' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'message=What'\''s Rukh?' \
-  -F 'context=rukh'
-```
-
-Response body:
-
-```json
-{
-  "output": "**Rukh** (also spelled roc, ruḵḵ, or rokh) is an enormous legendary bird of prey from Middle Eastern mythology and folklore.",
-  "model": "claude-sonnet-5",
-  "sessionId": "15a7e248-17f2-4b9e-a42b-000f97a075e7",
-  "usage": {
-    "input_tokens": 1930,
-    "cache_creation_input_tokens": 0,
-    "cache_read_input_tokens": 0,
-    "cache_creation": {
-      "ephemeral_5m_input_tokens": 0,
-      "ephemeral_1h_input_tokens": 0
-    },
-    "output_tokens": 352,
-    "service_tier": "standard",
-    "inference_geo": "not_available"
-  },
-  "cost": {
-    "input_cost": 0.003866,
-    "output_cost": 0.00352,
-    "total_cost": 0.007386
-  },
-  "rag": {
-    "selectedFiles": ["rukh-definition.md"],
-    "selectedUrls": [],
-    "totalFilesAvailable": 1,
-    "totalUrlsAvailable": 0,
-    "selectionMethod": "rag-two-step",
-    "selectionCost": {
-      "input_cost": 0.000006,
-      "output_cost": 0,
-      "total_cost": 0.000006
-    }
-  }
-}
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and conventions. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 
