@@ -130,6 +130,27 @@ Repo → **Settings → Webhooks → Add webhook**:
 - Secret: same value as `REPLACE_ME` in `hooks.json`
 - Events: **Just the push event**
 
+### 6. Chromium
+
+`/web-reader/llm` drives a headless browser, and Rukh does not bundle one.
+Install Chromium:
+
+```bash
+sudo apt install chromium
+```
+
+Rukh looks for it at the usual paths (`/usr/bin/chromium`,
+`/usr/bin/chromium-browser`, `/usr/bin/google-chrome`). If it lives
+elsewhere, set `CHROME_PATH` in `.env` and reload:
+
+```bash
+echo 'CHROME_PATH=/snap/bin/chromium' >> .env
+pm2 reload rukh --update-env
+```
+
+Check it with
+`curl "https://your-domain/web-reader/llm?url=https%3A%2F%2Fexample.com"`.
+
 ## Why pull, not push
 
 A push-based setup (GitHub Actions SSHing into the VPS) requires storing a
