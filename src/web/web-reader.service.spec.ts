@@ -160,6 +160,60 @@ describe('WebReaderService', () => {
     });
   });
 
+  describe('browser lookup', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { existsSync } = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const puppeteer = require('puppeteer-core');
+
+    const serviceWith = (chromePath?: string) =>
+      new WebReaderService({
+        get: jest.fn((key: string) =>
+          key === 'CHROME_PATH' ? chromePath : undefined,
+        ),
+      } as unknown as ConfigService);
+
+    it('should use CHROME_PATH when the file exists', async () => {
+      await serviceWith('/opt/chromium/chrome').extractForLLM(
+        'https://example.com',
+      );
+
+      expect(existsSync).toHaveBeenCalledWith('/opt/chromium/chrome');
+      expect(puppeteer.launch).toHaveBeenCalledWith(
+        expect.objectContaining({ executablePath: '/opt/chromium/chrome' }),
+      );
+    });
+
+    it('should fail naming CHROME_PATH when the file is missing', async () => {
+      existsSync.mockReturnValue(false);
+
+      await expect(
+        serviceWith('/opt/missing').extractForLLM('https://example.com'),
+      ).rejects.toThrow('CHROME_PATH points to a missing file: /opt/missing');
+      expect(puppeteer.launch).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to the known install paths', async () => {
+      existsSync.mockImplementation(
+        (path: string) => path === '/usr/bin/chromium',
+      );
+
+      await serviceWith().extractForLLM('https://example.com');
+
+      expect(puppeteer.launch).toHaveBeenCalledWith(
+        expect.objectContaining({ executablePath: '/usr/bin/chromium' }),
+      );
+    });
+
+    it('should fail when no browser is found', async () => {
+      existsSync.mockReturnValue(false);
+
+      await expect(
+        serviceWith().extractForLLM('https://example.com'),
+      ).rejects.toThrow('Could not find Chrome or Chromium installation');
+    });
+  });
+
   describe('search', () => {
     beforeEach(() => {
       // Mock global fetch
