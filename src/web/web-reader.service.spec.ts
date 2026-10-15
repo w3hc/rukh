@@ -8,9 +8,9 @@ jest.mock('puppeteer-core', () => ({
   launch: jest.fn(),
 }));
 
-// Mock execSync
-jest.mock('child_process', () => ({
-  execSync: jest.fn(),
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  existsSync: jest.fn(),
 }));
 
 describe('WebReaderService', () => {
@@ -54,10 +54,9 @@ describe('WebReaderService', () => {
     const puppeteer = require('puppeteer-core');
     puppeteer.launch.mockResolvedValue(mockBrowser);
 
-    // Mock execSync for Chrome detection
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { execSync } = require('child_process');
-    execSync.mockReturnValue('');
+    const { existsSync } = require('fs');
+    existsSync.mockReturnValue(true);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
