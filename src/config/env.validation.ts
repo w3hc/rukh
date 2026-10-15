@@ -49,6 +49,10 @@ export class EnvironmentVariables {
   @IsString()
   TAVILY_API_KEY?: string;
 
+  @IsOptional()
+  @IsString()
+  CHROME_PATH?: string;
+
   @IsInt()
   @IsPositive()
   SIWE_CHAIN_ID: number = 1;

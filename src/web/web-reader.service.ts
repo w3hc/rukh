@@ -1,7 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as puppeteer from 'puppeteer-core';
-import { execSync } from 'child_process';
+import { existsSync } from 'fs';
 
 export interface SearchResult {
   title: string;
@@ -41,6 +41,16 @@ export class WebReaderService {
       return this.browserExecutablePath;
     }
 
+    const override = this.configService.get<string>('CHROME_PATH');
+    if (override) {
+      if (!existsSync(override)) {
+        throw new Error(`CHROME_PATH points to a missing file: ${override}`);
+      }
+      this.browserExecutablePath = override;
+      this.logger.log(`Using browser from CHROME_PATH: ${override}`);
+      return override;
+    }
+
     const possiblePaths = [
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -50,17 +60,16 @@ export class WebReaderService {
     ];
 
     for (const path of possiblePaths) {
-      try {
-        execSync(`test -f "${path}"`, { stdio: 'ignore' });
+      if (existsSync(path)) {
         this.browserExecutablePath = path;
         this.logger.log(`Found browser at: ${path}`);
         return path;
-      } catch {
-        continue;
       }
     }
 
-    throw new Error('Could not find Chrome or Chromium installation');
+    throw new Error(
+      'Could not find Chrome or Chromium installation; set CHROME_PATH',
+    );
   }
 
   /**

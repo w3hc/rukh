@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Specs and mocks use typed provider mocks (`ProviderMock`, `AnthropicMock`) instead of `any`
 
 ### Fixed
+- **Web reader 500 in production**: `/web-reader/llm` failed with "Could not find Chrome or Chromium installation" on the VPS, which has no browser. A `CHROME_PATH` env var now overrides the browser lookup, and `docs/CI_CD.md` adds the Chromium install step
+- **Dependency audit**: `proxy-addr` and `handlebars` are overridden to patched versions; the `braces` advisory GHSA-vfj7-8cjw-p6xm (dev only, no patched release) is ignored in `auditConfig`
 - Ask-call notifications now log and skip on an ntfy delivery failure instead of silently swallowing it
 - **Dirty working tree after `/ask`**: logging a query no longer modifies a tracked file, so the deploy script stops refusing to deploy
 - **Corrupted JSON files under concurrent writes**: context indexes, chat history, the JSON stores and cost data are written to a temp file and renamed over the original, so a shorter write can no longer leave the tail of a longer one behind
