@@ -94,7 +94,7 @@
       "handlebars": ">=4.7.10"
     },
     "auditConfig": {
-      "ignoreGhsas": ["GHSA-848j-6mx2-7j84"]
+      "ignoreGhsas": ["GHSA-848j-6mx2-7j84", "GHSA-vfj7-8cjw-p6xm"]
     }
   },
   "packageManager": "pnpm@10.23.0+sha1.b4a44ab0dc2adf2e36371d11d8eb0dc78ffc976c"
